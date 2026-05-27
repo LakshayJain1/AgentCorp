@@ -8,6 +8,7 @@ import TaskQueue from './TaskQueue';
 import ActivityFeed from './ActivityFeed';
 import ExecutionLogViewer from './ExecutionLogViewer';
 import ConversationPanel from './ConversationPanel';
+import ProjectsFolder from './ProjectsFolder';
 
 export default function RightPanel() {
   return (
@@ -25,6 +26,9 @@ export default function RightPanel() {
 
         {/* Agent Chat */}
         <ConversationPanel />
+
+        {/* Projects Folder */}
+        <ProjectsFolder />
 
         {/* Execution Log */}
         <ExecutionLogViewer />

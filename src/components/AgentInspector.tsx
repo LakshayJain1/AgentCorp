@@ -198,7 +198,9 @@ export default function AgentInspector() {
                 <div className="bg-panel rounded-lg p-2">
                   <div className="text-muted">Status</div>
                   <div className="font-medium" style={{ color: STATUS_COLORS[selectedAgent.workStatus] }}>
-                    {STATUS_LABELS[selectedAgent.workStatus] || selectedAgent.workStatus}
+                    {selectedAgent.cooldownRemainingSeconds && selectedAgent.cooldownRemainingSeconds > 0
+                      ? `⏳ Cooldown (${Math.ceil(selectedAgent.cooldownRemainingSeconds)}s)`
+                      : STATUS_LABELS[selectedAgent.workStatus] || selectedAgent.workStatus}
                   </div>
                 </div>
                 <div className="bg-panel rounded-lg p-2">
@@ -206,6 +208,10 @@ export default function AgentInspector() {
                   <div className="font-medium" style={{ color: MOOD_COLORS[selectedAgent.mood] }}>
                     {selectedAgent.mood}
                   </div>
+                </div>
+                <div className="bg-panel rounded-lg p-2">
+                  <div className="text-muted">Efficiency</div>
+                  <div className="font-medium">{Math.round(selectedAgent.efficiency)}%</div>
                 </div>
                 <div className="bg-panel rounded-lg p-2">
                   <div className="text-muted">Productivity</div>

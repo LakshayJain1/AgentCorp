@@ -138,6 +138,14 @@ export class GameScene extends Phaser.Scene {
           state,
           energy: Math.round(Math.max(0, agent.energy)),
           mood: ws === 'blocked' ? 'frustrated' as const : agent.mood,
+          cooldownRemainingSeconds: agent.cooldownRemainingSeconds,
+          cooldownType: agent.cooldownType,
+          name: agent.name,
+          efficiency: agent.efficiency,
+          online: agent.online,
+          workStatus: agent.workStatus,
+          fsmState: agent.fsmState,
+          performance: agent.performance,
         };
       });
       storeSync.syncAgents(updates);
@@ -168,10 +176,165 @@ export class GameScene extends Phaser.Scene {
 
   private updateEnergy(agent: Agent, dt: number, _idx: number): void {
     const store = useGameStore.getState();
+    const speed = store.simulation.speed;
     const rate = 0.008 * (dt / 16);
 
+    // ─── COOLDOWN MANAGEMENT ───
+    if (agent.cooldownRemainingSeconds !== undefined && agent.cooldownRemainingSeconds > 0) {
+      // Decrement cooldown timer in real-world seconds, scaled by speed
+      const elapsedSec = (dt / 1000) * speed;
+      agent.cooldownRemainingSeconds = Math.max(0, agent.cooldownRemainingSeconds - elapsedSec);
+
+      // Visual state during cooldown
+      agent.workStatus = 'waiting';
+
+      if (agent.cooldownType === 'onboarding') {
+        agent.mood = 'neutral';
+        // Stand/idle at the Gaming Zone or Coffee Machine
+        const gaming = OFFICE_LOCATIONS.find((l) => l.role === 'gaming');
+        const coffee = OFFICE_LOCATIONS.find((l) => l.role === 'coffee');
+        const target = gaming || coffee;
+        if (target) {
+          const dist = Math.sqrt((agent.x - target.x) ** 2 + (agent.y - target.y) ** 2);
+          if (dist > 25 && agent.state !== 'walking') {
+            agent.targetX = target.x + (Math.random() - 0.5) * 15;
+            agent.targetY = target.y + (Math.random() - 0.5) * 15;
+            agent.state = 'walking';
+          } else if (dist <= 25 && agent.state !== 'walking') {
+            agent.state = 'resting';
+          }
+        }
+      } else if (agent.cooldownType === 'burnout') {
+        agent.mood = 'happy';
+        if (!agent.cooldownTargetLocId) {
+          const gaming = OFFICE_LOCATIONS.find((l) => l.role === 'gaming');
+          const coffee = OFFICE_LOCATIONS.find((l) => l.role === 'coffee');
+          const target = Math.random() < 0.5 ? gaming : coffee;
+          agent.cooldownTargetLocId = target?.id || 'gaming_zone';
+        }
+        const targetLoc = OFFICE_LOCATIONS.find((l) => l.id === agent.cooldownTargetLocId);
+        if (targetLoc) {
+          const dist = Math.sqrt((agent.x - targetLoc.x) ** 2 + (agent.y - targetLoc.y) ** 2);
+          if (dist > 15 && agent.state !== 'walking') {
+            agent.targetX = targetLoc.x + (Math.random() - 0.5) * 15;
+            agent.targetY = targetLoc.y + (Math.random() - 0.5) * 15;
+            agent.state = 'walking';
+          } else if (dist <= 15 && agent.state !== 'walking') {
+            agent.state = 'resting';
+          }
+        }
+      }
+
+      // Check if cooldown just finished
+      if (agent.cooldownRemainingSeconds === 0) {
+        if (agent.cooldownType === 'onboarding') {
+          // Onboarding completed!
+          const finalName = agent.name.replace('Onboarding: ', '');
+          agent.name = finalName;
+          agent.online = true;
+          agent.efficiency = 100;
+          agent.energy = 100;
+          agent.mood = 'happy';
+          agent.workStatus = 'idle';
+          agent.fsmState = 'idle';
+          agent.performance = {
+            tasksCompleted: 0,
+            tasksFailed: 0,
+            avgCompletionTime: 0,
+            successRate: 1,
+            collaborationScore: 80,
+            reliabilityScore: 90,
+            toolUsageCount: 0,
+            specializationTags: [],
+            seniority: 'junior',
+            productivityScore: 100,
+            promotionLevel: 'trial',
+            reviewsCount: 0,
+            lastReviewAt: null,
+          };
+
+          store.addEvent({
+            id: `onboard_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: Date.now(),
+            type: 'agent',
+            message: `🎉 Onboarded new ${agent.role} agent: ${agent.name}! All metrics reset to 100% efficiency.`,
+            agentId: agent.id,
+            taskId: null,
+          });
+        } else if (agent.cooldownType === 'burnout') {
+          // Burnout break completed!
+          agent.energy = 100;
+          agent.efficiency = 100;
+          agent.mood = 'focused';
+          agent.workStatus = 'idle';
+          agent.fsmState = 'idle';
+
+          store.addEvent({
+            id: `cooldown_done_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: Date.now(),
+            type: 'agent',
+            message: `⚡ ${agent.name} is back from cooldown at 100% efficiency!`,
+            agentId: agent.id,
+            taskId: null,
+          });
+        }
+
+        agent.cooldownType = undefined;
+        agent.cooldownTargetLocId = undefined;
+        agent.cooldownRemainingSeconds = undefined;
+
+        // Reset target destination to desk
+        const location = OFFICE_LOCATIONS.find((l) => l.role === agent.role);
+        if (location) {
+          agent.targetX = location.x;
+          agent.targetY = location.y;
+          agent.state = 'walking';
+        }
+      }
+      return; // Skip normal energy/efficiency logic while cooling down
+    }
+
+    // ─── NORMAL ENERGY & EFFICIENCY DRAIN ───
     if (agent.state === 'working' || agent.state === 'walking') {
       agent.energy -= rate * (agent.state === 'walking' ? 1.5 : 2.5);
+    }
+
+    if (agent.state === 'working' && agent.online) {
+      // Slowly drain efficiency while working
+      agent.efficiency = Math.max(10, agent.efficiency - rate * 0.4);
+    }
+
+    // Burnout Check: fatigue triggers if efficiency drops below 50
+    const isWorker = agent.role === 'engineer' || agent.role === 'qa' || agent.role === 'researcher';
+    if (agent.efficiency < 50 && isWorker && !agent.currentSubTaskId && agent.online) {
+      // Trigger burnout cooldown
+      agent.cooldownRemainingSeconds = 180 + Math.random() * 60; // 3-4 minutes
+      agent.cooldownType = 'burnout';
+      agent.workStatus = 'waiting';
+      agent.mood = 'tired';
+      agent.state = 'resting';
+
+      const coffee = OFFICE_LOCATIONS.find((l) => l.role === 'coffee');
+      const gaming = OFFICE_LOCATIONS.find((l) => l.role === 'gaming');
+      const target = Math.random() < 0.5 ? gaming : coffee;
+      agent.cooldownTargetLocId = target?.id || 'gaming_zone';
+
+      if (target) {
+        agent.targetX = target.x + (Math.random() - 0.5) * 15;
+        agent.targetY = target.y + (Math.random() - 0.5) * 15;
+        agent.state = 'walking';
+      }
+
+      store.addEvent({
+        id: `burnout_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        type: 'agent',
+        message: `💤 ${agent.name} (${agent.role}) feels fatigued (efficiency: ${Math.round(agent.efficiency)}%). Heading to the Coffee/Gaming zone for a break.`,
+        agentId: agent.id,
+        taskId: null,
+      });
+
+      return;
     }
 
     const coffee = OFFICE_LOCATIONS.find((l) => l.role === 'coffee');
@@ -311,7 +474,7 @@ export class GameScene extends Phaser.Scene {
     if (!bubble) return;
 
     const lastMsg = agent.conversations[agent.conversations.length - 1];
-    const isTalking = lastMsg && (Date.now() - lastMsg.timestamp) < 5000;
+    const isTalking = lastMsg && lastMsg.fromAgentId === agent.id && (Date.now() - lastMsg.timestamp) < 5000;
     if (!isTalking) {
       bubble.setVisible(false);
       return;
@@ -450,6 +613,25 @@ export class GameScene extends Phaser.Scene {
     g.fillRect(420, 190, 14, 22);
     g.fillStyle(0x2a5a2a, 1);
     g.fillRect(423, 184, 8, 12);
+
+    // Gaming Zone Arcades and Sofa
+    // Arcade Cabinet
+    g.fillStyle(0x0f172a, 1);
+    g.fillRect(150, 310, 22, 34);
+    g.fillStyle(0x1e293b, 1);
+    g.fillRect(152, 312, 18, 30);
+    g.fillStyle(0x00f5ff, 0.45); // screen
+    g.fillRect(154, 315, 14, 11);
+    g.fillStyle(0xff0055, 1); // controls
+    g.fillRect(157, 328, 2, 2);
+    g.fillStyle(0x00ff88, 1);
+    g.fillRect(163, 328, 2, 2);
+
+    // Gaming Sofa
+    g.fillStyle(0x312e81, 1); // Sofa frame
+    g.fillRect(185, 325, 36, 20);
+    g.fillStyle(0x4338ca, 1); // Sofa cushions
+    g.fillRect(188, 328, 30, 14);
 
     // Window
     g.fillStyle(0x0a0a2e, 1);

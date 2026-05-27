@@ -93,11 +93,19 @@ export class TaskQueue {
     workers: BaseWorkerAgent[],
     preferredRole: WorkerRole | null,
   ): BaseWorkerAgent | null {
+    const store = useGameStore.getState();
+    const isAvailable = (w: BaseWorkerAgent) => {
+      const agent = store.agents.find((a) => a.id === w.id);
+      if (!agent) return false;
+      const inCooldown = agent.cooldownRemainingSeconds !== undefined && agent.cooldownRemainingSeconds > 0;
+      return !w.isBusy() && agent.online && !inCooldown;
+    };
+
     if (preferredRole) {
-      const preferred = workers.find((w) => w.getWorkerRole() === preferredRole && !w.isBusy());
+      const preferred = workers.find((w) => w.getWorkerRole() === preferredRole && isAvailable(w));
       if (preferred) return preferred;
     }
-    return workers.find((w) => !w.isBusy()) || null;
+    return workers.find(isAvailable) || null;
   }
 
   markComplete(subtaskId: string): void {

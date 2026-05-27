@@ -76,11 +76,19 @@ export async function maybeStartConversation(): Promise<void> {
   });
 
   // The toAgent responds after a short delay
-  setTimeout(() => {
+  setTimeout(async () => {
     const currentStore = useGameStore.getState();
     const updatedToAgent = currentStore.agents.find((a) => a.id === toAgent.id);
     if (updatedToAgent) {
-      currentStore.sendMessage(toAgent.id, fromAgent.id, 'Acknowledged');
+      const replyResponse = await aiService.askAgent(
+        toAgent.role, toAgent.name, toAgent.traits,
+        `Reply briefly to this message from ${fromAgent.name} (${fromAgent.role.toUpperCase()}): "${message}". Keep your reply professional and work-related, 1 sentence.`,
+        { conversationPartner: fromAgent.name, partnerRole: fromAgent.role },
+      );
+      const reply = (replyResponse.content && !replyResponse.error)
+        ? replyResponse.content
+        : 'Got it, thanks!';
+      currentStore.sendMessage(toAgent.id, fromAgent.id, reply);
       currentStore.updateAgent(toAgent.id, { state: 'communicating' });
     }
   }, 2000);

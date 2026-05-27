@@ -166,6 +166,9 @@ export interface Agent {
   memory: AgentMemoryEntry[];
   online: boolean;
   lastActiveAt: number;
+  cooldownRemainingSeconds?: number;
+  cooldownType?: 'onboarding' | 'burnout';
+  cooldownTargetLocId?: string;
 }
 
 export type DeliverableType = 'code' | 'doc' | 'report' | 'spec' | 'config' | 'analysis' | 'design' | 'research';
@@ -259,9 +262,20 @@ export interface OfficeLocation {
   name: string;
   x: number;
   y: number;
-  role: AgentRole | 'general' | 'coffee' | 'meeting';
+  role: AgentRole | 'general' | 'coffee' | 'meeting' | 'gaming';
   width: number;
   height: number;
+}
+
+export interface DeliverableProject {
+  id: string;
+  taskId: string;
+  title: string;
+  type: DeliverableType;
+  lang?: string;
+  content: string;
+  createdAt: number;
+  completedBy: string | null;
 }
 
 export interface SimulationState {

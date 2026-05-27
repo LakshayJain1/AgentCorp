@@ -133,8 +133,39 @@ class PerformanceTracker {
         importance: 3,
       });
 
-      // Underperformance alert
-      if (score < 40 && member.performance.tasksCompleted > 3) {
+      // Underperformance alert and replacement
+      const isWorker = member.role === 'engineer' || member.role === 'qa' || member.role === 'researcher';
+      if (score < 50 && isWorker) {
+        this.pushActivity(hrAgent.id, 'blocked', `🚨 Replacing underperforming agent ${member.name} (${member.role}). Onboarding replacement...`);
+
+        store.addEvent({
+          id: `hr_replace_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: Date.now(),
+          type: 'review',
+          message: `🚨 HR: Replacing ${member.name} (${member.role}) due to low score (${score}/100). Hiring replacement...`,
+          agentId: hrAgent.id,
+          taskId: null,
+        });
+
+        // Generate a new unique candidate name
+        const candidateNames = ['Devon', 'Kira', 'Logan', 'Nadia', 'Zack', 'Elena', 'Connor', 'Fiona', 'Gavin', 'Hope', 'Ian', 'Julia'];
+        let candidateName = candidateNames[Math.floor(Math.random() * candidateNames.length)];
+        const currentNames = store.agents.map(a => a.name);
+        for (let attempt = 0; attempt < 20; attempt++) {
+          if (!currentNames.includes(candidateName)) break;
+          candidateName = candidateNames[Math.floor(Math.random() * candidateNames.length)];
+        }
+
+        store.updateAgent(member.id, {
+          name: `Onboarding: ${candidateName}`,
+          cooldownRemainingSeconds: 60, // 60s onboarding cooldown
+          cooldownType: 'onboarding',
+          online: false, // Temporarily offline
+          workStatus: 'waiting',
+          fsmState: 'idle',
+          efficiency: 0,
+        });
+      } else if (score < 40 && member.performance.tasksCompleted > 3) {
         this.pushActivity(hrAgent.id, 'blocked', `🚨 ${member.name} underperforming (score: ${score}). Placed on probation.`);
 
         store.addEvent({

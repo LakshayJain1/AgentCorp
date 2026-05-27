@@ -76,7 +76,7 @@ export default function Home() {
             type="text"
             value={taskIdea}
             onChange={(e) => setTaskIdea(e.target.value)}
-            placeholder="Type a task idea... then Enter"
+            placeholder="Give agents a task — e.g. &quot;Build a landing page&quot;..."
             className="w-full max-w-xs px-3 py-1.5 text-sm bg-surface border border-[#f59e0b]/50 text-[#f59e0b] rounded-lg outline-none placeholder-[#f59e0b]/30"
             autoFocus
             disabled={isInjecting}

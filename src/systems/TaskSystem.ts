@@ -134,7 +134,7 @@ export async function processTasks(): Promise<void> {
     if (action) {
       console.log(`[TASK] Matched action for "${task.title}" (status: ${task.status})`);
     } else {
-      console.log(`[TASK] No action for "${task.title}" (status: ${task.status}) - AgentRuntime should handle`);
+      console.log(`[TASK] No action for "${task.title}" (status: ${task.status}) - CentralOrchestrator will handle`);
     }
     if (!action) continue;
 

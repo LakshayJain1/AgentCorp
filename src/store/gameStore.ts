@@ -1,8 +1,9 @@
 'use client';
 
 import { create } from 'zustand';
-import { Agent, Task, SubTask, ValidationResult, GameEvent, SimulationState, AgentRole, OfficeLocation, DeliverableType, AgentActivity, AgentPerformance, AgentWorkStatus, ConversationMessage, TaskExecutionLog } from '@/agents/AgentTypes';
+import { Agent, Task, SubTask, ValidationResult, GameEvent, SimulationState, AgentRole, OfficeLocation, DeliverableType, AgentActivity, AgentPerformance, AgentWorkStatus, ConversationMessage, TaskExecutionLog, DeliverableProject } from '@/agents/AgentTypes';
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
+import { aiService } from '@/ai/AIService';
 import { simpleRuntime } from '@/runtime/SimpleRuntime';
 import { startTaskReview } from '@/systems/TaskReviewSystem';
 
@@ -42,6 +43,7 @@ export const OFFICE_LOCATIONS: OfficeLocation[] = [
   { id: 'hr_desk', name: 'HR Desk', x: 472, y: 80, role: 'hr', width: 80, height: 60 },
   { id: 'coffee_machine', name: 'Coffee Machine', x: 464, y: 88, role: 'coffee', width: 60, height: 50 },
   { id: 'meeting_room', name: 'Meeting Room', x: 328, y: 224, role: 'meeting', width: 160, height: 50 },
+  { id: 'gaming_zone', name: 'Gaming Zone', x: 180, y: 330, role: 'gaming', width: 70, height: 60 },
 ];
 
 let eventIdCounter = 0;
@@ -219,6 +221,7 @@ interface GameStore {
   selectedAgentId: string | null;
   selectedTaskId: string | null;
   credentialRequest: CredentialRequest | null;
+  deliverableProjects: DeliverableProject[];
 
   initAgents: () => void;
   addTask: () => void;
@@ -252,7 +255,13 @@ interface GameStore {
   updateSubtaskAgent: (subtaskId: string, agentId: string) => void;
   updateSubtaskValidation: (subtaskId: string, result: ValidationResult) => void;
   updateSubtaskDeliverable: (subtaskId: string, content: string, path?: string) => void;
+
+  // Deliverable Projects
+  addDeliverableProject: (project: DeliverableProject) => void;
+  generateDeliverableForTask: (taskId: string) => Promise<void>;
 }
+
+let projectIdCounter = 0;
 
 export const useGameStore = create<GameStore>((set, get) => ({
   agents: [],
@@ -270,12 +279,135 @@ export const useGameStore = create<GameStore>((set, get) => ({
   selectedAgentId: null,
   selectedTaskId: null,
   credentialRequest: null,
+  deliverableProjects: [],
 
   initAgents: () => {
     const roles: AgentRole[] = ['ceo', 'pm', 'researcher', 'engineer', 'qa', 'hr'];
     const agents = roles.map(createAgent);
     const initialEvent = createGameEvent('system', 'AgentCorp systems initialized. All agents ready.');
-    set({ agents, events: [initialEvent] });
+
+    // Seed some mock projects so the folder isn't empty
+    const mockProjects: DeliverableProject[] = [
+      {
+        id: `project_seed_1`,
+        taskId: 'seed_1',
+        title: 'Customer Dashboard',
+        type: 'code',
+        lang: 'html',
+        content: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Customer Dashboard</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:system-ui,sans-serif; background:#0f0f1e; color:#ddd; }
+.layout { display:grid; grid-template-columns:240px 1fr; min-height:100vh; }
+.sidebar { background:#1a1a2e; padding:1.5rem; border-right:1px solid #2a2a4e; }
+.sidebar h2 { color:#6c63ff; font-size:1rem; margin-bottom:1.5rem; }
+.sidebar a { display:block; color:#888; padding:0.5rem; text-decoration:none; }
+.sidebar a:hover { color:#fff; background:#2a2a4e; border-radius:4px; }
+.main { padding:2rem; }
+.stats { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:2rem; }
+.card { background:#1a1a2e; border:1px solid #2a2a4e; border-radius:8px; padding:1.2rem; }
+.card h3 { color:#888; font-size:0.8rem; text-transform:uppercase; }
+.card .value { font-size:2rem; font-weight:bold; color:#6c63ff; margin-top:0.25rem; }
+</style></head>
+<body>
+<div class="layout">
+<nav class="sidebar"><h2>AgentCorp</h2><a href="#">Overview</a><a href="#">Analytics</a><a href="#">Users</a><a href="#">Settings</a></nav>
+<div class="main"><h1>Customer Dashboard</h1>
+<div class="stats">
+<div class="card"><h3>Users</h3><div class="value">12,847</div></div>
+<div class="card"><h3>Revenue</h3><div class="value">$48,290</div></div>
+<div class="card"><h3>Active</h3><div class="value">3,421</div></div>
+</div></div></div></body></html>`,
+        createdAt: Date.now() - 86400000 * 3,
+        completedBy: null,
+      },
+      {
+        id: `project_seed_2`,
+        taskId: 'seed_2',
+        title: 'API Rate Limiter Spec',
+        type: 'spec',
+        lang: 'markdown',
+        content: `# API Rate Limiter Specification
+
+## Overview
+Rate limiting middleware for public API endpoints to prevent abuse.
+
+## Requirements
+- 100 requests/minute per API key
+- 1000 requests/minute per IP
+- Configurable limits per endpoint
+- Redis-backed sliding window
+
+## Implementation
+\`\`\`typescript
+interface RateLimitConfig {
+  windowMs: number;
+  maxRequests: number;
+  keyGenerator: (req: Request) => string;
+}
+\`\`\`
+
+## Endpoints
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| GET /api/v1/* | 100 | 1 min |
+| POST /api/v1/* | 50 | 1 min |
+| DELETE /api/v1/* | 20 | 1 min |`,
+        createdAt: Date.now() - 86400000 * 2,
+        completedBy: null,
+      },
+      {
+        id: `project_seed_3`,
+        taskId: 'seed_3',
+        title: 'Security Audit Report',
+        type: 'report',
+        lang: 'markdown',
+        content: `# Security Audit Report
+
+**Date:** ${new Date().toISOString().split('T')[0]}
+**Status:** Complete
+
+## Summary
+Comprehensive security audit of AgentCorp infrastructure.
+
+## Findings
+
+### Critical
+- None found
+
+### High
+- JWT secret key rotation not enforced
+- No rate limiting on auth endpoints
+
+### Medium
+- Missing CSRF protection on mutation endpoints
+- Debug mode enabled in production config
+
+## Recommendations
+1. Implement automated key rotation
+2. Add rate limiting middleware
+3. Enable CSRF tokens
+4. Disable debug mode in production`,
+        createdAt: Date.now() - 86400000,
+        completedBy: null,
+      },
+    ];
+
+    // Seed some initial tasks so agents have work to do
+    const mockTasks: Task[] = [
+      createTask('Build customer feedback dashboard'),
+      createTask('Audit API authentication security'),
+      createTask('Optimize database query performance'),
+    ].map((t, i) => ({
+      ...t,
+      id: `seed_task_${i + 1}`,
+      status: 'pending' as const,
+      priority: (['high', 'critical', 'medium'] as const)[i],
+    }));
+
+    set({ agents, events: [initialEvent], deliverableProjects: mockProjects, tasks: mockTasks });
   },
 
   addTask: () => {
@@ -373,6 +505,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         },
       };
     });
+    // Generate a deliverable project for the completed task
+    get().generateDeliverableForTask(taskId);
   },
 
   failTask: (taskId) => {
@@ -642,6 +776,43 @@ export const useGameStore = create<GameStore>((set, get) => ({
           s.id === subtaskId ? { ...s, deliverable: content } : s,
         ),
       })),
+    }));
+  },
+
+  // Deliverable Projects
+  addDeliverableProject: (project) => {
+    set((state) => ({
+      deliverableProjects: [project, ...state.deliverableProjects],
+    }));
+  },
+
+  generateDeliverableForTask: async (taskId) => {
+    const state = get();
+    const task = state.tasks.find((t) => t.id === taskId);
+    if (!task || task.status !== 'completed') return;
+
+    const completedAgent = state.agents.find((a) => a.currentTaskId === taskId);
+    const deliverableType = task.deliverableType || 'code';
+    const content = await aiService.generateDeliverable(task.title, deliverableType, task.deliverableLang);
+
+    const project: DeliverableProject = {
+      id: `project_${++projectIdCounter}_${Date.now()}`,
+      taskId: task.id,
+      title: task.title,
+      type: deliverableType,
+      lang: task.deliverableLang,
+      content,
+      createdAt: Date.now(),
+      completedBy: completedAgent?.id || null,
+    };
+
+    get().addDeliverableProject(project);
+
+    // Also store on the task itself
+    set((s) => ({
+      tasks: s.tasks.map((t) =>
+        t.id === taskId ? { ...t, deliverable: content } : t,
+      ),
     }));
   },
 }));

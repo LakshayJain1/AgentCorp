@@ -13,9 +13,15 @@ class AIService {
   private minInterval = 1000;
   private apiKeyChecked = false;
   private hasApiKey = false;
+  private initPromise: Promise<boolean> | null = null;
 
   async checkApiKey(): Promise<boolean> {
     if (this.apiKeyChecked) return this.hasApiKey;
+    this.initPromise = this.initPromise || this._checkApiKey();
+    return this.initPromise;
+  }
+
+  private async _checkApiKey(): Promise<boolean> {
     try {
       const res = await fetch('/api/ai', {
         method: 'POST',
@@ -24,8 +30,10 @@ class AIService {
       });
       const data = await res.json();
       this.hasApiKey = data.available === true && data.configured === true;
+      console.log(`[AIService] API key ${this.hasApiKey ? 'available' : 'NOT available'}, using ${this.hasApiKey ? 'OpenRouter AI' : 'mock responses'}`);
     } catch {
       this.hasApiKey = false;
+      console.log('[AIService] API key check failed, using mock responses');
     }
     this.apiKeyChecked = true;
     return this.hasApiKey;
@@ -1399,6 +1407,8 @@ Analysis of ${title.toLowerCase()} conducted by AgentCorp Research.
   private async processQueue(): Promise<void> {
     if (this.processing || this.queue.length === 0) return;
     this.processing = true;
+
+    await this.checkApiKey();
 
     while (this.queue.length > 0) {
       const now = Date.now();
