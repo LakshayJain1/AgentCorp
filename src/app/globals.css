@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
   --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
   --color-canvas: var(--canvas);
   --color-panel: var(--panel);
@@ -19,59 +19,168 @@
 }
 
 :root {
-  --canvas: #f0f0f5;
-  --panel: #ffffff;
-  --card: #f5f5fa;
-  --surface: #e8e8f0;
-  --elevated: #dcdce6;
-  --border: #d4d4de;
-  --text: #1a1a2e;
-  --subtle: #5a5a7a;
-  --muted: #9999b0;
-}
+  --canvas: #050805;
+  --panel: #090f09;
+  --card: #0c140c;
+  --surface: #101c10;
+  --elevated: #1a2c1a;
+  --border: #1d331d;
+  --text: #00ff88;
+  --subtle: #3f6e3f;
+  --muted: #1f361f;
 
-html.dark {
-  --canvas: #0e0e16;
-  --panel: #111118;
-  --card: #16161f;
-  --surface: #1a1a28;
-  --elevated: #2a2a45;
-  --border: #2a2a45;
-  --text: #e8e8e8;
-  --subtle: #9ca3af;
-  --muted: #6b7280;
+  --color-green: #00ff88;
+  --color-amber: #ffb400;
+  --color-red: #ff4d4d;
+  --color-blue: #00f5ff;
 }
 
 body {
-  background: var(--panel);
+  background: var(--canvas);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  overflow: hidden;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
   margin: 0;
   padding: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background 0.3s ease, color 0.3s ease;
+  position: relative;
 }
 
+/* Full-screen scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 136, 0.012) 2px,
+    rgba(0, 255, 136, 0.012) 4px
+  );
+}
+
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #1a1a24;
+  background: var(--canvas);
+  border-left: 1px solid var(--border);
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #3a3a5a;
+  background: var(--subtle);
   border-radius: 3px;
+  border: 1px solid var(--border);
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #5a5a7a;
+  background: var(--text);
+  box-shadow: 0 0 8px var(--text);
 }
 
+/* Animations */
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-2px); }
+}
+
+@keyframes crt-flicker {
+  0% { opacity: 0.985; }
+  50% { opacity: 1; }
+  100% { opacity: 0.99; }
+}
+
+@keyframes terminal-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes pulse-light {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.75; }
+}
+
+/* CRT monitor styling utilities */
+.crt-screen {
+  animation: crt-flicker 0.18s infinite;
+  position: relative;
+}
+
+.crt-scanlines {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%,
+    rgba(0, 0, 0, 0.15) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.85;
+}
+
+.crt-screen::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,0.4) 100%);
+  pointer-events: none;
+  z-index: 20;
+}
+
+.text-glow {
+  text-shadow: 0 0 4px var(--text), 0 0 10px rgba(0, 255, 136, 0.2);
+}
+
+.border-glow {
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.1), inset 0 0 10px rgba(0, 255, 136, 0.05);
+}
+
+.terminal-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 15px;
+  background-color: var(--text);
+  animation: terminal-blink 1s infinite;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+/* Fade-out Bottom Mask */
+.fade-out-bottom {
+  mask-image: linear-gradient(to bottom, black 82%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 82%, transparent 100%);
+}
+
+.pulse-skeleton {
+  animation: pulse-light 1.8s ease-in-out infinite;
+}
+
+/* Boot sequence animations */
+@keyframes typewriter {
+  from { width: 0; }
+  to { width: 100%; }
+}
+.typewriter {
+  overflow: hidden;
+  white-space: nowrap;
+  animation: typewriter 0.4s steps(30) forwards;
+  display: inline-block;
+  max-width: fit-content;
+}
+
+@keyframes boot-fade {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.boot-line {
+  animation: boot-fade 0.2s ease-out forwards;
+  opacity: 0;
 }

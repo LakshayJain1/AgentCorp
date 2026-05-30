@@ -16,12 +16,12 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  code: '#f9ca24',
-  doc: '#45b7d1',
+  code: 'var(--color-amber)',
+  doc: 'var(--color-blue)',
   report: '#a29bfe',
   spec: '#4ecdc4',
   config: '#f472b6',
-  analysis: '#ff6b6b',
+  analysis: 'var(--color-red)',
   design: '#6366f1',
   research: '#22c55e',
 };
@@ -29,23 +29,22 @@ const TYPE_COLORS: Record<string, string> = {
 export default function ProjectsFolder() {
   const projects = useGameStore((s) => s.deliverableProjects);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-
-  const selected = projects.find((p) => p.id === selectedProject);
+  const [isOpen, setIsOpen] = useState(true);
 
   return (
-    <div className="bg-panel rounded-xl border border-border/50 p-3">
+    <div className="font-mono text-xs text-text">
+      {/* Folder Header Accordion */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-between w-full mb-2.5"
+        className="flex items-center justify-between w-full mb-3 cursor-pointer py-1 hover:bg-text/5 px-1 rounded transition-all"
       >
         <div className="flex items-center gap-2">
           <span className="text-sm">📁</span>
-          <h3 className="text-subtle text-sm font-semibold">Projects</h3>
+          <h3 className="text-text font-bold uppercase tracking-wider text-glow">DELIVERABLES_ARCHIVE</h3>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-muted text-xs">{projects.length} deliverables</span>
-          <span className="text-muted text-xs">{isOpen ? '▼' : '▶'}</span>
+          <span className="text-subtle text-[10px]">{projects.length} files</span>
+          <span className="text-subtle text-[9px]">{isOpen ? '▼' : '▶'}</span>
         </div>
       </button>
 
@@ -58,54 +57,57 @@ export default function ProjectsFolder() {
             className="overflow-hidden"
           >
             {projects.length === 0 && (
-              <div className="text-muted text-xs text-center py-3">
-                No completed projects yet. Tasks will appear here when finished.
+              <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
+                <span className="text-3xl text-glow animate-pulse mb-2.5">📦</span>
+                <span className="text-text font-bold uppercase tracking-wider mb-1 text-glow">ARCHIVE_EMPTY</span>
+                <span className="text-subtle text-[10px] mb-3">No finished deliverables archived yet...</span>
+                <div className="w-full max-w-[120px] space-y-2 animate-pulse">
+                  <div className="h-1 bg-muted rounded pulse-skeleton w-3/4 mx-auto" />
+                </div>
               </div>
             )}
 
-            <div className="space-y-1 max-h-[300px] overflow-y-auto">
+            <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
               {projects.map((project) => {
                 const icon = TYPE_ICONS[project.type] || '📦';
-                const color = TYPE_COLORS[project.type] || '#888';
+                const color = TYPE_COLORS[project.type] || 'var(--text)';
                 return (
-                  <div key={project.id}>
+                  <div key={project.id} className="border border-border/20 rounded bg-card/40 p-1">
                     <button
                       onClick={() =>
                         setSelectedProject(
                           selectedProject === project.id ? null : project.id,
                         )
                       }
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface/50 text-left transition-colors"
+                      className="w-full flex items-center gap-2.5 px-2 py-1.5 hover:bg-text/5 text-left transition-colors cursor-pointer rounded"
                       style={{
-                        backgroundColor:
-                          selectedProject === project.id ? `${color}15` : 'transparent',
                         borderLeft:
                           selectedProject === project.id
-                            ? `2px solid ${color}`
-                            : '2px solid transparent',
+                            ? `3px solid ${color}`
+                            : '3px solid transparent',
                       }}
                     >
-                      <span className="text-sm">{icon}</span>
+                      <span className="text-sm shrink-0">{icon}</span>
                       <div className="min-w-0 flex-1">
-                        <div className="text-white text-xs font-medium truncate">
-                          {project.title}
+                        <div className="text-text font-bold text-[11px] truncate text-glow">
+                          [FILE] {project.title}
                         </div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2 mt-0.5">
                           <span
-                            className="text-[10px] font-medium uppercase"
+                            className="text-[9px] font-bold uppercase"
                             style={{ color }}
                           >
                             {project.type}
                           </span>
                           {project.lang && (
-                            <span className="text-muted text-[10px]">
-                              {project.lang}
+                            <span className="text-subtle text-[9px]">
+                              ext: {project.lang}
                             </span>
                           )}
                         </div>
                       </div>
-                      <span className="text-muted text-[10px] shrink-0">
-                        {new Date(project.createdAt).toLocaleDateString()}
+                      <span className="text-subtle text-[9px] shrink-0">
+                        {new Date(project.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                       </span>
                     </button>
 
@@ -115,9 +117,9 @@ export default function ProjectsFolder() {
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
-                          className="overflow-hidden ml-6 mb-1"
+                          className="overflow-hidden mb-1 px-1.5"
                         >
-                          <pre className="text-muted text-[10px] whitespace-pre-wrap bg-[#0a0a12] p-2 rounded-lg mt-1 max-h-[200px] overflow-y-auto border border-border/20 font-mono leading-relaxed">
+                          <pre className="text-text/90 text-[10px] whitespace-pre-wrap bg-[#050805] p-2.5 rounded-lg mt-2 max-h-[220px] overflow-y-auto border border-border/40 font-mono leading-normal shadow-inner">
                             {project.content.slice(0, 1500)}
                             {project.content.length > 1500 ? '\n...(truncated)' : ''}
                           </pre>

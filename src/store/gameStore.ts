@@ -259,6 +259,25 @@ interface GameStore {
   // Deliverable Projects
   addDeliverableProject: (project: DeliverableProject) => void;
   generateDeliverableForTask: (taskId: string) => Promise<void>;
+
+  // User Personalization & Connectors Tab
+  isInitialized: boolean;
+  companyName: string;
+  companyProduct: string;
+  developersCount: number;
+  connectors: {
+    github: { connected: boolean; repoUrl: string; token: string; autoCommit: boolean };
+    vercel: { connected: boolean; token: string; autoDeploy: boolean };
+    slack: { connected: boolean; webhookUrl: string; broadcastEvents: boolean };
+    ai: { provider: 'gemini' | 'openrouter'; apiKey: string };
+  };
+  initializePersonalizedOffice: (
+    companyName: string,
+    companyProduct: string,
+    developersCount: number,
+    connectors: GameStore['connectors']
+  ) => void;
+  updateConnectors: (connectors: Partial<GameStore['connectors']>) => void;
 }
 
 let projectIdCounter = 0;
@@ -275,6 +294,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     morale: 75,
     totalTasksCompleted: 0,
     totalTasksFailed: 0,
+  },
+  isInitialized: false,
+  companyName: 'AgentCorp',
+  companyProduct: 'Autonomous Developer Sandbox & OS',
+  developersCount: 1,
+  connectors: {
+    github: { connected: false, repoUrl: '', token: '', autoCommit: false },
+    vercel: { connected: false, token: '', autoDeploy: false },
+    slack: { connected: false, webhookUrl: '', broadcastEvents: false },
+    ai: { provider: 'gemini', apiKey: '' },
   },
   selectedAgentId: null,
   selectedTaskId: null,
@@ -814,6 +843,48 @@ Comprehensive security audit of AgentCorp infrastructure.
         t.id === taskId ? { ...t, deliverable: content } : t,
       ),
     }));
+  },
+
+  initializePersonalizedOffice: (companyName, companyProduct, developersCount, connectors) => {
+    // Custom seed tasks matching their startup description!
+    const customTasks: Task[] = [
+      createTask(`Establish standard workspace specs for ${companyProduct}`),
+      createTask(`Audit ${companyName} landing page and core logic`),
+      createTask(`Build continuous integration configuration for Vercel deploy`),
+    ].map((t, i) => ({
+      ...t,
+      id: `custom_task_${i + 1}_${Date.now()}`,
+      status: 'pending' as const,
+      priority: (['high', 'critical', 'medium'] as const)[i],
+    }));
+
+    set({
+      isInitialized: true,
+      companyName,
+      companyProduct,
+      developersCount,
+      connectors,
+      tasks: customTasks,
+    });
+    
+    // Re-initialize agents with fresh configurations
+    get().initAgents();
+    
+    // Add custom event log
+    const event = createGameEvent('system', `🏢 Personalized office for ${companyName} ("${companyProduct.slice(0, 50)}...") initialized! All departments active.`);
+    get().addEvent(event);
+  },
+
+  updateConnectors: (updates) => {
+    set((state) => ({
+      connectors: {
+        ...state.connectors,
+        ...updates,
+      },
+    }));
+    
+    const event = createGameEvent('system', `⚙️ Connected integration settings updated.`);
+    get().addEvent(event);
   },
 }));
 
