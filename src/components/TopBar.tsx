@@ -3,9 +3,11 @@
 import { useState, useRef, useCallback } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { motion } from 'framer-motion';
+import { useUser, SignInButton, SignUpButton, UserButton } from '@clerk/nextjs';
 import ScrumMeeting from '@/components/ScrumMeeting';
 
 export default function TopBar() {
+  const { isSignedIn } = useUser();
   const simulation = useGameStore((s) => s.simulation);
   const setPaused = useGameStore((s) => s.setPaused);
   const setSpeed = useGameStore((s) => s.setSpeed);
@@ -38,6 +40,29 @@ export default function TopBar() {
 
       {/* Controls Area */}
       <div className="flex flex-wrap items-center gap-4">
+        {/* Auth Controls */}
+        <div className="flex items-center gap-2 border-r border-border/30 pr-3">
+          {!isSignedIn ? (
+            <>
+              <SignInButton mode="modal">
+                <button className="px-2.5 py-1 text-[9px] font-bold font-mono uppercase tracking-wider border border-text/50 text-text bg-text/10 hover:bg-text/20 rounded-lg transition-all cursor-pointer">
+                  SIGN_IN
+                </button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button className="px-2.5 py-1 text-[9px] font-bold font-mono uppercase tracking-wider border border-amber-400/50 text-amber-400 bg-amber-400/10 hover:bg-amber-400/20 rounded-lg transition-all cursor-pointer">
+                  REGISTER
+                </button>
+              </SignUpButton>
+            </>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-subtle font-mono uppercase">OPERATOR</span>
+              <UserButton />
+            </div>
+          )}
+        </div>
+
         {/* Meeting trigger */}
         <ScrumMeeting />
 
