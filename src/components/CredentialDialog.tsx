@@ -3,6 +3,7 @@
 import { useGameStore } from '@/store/gameStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
+import { Eye, EyeOff, Key, X } from 'lucide-react';
 
 export default function CredentialDialog() {
   const credentialRequest = useGameStore((s) => s.credentialRequest);
@@ -22,34 +23,36 @@ export default function CredentialDialog() {
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       >
         <motion.div
-          className="bg-panel border border-border rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+          className="bg-white border border-gray-200 rounded-2xl card-shadow w-full max-w-md mx-4 overflow-hidden"
           initial={{ scale: 0.9, y: 20 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.9, y: 20 }}
         >
           <div className="p-5">
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-lg">🔑</span>
-              <h2 className="text-base font-semibold text-text">Credentials Required</h2>
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400/20 to-orange-400/20 flex items-center justify-center">
+                <Key className="w-4 h-4 text-amber-500" />
+              </div>
+              <h2 className="text-base font-semibold text-gray-900">Credentials Required</h2>
             </div>
 
-            <div className="bg-surface rounded-lg p-3 mb-4 text-sm text-text/80 space-y-1">
+            <div className="bg-gray-50 rounded-xl p-3 mb-4 text-sm text-gray-600 space-y-1">
               <p>
-                <span className="font-medium text-text">Task:</span> {credentialRequest.taskTitle}
+                <span className="font-semibold text-gray-900">Task:</span> {credentialRequest.taskTitle}
               </p>
               <p>
-                <span className="font-medium text-text">Required:</span> {credentialRequest.credentialLabel}
+                <span className="font-semibold text-gray-900">Required:</span> {credentialRequest.credentialLabel}
               </p>
-              <p className="text-xs text-text/60 mt-2">{credentialRequest.reason}</p>
+              <p className="text-xs text-gray-400 mt-2">{credentialRequest.reason}</p>
             </div>
 
-            <div className="text-xs text-text/60 mb-3">
+            <div className="text-xs text-gray-500 mb-3">
               The PM has identified that this task needs external credentials. Provide them below to continue.
             </div>
 
@@ -59,7 +62,7 @@ export default function CredentialDialog() {
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 placeholder={`Enter ${credentialRequest.credentialLabel}...`}
-                className="w-full px-3 py-2 pr-10 text-sm bg-surface border border-border rounded-lg text-text placeholder-text/30 outline-none focus:border-[#00f5ff]/50"
+                className="w-full px-3 py-2 pr-10 text-sm bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100 transition-all"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSubmit();
@@ -67,9 +70,9 @@ export default function CredentialDialog() {
               />
               <button
                 onClick={() => setShowValue(!showValue)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-text/40 hover:text-text/70 text-xs"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
               >
-                {showValue ? '🙈' : '👁️'}
+                {showValue ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -80,14 +83,14 @@ export default function CredentialDialog() {
                 dismissCredentialRequest();
                 setValue('');
               }}
-              className="px-3 py-1.5 text-xs font-medium text-text/60 hover:text-text/80 border border-border rounded-lg hover:bg-surface/50"
+              className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all cursor-pointer"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
               disabled={!value.trim()}
-              className="px-4 py-1.5 text-xs font-medium bg-[#00f5ff]/20 border border-[#00f5ff]/50 text-[#00f5ff] rounded-lg hover:bg-[#00f5ff]/30 disabled:opacity-30"
+              className="px-4 py-1.5 text-xs font-medium bg-gradient-to-r from-sky-400 to-cyan-400 text-white rounded-xl hover:from-sky-500 hover:to-cyan-500 disabled:opacity-40 transition-all shadow-sm cursor-pointer"
             >
               Provide & Resume
             </button>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X, MessageSquareText } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
 
 export default function ScrumMeeting() {
@@ -11,7 +11,6 @@ export default function ScrumMeeting() {
   const addTaskWithTitle = useGameStore((s) => s.addTaskWithTitle);
 
   useEffect(() => {
-    // Simulate fetching tasks for the meeting
     const fetchedTasks = ['Task 1', 'Task 2', 'Task 3'];
     setTasks(fetchedTasks);
   }, []);
@@ -24,9 +23,11 @@ export default function ScrumMeeting() {
   return (
     <div className="relative">
       <motion.button
+        whileTap={{ scale: 0.97 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#6366f1]/50 text-[#6366f1] bg-[#6366f1]/10 hover:bg-[#6366f1]/20 transition-all"
+        className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-violet-200 text-violet-600 bg-violet-50 hover:bg-violet-100 transition-all flex items-center gap-1.5 cursor-pointer"
       >
+        <MessageSquareText className="w-3 h-3" />
         Daily Scrum
       </motion.button>
 
@@ -35,17 +36,17 @@ export default function ScrumMeeting() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 10 }}
-          className="absolute top-full right-0 mt-2 bg-surface border border-[#6366f1]/60 rounded-lg shadow-xl p-4 w-64 z-50"
+          className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-xl card-shadow p-4 w-64 z-50"
         >
           <div className="flex justify-between items-center mb-2">
-            <h2 className="text-white font-semibold text-sm">Scrum Meeting</h2>
-            <button onClick={() => setIsOpen(false)} className="text-subtle hover:text-white">
-              <X size={16} />
+            <h2 className="text-gray-900 font-semibold text-sm">Scrum Meeting</h2>
+            <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+              <X className="w-4 h-4" />
             </button>
           </div>
           <div className="flex flex-col gap-2">
             {tasks.map((task, index) => (
-              <div key={index} className="bg-elevated p-2 rounded-md text-xs text-gray-300">
+              <div key={index} className="bg-gray-50 p-2 rounded-lg text-xs text-gray-600 border border-gray-100">
                 {task}
               </div>
             ))}
@@ -53,7 +54,7 @@ export default function ScrumMeeting() {
           <input
             type="text"
             placeholder="Add a new task..."
-            className="mt-2 w-full px-2 py-1 text-xs bg-surface border border-[#6366f1]/50 text-[#f59e0b] rounded-lg outline-none placeholder-[#f59e0b]/30"
+            className="mt-2 w-full px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100 transition-all"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && e.currentTarget.value.trim()) {
                 handleAddTask(e.currentTarget.value.trim());

@@ -3,6 +3,7 @@
 import { useGameStore } from '@/store/gameStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { useUser, SignIn, SignUp } from '@clerk/nextjs';
 import { 
   GitBranch, Play, Key, Mail, Lock, Sparkles, Server, Check, ArrowRight, 
   ShieldCheck, ChevronRight, CreditCard, Users, 
@@ -12,14 +13,10 @@ import {
 
 export default function SetupWizard() {
   const { initializePersonalizedOffice } = useGameStore();
+  const { isSignedIn } = useUser();
 
   const [step, setStep] = useState<number>(0); // Step 0 is the premium Landing Page
-
-  // Authentication Fields
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authComponent, setAuthComponent] = useState<'signin' | 'signup'>('signin');
 
   // Profile Fields
   const [companyName, setCompanyName] = useState('AgentCorp');
@@ -50,6 +47,9 @@ export default function SetupWizard() {
 
   const [aiProvider, setAiProvider] = useState<'gemini' | 'openrouter'>('gemini');
   const [aiKey, setAiKey] = useState('');
+
+  // Restoring state from sessionStorage (prevents flash on Clerk redirect)
+  const [isRestoring, setIsRestoring] = useState(true);
 
   // Deploying loading state
   const [deployStatus, setDeployStatus] = useState<string[]>([]);
@@ -98,14 +98,54 @@ export default function SetupWizard() {
     return () => clearInterval(timer);
   }, [step]);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoggingIn(true);
-    setTimeout(() => {
-      setIsLoggingIn(false);
-      setStep(2); // Go to Profile
-    }, 1500);
-  };
+  // Restore wizard state + handle auto-advance, all before first render
+  useEffect(() => {
+    if (isSignedIn === undefined) return; // Clerk session still loading
+
+    const saved = sessionStorage.getItem('wizardState');
+    if (saved) {
+      try {
+        const state = JSON.parse(saved);
+        let targetStep = state.step;
+        if (isSignedIn && targetStep === 1) {
+          targetStep = 2; // Skip auth when already signed in
+        }
+        setStep(targetStep);
+        setCompanyName(state.companyName);
+        setCompanyProduct(state.companyProduct);
+        setDevCount(state.devCount);
+        setGhConnected(state.ghConnected);
+        setGhRepo(state.ghRepo);
+        setGhToken(state.ghToken);
+        setGhCommit(state.ghCommit);
+        setVConnected(state.vConnected);
+        setVToken(state.vToken);
+        setVDeploy(state.vDeploy);
+        setSConnected(state.sConnected);
+        setSUrl(state.sUrl);
+        setSBroadcast(state.sBroadcast);
+        setAiProvider(state.aiProvider);
+        setAiKey(state.aiKey);
+      } catch {}
+    }
+    setIsRestoring(false);
+  }, [isSignedIn]);
+
+  // Persist wizard state across potential Clerk redirects
+  useEffect(() => {
+    if (isRestoring) return;
+    sessionStorage.setItem('wizardState', JSON.stringify({
+      step, companyName, companyProduct, devCount,
+      ghConnected, ghRepo, ghToken, ghCommit,
+      vConnected, vToken, vDeploy,
+      sConnected, sUrl, sBroadcast,
+      aiProvider, aiKey,
+    }));
+  }, [step, companyName, companyProduct, devCount,
+      ghConnected, ghRepo, ghToken, ghCommit,
+      vConnected, vToken, vDeploy,
+      sConnected, sUrl, sBroadcast,
+      aiProvider, aiKey, isRestoring]);
 
   const handlePaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,6 +182,7 @@ export default function SetupWizard() {
         clearInterval(interval);
         // Complete launch!
         setTimeout(() => {
+          sessionStorage.removeItem('wizardState');
           initializePersonalizedOffice(companyName, companyProduct, devCount, {
             github: { connected: ghConnected, repoUrl: ghRepo, token: ghToken, autoCommit: ghCommit },
             vercel: { connected: vConnected, token: vToken, autoDeploy: vDeploy },
@@ -158,6 +199,11 @@ export default function SetupWizard() {
     center: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -15 }
   };
+
+  // Prevent flash: show nothing while restoring saved wizard state
+  if (isRestoring) {
+    return <div className="fixed inset-0 z-50 bg-[#080b08]" />;
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-[#080b08] text-white overflow-y-auto overflow-x-hidden font-sans select-none">
@@ -366,7 +412,7 @@ export default function SetupWizard() {
             </motion.div>
           )}
 
-          {/* STEP 1: PIXEL-PERFECT MOCK CLERK AUTH MODAL */}
+          {/* STEP 1: CLERK INTEGRATED AUTH WITH CUSTOM UI */}
           {step === 1 && (
             <motion.div
               key="auth"
@@ -392,106 +438,105 @@ export default function SetupWizard() {
                   </span>
                 </div>
                 <h2 className="text-xl font-extrabold tracking-tight text-white">
-                  {authMode === 'signin' ? 'Sign in to AgentCorp' : 'Create your account'}
+                  {authComponent === 'signin' ? 'Sign in to AgentCorp' : 'Create your account'}
                 </h2>
                 <p className="text-xs text-white/50 mt-1">
                   Provide secure credentials to establish host synchronization
                 </p>
               </div>
 
-              {/* Social Login Buttons */}
-              <div className="space-y-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsLoggingIn(true);
-                    setTimeout(() => {
-                      setIsLoggingIn(false);
-                      setStep(2);
-                    }, 1200);
+              {/* Real Clerk SignIn/SignUp with custom appearance */}
+              {authComponent === 'signin' ? (
+                <SignIn
+                  appearance={{
+                    elements: {
+                      rootBox: 'w-full',
+                      card: 'bg-transparent shadow-none p-0',
+                      header: 'hidden',
+                      headerTitle: 'hidden',
+                      headerSubtitle: 'hidden',
+                      footer: 'hidden',
+                      socialButtonsBlockButton:
+                        'w-full py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all',
+                      socialButtonsBlockButtonText: 'text-white text-xs font-bold',
+                      dividerLine: 'bg-white/10',
+                      dividerText: 'text-[10px] font-mono text-white/40 uppercase',
+                      dividerRow: 'my-5',
+                      formFieldLabel:
+                        'text-[9px] font-bold text-white/60 uppercase tracking-widest mb-1.5 font-mono',
+                      formFieldInput:
+                        'w-full py-2 bg-black/40 border border-white/10 rounded-xl text-white text-xs outline-none focus:border-cyan-400/50 transition-all font-mono',
+                      formButtonPrimary:
+                        'w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white font-bold text-xs transition-all uppercase font-mono shadow-lg shadow-cyan-500/20',
+                      identityPreviewText: 'text-white text-xs',
+                      identityPreviewEditButton: 'text-cyan-400 hover:text-cyan-300 text-xs',
+                      alternativeMethodsBlockButton:
+                        'w-full py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all',
+                      alternativeMethodsBlockButtonText: 'text-white text-xs font-bold',
+                    },
                   }}
-                  className="w-full py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <svg className="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24" fill="currentColor">
-                    <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482C19.138 20.193 22 16.44 22 12.017 22 6.484 17.522 2 12 2z" />
-                  </svg>
-                  Continue with GitHub
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsLoggingIn(true);
-                    setTimeout(() => {
-                      setIsLoggingIn(false);
-                      setStep(2);
-                    }, 1200);
+                />
+              ) : (
+                <SignUp
+                  appearance={{
+                    elements: {
+                      rootBox: 'w-full',
+                      card: 'bg-transparent shadow-none p-0',
+                      header: 'hidden',
+                      headerTitle: 'hidden',
+                      headerSubtitle: 'hidden',
+                      footer: 'hidden',
+                      socialButtonsBlockButton:
+                        'w-full py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all',
+                      socialButtonsBlockButtonText: 'text-white text-xs font-bold',
+                      dividerLine: 'bg-white/10',
+                      dividerText: 'text-[10px] font-mono text-white/40 uppercase',
+                      dividerRow: 'my-5',
+                      formFieldLabel:
+                        'text-[9px] font-bold text-white/60 uppercase tracking-widest mb-1.5 font-mono',
+                      formFieldInput:
+                        'w-full py-2 bg-black/40 border border-white/10 rounded-xl text-white text-xs outline-none focus:border-cyan-400/50 transition-all font-mono',
+                      formButtonPrimary:
+                        'w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white font-bold text-xs transition-all uppercase font-mono shadow-lg shadow-cyan-500/20',
+                      identityPreviewText: 'text-white text-xs',
+                      identityPreviewEditButton: 'text-cyan-400 hover:text-cyan-300 text-xs',
+                      alternativeMethodsBlockButton:
+                        'w-full py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all',
+                      alternativeMethodsBlockButtonText: 'text-white text-xs font-bold',
+                    },
                   }}
-                  className="w-full py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-                    <path fill="#EA4335" d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.136 4.114-3.468 0-6.277-2.81-6.277-6.277s2.809-6.277 6.277-6.277c1.554 0 2.973.567 4.073 1.503l3.078-3.078C18.896 1.8 15.753 1 12.24 1 6.032 1 1 6.032 1 12.24s5.032 11.24 11.24 11.24c5.897 0 10.87-4.243 10.87-11.24 0-.687-.06-1.354-.17-1.955h-10.7z" />
-                  </svg>
-                  Continue with Google
-                </button>
-              </div>
+                />
+              )}
 
-              <div className="flex items-center gap-3 my-5">
-                <div className="h-[1px] flex-1 bg-white/10" />
-                <span className="text-[10px] font-mono text-white/40 uppercase">or</span>
-                <div className="h-[1px] flex-1 bg-white/10" />
-              </div>
-
-              {/* Standard Email/Password Form */}
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className="block text-[9px] font-bold text-white/60 uppercase tracking-widest mb-1.5 font-mono">Email Address</label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-white/40 pointer-events-none">
-                      <Mail size={13} />
-                    </span>
-                    <input
-                      type="email"
-                      required
-                      placeholder="name@company.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 bg-black/40 border border-white/10 rounded-xl text-white text-xs outline-none focus:border-cyan-400/50 transition-all font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[9px] font-bold text-white/60 uppercase tracking-widest mb-1.5 font-mono">Secure Access Key</label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-white/40 pointer-events-none">
-                      <Lock size={13} />
-                    </span>
-                    <input
-                      type="password"
-                      required
-                      placeholder="••••••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 bg-black/40 border border-white/10 rounded-xl text-white text-xs outline-none focus:border-cyan-400/50 transition-all font-mono"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoggingIn}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white font-bold text-xs transition-all uppercase font-mono flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/20 cursor-pointer"
-                >
-                  {isLoggingIn ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              {/* Toggle between Sign In / Sign Up */}
+              <div className="mt-5 text-center">
+                <span className="text-[11px] font-mono text-white/50">
+                  {authComponent === 'signin' ? (
+                    <>
+                      Don&apos;t have an account?{' '}
+                      <button
+                        onClick={() => setAuthComponent('signup')}
+                        className="text-cyan-400 hover:text-cyan-300 font-bold underline underline-offset-2 cursor-pointer"
+                      >
+                        Sign up
+                      </button>
+                    </>
                   ) : (
-                    <>Continue <ArrowRight size={14} /></>
+                    <>
+                      Already have an account?{' '}
+                      <button
+                        onClick={() => setAuthComponent('signin')}
+                        className="text-cyan-400 hover:text-cyan-300 font-bold underline underline-offset-2 cursor-pointer"
+                      >
+                        Sign in
+                      </button>
+                    </>
                   )}
-                </button>
-              </form>
+                </span>
+              </div>
 
               {/* Secure Clerk tag */}
-              <div className="mt-5 text-center flex items-center justify-center gap-1 text-[9px] font-mono text-white/30">
+              <div className="mt-4 text-center flex items-center justify-center gap-1 text-[9px] font-mono text-white/30">
                 <Lock size={10} /> Securely compiled & authenticated via Clerk
               </div>
             </motion.div>

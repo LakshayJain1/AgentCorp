@@ -25,28 +25,24 @@ export default function RightPanel() {
   const [activeTab, setActiveTab] = useState<PanelTab>('simulation');
 
   return (
-    <div className="w-[420px] shrink-0 h-full flex flex-col bg-panel border-l border-border/60">
-      {/* Tab Navigation Header */}
-      <div className="flex items-center border-b border-border/40 bg-surface/30 px-1 pt-2 shrink-0">
+    <div className="w-[420px] shrink-0 h-full flex flex-col bg-white border-l border-gray-100">
+      <div className="flex items-center border-b border-gray-100 bg-gray-50/50 px-1 pt-2 shrink-0">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`
-              relative flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold uppercase tracking-wider font-mono
-              transition-colors duration-200 rounded-t-lg
-              ${activeTab === tab.id
-                ? 'text-[#00f5ff] bg-panel border border-border/40 border-b-transparent -mb-px z-10'
-                : 'text-muted hover:text-subtle border border-transparent'
-              }
-            `}
+            className={`relative flex items-center gap-1.5 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors duration-200 rounded-t-xl ${
+              activeTab === tab.id
+                ? 'text-sky-600 bg-white border border-gray-100 border-b-transparent -mb-px z-10'
+                : 'text-gray-400 hover:text-gray-600 border border-transparent'
+            }`}
           >
             {tab.icon}
             {tab.label}
             {activeTab === tab.id && (
               <motion.div
                 layoutId="activeTabIndicator"
-                className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#00f5ff] rounded-full"
+                className="absolute bottom-0 left-2 right-2 h-[2px] bg-gradient-to-r from-sky-400 to-cyan-400 rounded-full"
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
               />
             )}
@@ -54,7 +50,6 @@ export default function RightPanel() {
         ))}
       </div>
 
-      {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         <AnimatePresence mode="wait">
           {activeTab === 'simulation' && (
@@ -66,22 +61,11 @@ export default function RightPanel() {
               transition={{ duration: 0.15 }}
               className="space-y-3"
             >
-              {/* Metrics Row */}
               <CompanyMetrics />
-
-              {/* Live Activity Feed */}
               <ActivityFeed />
-
-              {/* Agent Chat */}
               <ConversationPanel />
-
-              {/* Projects Folder */}
               <ProjectsFolder />
-
-              {/* Agent List */}
               <AgentInspector />
-
-              {/* Event Log */}
               <div className="h-[250px]">
                 <EventLog />
               </div>
@@ -97,10 +81,7 @@ export default function RightPanel() {
               transition={{ duration: 0.15 }}
               className="space-y-3"
             >
-              {/* Task Queue */}
               <TaskQueue />
-
-              {/* Execution Log */}
               <ExecutionLogViewer />
             </motion.div>
           )}

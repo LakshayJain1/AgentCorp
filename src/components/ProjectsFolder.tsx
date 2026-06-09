@@ -16,14 +16,14 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  code: 'var(--color-amber)',
-  doc: 'var(--color-blue)',
-  report: '#a29bfe',
-  spec: '#4ecdc4',
-  config: '#f472b6',
-  analysis: 'var(--color-red)',
-  design: '#6366f1',
-  research: '#22c55e',
+  code: '#F59E0B',
+  doc: '#59C7FF',
+  report: '#8B7CF6',
+  spec: '#6CC04A',
+  config: '#EC4899',
+  analysis: '#EF4444',
+  design: '#7C3AED',
+  research: '#6CC04A',
 };
 
 export default function ProjectsFolder() {
@@ -32,19 +32,18 @@ export default function ProjectsFolder() {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
-    <div className="font-mono text-xs text-text">
-      {/* Folder Header Accordion */}
+    <div className="text-sm text-gray-900">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-between w-full mb-3 cursor-pointer py-1 hover:bg-text/5 px-1 rounded transition-all"
+        className="flex items-center justify-between w-full mb-3 cursor-pointer py-1 px-1 rounded-lg hover:bg-gray-50 transition-all"
       >
         <div className="flex items-center gap-2">
           <span className="text-sm">📁</span>
-          <h3 className="text-text font-bold uppercase tracking-wider text-glow">DELIVERABLES_ARCHIVE</h3>
+          <h3 className="text-gray-900 font-semibold text-xs uppercase tracking-wider">Deliverables</h3>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-subtle text-[10px]">{projects.length} files</span>
-          <span className="text-subtle text-[9px]">{isOpen ? '▼' : '▶'}</span>
+          <span className="text-gray-400 text-[10px]">{projects.length} files</span>
+          <span className="text-gray-400 text-[9px]">{isOpen ? '▼' : '▶'}</span>
         </div>
       </button>
 
@@ -58,11 +57,13 @@ export default function ProjectsFolder() {
           >
             {projects.length === 0 && (
               <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
-                <span className="text-3xl text-glow animate-pulse mb-2.5">📦</span>
-                <span className="text-text font-bold uppercase tracking-wider mb-1 text-glow">ARCHIVE_EMPTY</span>
-                <span className="text-subtle text-[10px] mb-3">No finished deliverables archived yet...</span>
-                <div className="w-full max-w-[120px] space-y-2 animate-pulse">
-                  <div className="h-1 bg-muted rounded pulse-skeleton w-3/4 mx-auto" />
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-400/20 to-green-400/20 flex items-center justify-center mb-2.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                </div>
+                <span className="text-sm font-semibold text-gray-400 mb-1">Archive empty</span>
+                <span className="text-xs text-gray-300 mb-3">No deliverables yet...</span>
+                <div className="w-full max-w-[120px] space-y-2">
+                  <div className="h-1.5 bg-gray-100 rounded-full pulse-skeleton w-3/4 mx-auto" />
                 </div>
               </div>
             )}
@@ -70,43 +71,37 @@ export default function ProjectsFolder() {
             <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
               {projects.map((project) => {
                 const icon = TYPE_ICONS[project.type] || '📦';
-                const color = TYPE_COLORS[project.type] || 'var(--text)';
+                const color = TYPE_COLORS[project.type] || '#9CA3AF';
                 return (
-                  <div key={project.id} className="border border-border/20 rounded bg-card/40 p-1">
+                  <div key={project.id} className="border border-gray-100 rounded-xl bg-white">
                     <button
                       onClick={() =>
                         setSelectedProject(
                           selectedProject === project.id ? null : project.id,
                         )
                       }
-                      className="w-full flex items-center gap-2.5 px-2 py-1.5 hover:bg-text/5 text-left transition-colors cursor-pointer rounded"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 text-left transition-colors cursor-pointer rounded-xl"
                       style={{
-                        borderLeft:
-                          selectedProject === project.id
-                            ? `3px solid ${color}`
-                            : '3px solid transparent',
+                        borderLeft: selectedProject === project.id ? `3px solid ${color}` : '3px solid transparent',
                       }}
                     >
                       <span className="text-sm shrink-0">{icon}</span>
                       <div className="min-w-0 flex-1">
-                        <div className="text-text font-bold text-[11px] truncate text-glow">
-                          [FILE] {project.title}
+                        <div className="text-gray-900 font-semibold text-xs truncate">
+                          {project.title}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span
-                            className="text-[9px] font-bold uppercase"
-                            style={{ color }}
-                          >
+                          <span className="text-[9px] font-semibold uppercase" style={{ color }}>
                             {project.type}
                           </span>
                           {project.lang && (
-                            <span className="text-subtle text-[9px]">
+                            <span className="text-gray-400 text-[9px]">
                               ext: {project.lang}
                             </span>
                           )}
                         </div>
                       </div>
-                      <span className="text-subtle text-[9px] shrink-0">
+                      <span className="text-gray-400 text-[9px] shrink-0">
                         {new Date(project.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                       </span>
                     </button>
@@ -117,9 +112,9 @@ export default function ProjectsFolder() {
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
-                          className="overflow-hidden mb-1 px-1.5"
+                          className="overflow-hidden mb-1 px-2"
                         >
-                          <pre className="text-text/90 text-[10px] whitespace-pre-wrap bg-[#050805] p-2.5 rounded-lg mt-2 max-h-[220px] overflow-y-auto border border-border/40 font-mono leading-normal shadow-inner">
+                          <pre className="text-gray-700 text-xs whitespace-pre-wrap bg-gray-50 p-3 rounded-xl mt-2 max-h-[220px] overflow-y-auto border border-gray-100 font-mono leading-relaxed">
                             {project.content.slice(0, 1500)}
                             {project.content.length > 1500 ? '\n...(truncated)' : ''}
                           </pre>
