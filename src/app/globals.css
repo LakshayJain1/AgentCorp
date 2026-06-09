@@ -149,3 +149,59 @@ body {
 .pulse-skeleton {
   animation: pulse-soft 2s ease-in-out infinite;
 }
+
+/* Landing Page Specific Styles */
+.font-serif {
+  font-family: 'Instrument Serif', Georgia, serif;
+}
+
+.arch-header {
+  border-radius: 999px 999px 0 0;
+}
+
+@keyframes draw-arch {
+  from {
+    clip-path: ellipse(0% 0% at 50% 100%);
+    opacity: 0;
+  }
+  to {
+    clip-path: ellipse(100% 100% at 50% 100%);
+    opacity: 1;
+  }
+}
+
+.animate-draw-arch {
+  animation: draw-arch 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.text-gradient-sky {
+  background: linear-gradient(to right, #0EA5E9, #22D3EE);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.glow-btn {
+  position: relative;
+  transition: all 0.3s ease;
+}
+.glow-btn::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(135deg, #0EA5E9, #a78bfa);
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.glow-btn:hover::after {
+  opacity: 0.4;
+}
+
+/* Opaque floating menu */
+.floating-pill {
+  background: #FFFFFF;
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+

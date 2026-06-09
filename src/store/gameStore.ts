@@ -867,11 +867,59 @@ Comprehensive security audit of AgentCorp infrastructure.
       tasks: customTasks,
     });
     
-    // Re-initialize agents with fresh configurations
+    // Re-initialize base agents
     get().initAgents();
+
+    // Spawn additional engineer agents for each dev beyond 1
+    if (developersCount > 1) {
+      const extraDevNames = ['Dave', 'Priya', 'Leo'];
+      const extraDevColors = [0x00cec9, 0xfd79a8, 0x6c5ce7];
+      for (let i = 1; i < developersCount; i++) {
+        const devName = extraDevNames[(i - 1) % extraDevNames.length];
+        const extraAgent: import('@/agents/AgentTypes').Agent = {
+          id: generateId('agent'),
+          name: devName,
+          role: 'engineer',
+          traits: AGENT_PERSONALITIES['engineer'],
+          energy: 100,
+          maxEnergy: 100,
+          mood: 'neutral',
+          state: 'idle',
+          fsmState: 'idle' as const,
+          workStatus: 'idle',
+          currentTaskId: null,
+          currentSubTaskId: null,
+          workerRole: 'developer' as const,
+          x: 292 + i * 30 + Math.random() * 20,
+          y: 284 + i * 20 + Math.random() * 15,
+          targetX: 292 + i * 30,
+          targetY: 284 + i * 20,
+          conversations: [],
+          efficiency: 75 + Math.floor(Math.random() * 20),
+          color: extraDevColors[(i - 1) % extraDevColors.length],
+          emoji: '💻',
+          officeLocation: 'coding_desk',
+          aiReady: false,
+          activity: [],
+          performance: {
+            tasksCompleted: 0, tasksFailed: 0, avgCompletionTime: 0,
+            successRate: 1, collaborationScore: 50, reliabilityScore: 75,
+            toolUsageCount: 0, specializationTags: [], seniority: 'junior',
+            productivityScore: 50, promotionLevel: 'trial', reviewsCount: 0,
+            lastReviewAt: null,
+          },
+          memory: [],
+          online: true,
+          lastActiveAt: Date.now(),
+        };
+        set((state) => ({ agents: [...state.agents, extraAgent] }));
+      }
+      const devEvent = createGameEvent('system', `🚀 ${developersCount} developer agents spawned on the office floor!`);
+      get().addEvent(devEvent);
+    }
     
     // Add custom event log
-    const event = createGameEvent('system', `🏢 Personalized office for ${companyName} ("${companyProduct.slice(0, 50)}...") initialized! All departments active.`);
+    const event = createGameEvent('system', `🏢 Personalized office for ${companyName} initialized! All departments active.`);
     get().addEvent(event);
   },
 

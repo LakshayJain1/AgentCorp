@@ -14,7 +14,7 @@ export default function SetupWizard() {
   const { initializePersonalizedOffice } = useGameStore();
   const { isSignedIn } = useUser();
 
-  const [step, setStep] = useState<number>(0);
+  const [step, setStep] = useState<number>(1);
   const [authComponent, setAuthComponent] = useState<'signin' | 'signup'>('signin');
 
   const [companyName, setCompanyName] = useState('AgentCorp');
@@ -92,30 +92,45 @@ export default function SetupWizard() {
       try {
         const state = JSON.parse(saved);
         let targetStep = state.step;
+        // Never restore to step 0 or 5 — both are dead-ends without proper context
+        if (targetStep === 0 || targetStep >= 5) {
+          targetStep = isSignedIn ? 2 : 1;
+          sessionStorage.removeItem('wizardState');
+        }
         if (isSignedIn && targetStep === 1) targetStep = 2;
         setStep(targetStep);
         setCompanyName(state.companyName);
         setCompanyProduct(state.companyProduct);
         setDevCount(state.devCount);
-        setGhConnected(state.ghConnected);
-        setGhRepo(state.ghRepo);
-        setGhToken(state.ghToken);
-        setGhCommit(state.ghCommit);
-        setVConnected(state.vConnected);
-        setVToken(state.vToken);
-        setVDeploy(state.vDeploy);
-        setSConnected(state.sConnected);
-        setSUrl(state.sUrl);
-        setSBroadcast(state.sBroadcast);
-        setAiProvider(state.aiProvider);
-        setAiKey(state.aiKey);
-      } catch {}
+        setGhConnected(state.ghConnected ?? true);
+        setGhRepo(state.ghRepo ?? '');
+        setGhToken(state.ghToken ?? '');
+        setGhCommit(state.ghCommit ?? true);
+        setVConnected(state.vConnected ?? true);
+        setVToken(state.vToken ?? '');
+        setVDeploy(state.vDeploy ?? true);
+        setSConnected(state.sConnected ?? false);
+        setSUrl(state.sUrl ?? '');
+        setSBroadcast(state.sBroadcast ?? true);
+        setAiProvider(state.aiProvider ?? 'gemini');
+        setAiKey(state.aiKey ?? '');
+      } catch {
+        sessionStorage.removeItem('wizardState');
+      }
+    } else {
+      if (isSignedIn) {
+        setStep(2);
+      } else {
+        setStep(1);
+      }
     }
     setIsRestoring(false);
   }, [isSignedIn]);
 
   useEffect(() => {
     if (isRestoring) return;
+    // Don't persist the launch/deploying screen — a refresh should restart cleanly
+    if (step >= 5) return;
     sessionStorage.setItem('wizardState', JSON.stringify({
       step, companyName, companyProduct, devCount,
       ghConnected, ghRepo, ghToken, ghCommit,
@@ -135,7 +150,7 @@ export default function SetupWizard() {
     setTimeout(() => {
       setIsPaying(false);
       setPaymentSuccess(true);
-      setTimeout(() => setStep(4), 1000);
+      setTimeout(() => handleLaunchSequence(), 1000);
     }, 2000);
   };
 
@@ -539,6 +554,15 @@ export default function SetupWizard() {
                   </p>
                 </div>
               </div>
+
+              {/* Testing Disclaimer */}
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2.5">
+                <span className="text-amber-500 text-base shrink-0">⚠️</span>
+                <p className="text-[10px] text-amber-700 leading-relaxed">
+                  <strong>Beta Disclaimer:</strong> AgentCorp is in early testing. Agents may make mistakes, produce incorrect outputs, or take unintended actions. <strong>Use on your own risk</strong> — do not run on production repositories without review. No data is guaranteed to be safe.
+                </p>
+              </div>
+
               <div className="flex gap-4 pt-2">
                 <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 font-semibold text-xs hover:bg-gray-100 transition-colors cursor-pointer">
                   Back
@@ -679,8 +703,8 @@ export default function SetupWizard() {
                   <button onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 font-semibold text-xs hover:bg-gray-100 transition-colors cursor-pointer">
                     Back
                   </button>
-                  <button onClick={() => setStep(4)} className="flex-1 py-2.5 rounded-xl bg-green-50 hover:bg-green-100 border border-green-200 text-green-600 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
-                    Authorize Spawn <ArrowRight size={14} />
+                  <button onClick={handleLaunchSequence} className="flex-1 py-2.5 rounded-xl bg-green-50 hover:bg-green-100 border border-green-200 text-green-600 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                    Launch Simulation <ArrowRight size={14} />
                   </button>
                 </div>
               ) : (
@@ -708,7 +732,7 @@ export default function SetupWizard() {
             </motion.div>
           )}
 
-          {step === 4 && (
+          {step === 999 && (
             <motion.div
               key="connectors"
               variants={wizardVariants}

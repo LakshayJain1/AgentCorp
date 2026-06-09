@@ -11,7 +11,7 @@ export default function OnboardPage() {
 
   useEffect(() => {
     if (isInitialized) {
-      router.replace('/');
+      router.replace('/workspace');
     }
   }, [isInitialized, router]);
 
