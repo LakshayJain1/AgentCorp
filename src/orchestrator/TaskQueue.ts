@@ -71,7 +71,7 @@ export class TaskQueue {
         taskId: item.subtask.parentTaskId,
       });
 
-      availableWorker.assignSubtask(item.subtask, item.retryDetails);
+      availableWorker.assignSubtask(item.subtask);
     }
   }
 

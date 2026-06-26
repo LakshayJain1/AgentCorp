@@ -9,155 +9,33 @@ class ToolRegistry {
   private tools: Map<string, ToolHandler> = new Map();
 
   constructor() {
-    this.register({
-      definition: {
-        name: 'read_file',
-        description: 'Read the contents of a file at the given path',
-        parameters: { path: 'string' },
-      },
-      execute: async ({ path }) => {
-        const start = performance.now();
-        try {
-          const res = await fetch('/api/tool', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tool: 'read_file', params: { path } }),
-          });
-          const data = await res.json();
-          return { success: data.success, output: data.output, duration: performance.now() - start };
-        } catch (e) {
-          return { success: false, output: '', error: String(e), duration: performance.now() - start };
-        }
-      },
-    });
-
-    this.register({
-      definition: {
-        name: 'write_file',
-        description: 'Write content to a file at the given path',
-        parameters: { path: 'string', content: 'string' },
-      },
-      execute: async ({ path, content }) => {
-        const start = performance.now();
-        try {
-          const res = await fetch('/api/tool', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tool: 'write_file', params: { path, content } }),
-          });
-          const data = await res.json();
-          return { success: data.success, output: `Wrote ${content.length} bytes to ${path}`, duration: performance.now() - start };
-        } catch (e) {
-          return { success: false, output: '', error: String(e), duration: performance.now() - start };
-        }
-      },
-    });
-
-    this.register({
-      definition: {
-        name: 'search_files',
-        description: 'Search for files matching a glob pattern',
-        parameters: { pattern: 'string' },
-      },
-      execute: async ({ pattern }) => {
-        const start = performance.now();
-        try {
-          const res = await fetch('/api/tool', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tool: 'search_files', params: { pattern } }),
-          });
-          const data = await res.json();
-          return { success: data.success, output: data.output, duration: performance.now() - start };
-        } catch (e) {
-          return { success: false, output: '', error: String(e), duration: performance.now() - start };
-        }
-      },
-    });
-
-    this.register({
-      definition: {
-        name: 'read_directory',
-        description: 'List files and directories in a directory',
-        parameters: { path: 'string' },
-      },
-      execute: async ({ path }) => {
-        const start = performance.now();
-        try {
-          const res = await fetch('/api/tool', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tool: 'read_directory', params: { path } }),
-          });
-          const data = await res.json();
-          return { success: data.success, output: data.output, duration: performance.now() - start };
-        } catch (e) {
-          return { success: false, output: '', error: String(e), duration: performance.now() - start };
-        }
-      },
-    });
-
-    this.register({
-      definition: {
-        name: 'execute_command',
-        description: 'Run a terminal command on the host system',
-        parameters: { command: 'string', workdir: 'string' },
-      },
-      execute: async ({ command, workdir }) => {
-        const start = performance.now();
-        try {
-          const res = await fetch('/api/tool', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tool: 'execute_command', params: { command, workdir: workdir || '' } }),
-          });
-          const data = await res.json();
-          return { success: data.success, output: data.output, duration: performance.now() - start };
-        } catch (e) {
-          return { success: false, output: '', error: String(e), duration: performance.now() - start };
-        }
-      },
-    });
-
-    this.register({
-      definition: {
-        name: 'search_codebase',
-        description: 'Search for text patterns in the codebase',
-        parameters: { pattern: 'string', include: 'string' },
-      },
-      execute: async ({ pattern, include }) => {
-        const start = performance.now();
-        try {
-          const res = await fetch('/api/tool', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tool: 'search_codebase', params: { pattern, include: include || '' } }),
-          });
-          const data = await res.json();
-          return { success: data.success, output: data.output, duration: performance.now() - start };
-        } catch (e) {
-          return { success: false, output: '', error: String(e), duration: performance.now() - start };
-        }
-      },
-    });
-
+    console.log('[AgentCorp] ToolRegistry constructed');
     this.register({
       definition: {
         name: 'ask_agent',
-        description: 'Send a message to another agent and get their response',
+        description: 'Send a prompt to the AI and get a response. The primary tool for all agent work.',
         parameters: { agentRole: 'string', question: 'string' },
       },
       execute: async ({ agentRole, question }) => {
         const start = performance.now();
+        console.log('[AgentCorp] ask_agent executing — role:', agentRole, 'question length:', question?.length);
         try {
           const res = await fetch('/api/ai', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: question, role: agentRole, action: 'chat' }),
           });
+          console.log('[AgentCorp] /api/ai response status:', res.status);
+          if (!res.ok) {
+            const errorText = await res.text().catch(() => 'unknown');
+            console.error('[AgentCorp] /api/ai error:', res.status, errorText);
+            return { success: false, output: '', error: `API returned ${res.status}: ${errorText}`, duration: performance.now() - start };
+          }
           const data = await res.json();
+          console.log('[AgentCorp] /api/ai response data keys:', Object.keys(data));
           return { success: true, output: data.content || 'No response', duration: performance.now() - start };
         } catch (e) {
+          console.error('[AgentCorp] /api/ai fetch failed:', e);
           return { success: false, output: '', error: String(e), duration: performance.now() - start };
         }
       },
@@ -181,8 +59,10 @@ class ToolRegistry {
     params: Record<string, string>,
     onLog?: (log: { action: string; tool: string; input: string; output: string; status: 'running' | 'success' | 'error' }) => void,
   ): Promise<ToolResult> {
+    console.log('[AgentCorp] executeTool called:', name, Object.keys(params));
     const tool = this.tools.get(name);
     if (!tool) {
+      console.error('[AgentCorp] unknown tool:', name);
       return { success: false, output: '', error: `Unknown tool: ${name}`, duration: 0 };
     }
 
@@ -204,6 +84,7 @@ class ToolRegistry {
       status: result.success ? 'success' : 'error',
     });
 
+    console.log('[AgentCorp] executeTool result:', name, 'success:', result.success, 'outputLength:', result.output?.length);
     return result;
   }
 }

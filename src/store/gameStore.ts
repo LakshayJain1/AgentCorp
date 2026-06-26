@@ -1,11 +1,10 @@
 'use client';
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { Agent, Task, SubTask, ValidationResult, GameEvent, SimulationState, AgentRole, OfficeLocation, DeliverableType, AgentActivity, AgentPerformance, AgentWorkStatus, ConversationMessage, TaskExecutionLog, DeliverableProject } from '@/agents/AgentTypes';
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
-import { aiService } from '@/ai/AIService';
-import { simpleRuntime } from '@/runtime/SimpleRuntime';
-import { startTaskReview } from '@/systems/TaskReviewSystem';
+import { agentRuntime } from '@/runtime/AgentRuntime';
 
 const TASK_TITLES = [
   'Analyze customer feedback',
@@ -282,7 +281,9 @@ interface GameStore {
 
 let projectIdCounter = 0;
 
-export const useGameStore = create<GameStore>((set, get) => ({
+export const useGameStore = create<GameStore>()(
+  persist(
+    (set, get) => ({
   agents: [],
   tasks: [],
   events: [],
@@ -424,19 +425,7 @@ Comprehensive security audit of AgentCorp infrastructure.
       },
     ];
 
-    // Seed some initial tasks so agents have work to do
-    const mockTasks: Task[] = [
-      createTask('Build customer feedback dashboard'),
-      createTask('Audit API authentication security'),
-      createTask('Optimize database query performance'),
-    ].map((t, i) => ({
-      ...t,
-      id: `seed_task_${i + 1}`,
-      status: 'pending' as const,
-      priority: (['high', 'critical', 'medium'] as const)[i],
-    }));
-
-    set({ agents, events: [initialEvent], deliverableProjects: mockProjects, tasks: mockTasks });
+    set({ agents, events: [initialEvent], deliverableProjects: mockProjects, tasks: [] });
   },
 
   addTask: () => {
@@ -449,15 +438,18 @@ Comprehensive security audit of AgentCorp infrastructure.
   },
 
   addTaskWithTitle: (title: string, contextFile?: string) => {
+    console.log('[AgentCorp] addTaskWithTitle called:', title);
     const task = createTask(title, contextFile);
+    console.log('[AgentCorp] created task:', { id: task.id, title: task.title, status: task.status, assignedTo: task.assignedTo });
     const event = createGameEvent('task', `New task created: ${task.title}`);
     set((state) => ({
       tasks: [...state.tasks, task],
       events: [event, ...state.events.slice(0, 49)],
     }));
 
-    // Agents will visibly think about and review this task
-    startTaskReview(task);
+    // Agents will process this task through the deliverable pipeline
+    console.log('[AgentCorp] calling generateDeliverableForTask for:', task.id);
+    get().generateDeliverableForTask(task.id);
   },
 
   updateAgent: (id, updates) => {
@@ -612,16 +604,11 @@ Comprehensive security audit of AgentCorp infrastructure.
 
       set((state) => ({
         tasks: state.tasks.map((t) =>
-          t.id === req.taskId ? { ...t, status: 'in_progress' as const } : t,
+          t.id === req.taskId ? { ...t, status: 'in_progress' as const, aiContext: { ...t.aiContext, [credentialKey]: value } } : t,
         ),
       }));
 
-      // Execute task with credential context
-      simpleRuntime.executeTask({
-        ...task,
-        status: 'in_progress',
-        aiContext: { ...task.aiContext, [credentialKey]: value },
-      });
+      get().generateDeliverableForTask(req.taskId);
     }
 
     const ev = createGameEvent('system', `Credentials provided for "${req.taskTitle}". Task resumed.`);
@@ -660,7 +647,7 @@ Comprehensive security audit of AgentCorp infrastructure.
       ),
     }));
 
-    simpleRuntime.executeTask({ ...task, status: 'in_progress' });
+    get().generateDeliverableForTask(taskId);
   },
 
   // === NEW RUNTIME API ===
@@ -816,55 +803,29 @@ Comprehensive security audit of AgentCorp infrastructure.
   },
 
   generateDeliverableForTask: async (taskId) => {
+    console.log('[AgentCorp] generateDeliverableForTask called:', taskId);
     const state = get();
     const task = state.tasks.find((t) => t.id === taskId);
-    if (!task || task.status !== 'completed') return;
+    if (!task) {
+      console.warn('[AgentCorp] generateDeliverableForTask — task not found:', taskId);
+      return;
+    }
+    console.log('[AgentCorp] generateDeliverableForTask — task found:', { id: task.id, status: task.status, assignedTo: task.assignedTo });
 
-    const completedAgent = state.agents.find((a) => a.currentTaskId === taskId);
-    const deliverableType = task.deliverableType || 'code';
-    const content = await aiService.generateDeliverable(task.title, deliverableType, task.deliverableLang);
-
-    const project: DeliverableProject = {
-      id: `project_${++projectIdCounter}_${Date.now()}`,
-      taskId: task.id,
-      title: task.title,
-      type: deliverableType,
-      lang: task.deliverableLang,
-      content,
-      createdAt: Date.now(),
-      completedBy: completedAgent?.id || null,
-    };
-
-    get().addDeliverableProject(project);
-
-    // Also store on the task itself
-    set((s) => ({
-      tasks: s.tasks.map((t) =>
-        t.id === taskId ? { ...t, deliverable: content } : t,
-      ),
-    }));
+    // agentRuntime.processTask already creates the deliverable project and completes/fails the task
+    console.log('[AgentCorp] calling agentRuntime.processTask');
+    await agentRuntime.processTask(task);
+    console.log('[AgentCorp] agentRuntime.processTask returned');
   },
 
   initializePersonalizedOffice: (companyName, companyProduct, developersCount, connectors) => {
-    // Custom seed tasks matching their startup description!
-    const customTasks: Task[] = [
-      createTask(`Establish standard workspace specs for ${companyProduct}`),
-      createTask(`Audit ${companyName} landing page and core logic`),
-      createTask(`Build continuous integration configuration for Vercel deploy`),
-    ].map((t, i) => ({
-      ...t,
-      id: `custom_task_${i + 1}_${Date.now()}`,
-      status: 'pending' as const,
-      priority: (['high', 'critical', 'medium'] as const)[i],
-    }));
-
     set({
       isInitialized: true,
       companyName,
       companyProduct,
       developersCount,
       connectors,
-      tasks: customTasks,
+      tasks: [],
     });
     
     // Re-initialize base agents
@@ -934,7 +895,19 @@ Comprehensive security audit of AgentCorp infrastructure.
     const event = createGameEvent('system', `⚙️ Connected integration settings updated.`);
     get().addEvent(event);
   },
-}));
+}),
+    {
+      name: 'agentcorp-storage',
+      partialize: (state) => ({
+        isInitialized: state.isInitialized,
+        companyName: state.companyName,
+        companyProduct: state.companyProduct,
+        developersCount: state.developersCount,
+        connectors: state.connectors,
+      }),
+    },
+  ),
+);
 
 export function getAgentById(id: string | null): Agent | undefined {
   if (!id) return undefined;

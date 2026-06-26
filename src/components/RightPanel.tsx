@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, Plug, ListChecks } from 'lucide-react';
+import { Activity, Plug, ListChecks, FolderOpen } from 'lucide-react';
 import EventLog from './EventLog';
 import AgentInspector from './AgentInspector';
 import CompanyMetrics from './CompanyMetrics';
@@ -13,11 +13,12 @@ import ConversationPanel from './ConversationPanel';
 import ProjectsFolder from './ProjectsFolder';
 import ConnectorsTab from './ConnectorsTab';
 
-type PanelTab = 'simulation' | 'connectors' | 'tasks';
+type PanelTab = 'simulation' | 'connectors' | 'tasks' | 'deliverables';
 
 const TABS: { id: PanelTab; label: string; icon: React.ReactNode }[] = [
   { id: 'simulation', label: 'Live', icon: <Activity size={13} /> },
   { id: 'tasks', label: 'Tasks', icon: <ListChecks size={13} /> },
+  { id: 'deliverables', label: 'Deliverables', icon: <FolderOpen size={13} /> },
   { id: 'connectors', label: 'Connectors', icon: <Plug size={13} /> },
 ];
 
@@ -83,6 +84,18 @@ export default function RightPanel() {
             >
               <TaskQueue />
               <ExecutionLogViewer />
+            </motion.div>
+          )}
+
+          {activeTab === 'deliverables' && (
+            <motion.div
+              key="deliverables"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.15 }}
+            >
+              <ProjectsFolder />
             </motion.div>
           )}
 

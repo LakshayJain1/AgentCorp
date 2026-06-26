@@ -1,7 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const TYPE_ICONS: Record<string, string> = {
@@ -118,6 +118,28 @@ export default function ProjectsFolder() {
                             {project.content.slice(0, 1500)}
                             {project.content.length > 1500 ? '\n...(truncated)' : ''}
                           </pre>
+                          <div className="flex gap-2 mt-2 mb-1">
+                            <button
+                              onClick={() => navigator.clipboard.writeText(project.content)}
+                              className="text-xs px-3 py-1.5 bg-sky-50 text-sky-600 rounded-lg hover:bg-sky-100 transition-colors cursor-pointer"
+                            >
+                              Copy
+                            </button>
+                            <button
+                              onClick={() => {
+                                const blob = new Blob([project.content], { type: 'text/plain' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `${project.title.replace(/\s+/g, '_')}.${project.lang || 'txt'}`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              }}
+                              className="text-xs px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer"
+                            >
+                              Download
+                            </button>
+                          </div>
                         </motion.div>
                       )}
                     </AnimatePresence>

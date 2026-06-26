@@ -1,44 +1,28 @@
-import { BaseWorkerAgent, AgentStep } from './BaseWorkerAgent';
+import { BaseWorkerAgent } from './BaseWorkerAgent';
 import { SubTask, WorkerRole } from './AgentTypes';
+import { toolRegistry } from '@/runtime/ToolRegistry';
 
 export class QAAgent extends BaseWorkerAgent {
   getWorkerRole(): WorkerRole {
     return 'qa_worker';
   }
 
-  protected async getExecutionSteps(subtask: SubTask): Promise<AgentStep[]> {
-    return [
-      {
-        tool: 'execute_command', required: false,
-        params: { command: 'npx tsc --noEmit 2>&1 | head -30', workdir: '' },
-        description: 'Running TypeScript type check',
-        storeAs: 'tsc_output',
-      },
-      {
-        tool: 'execute_command', required: false,
-        params: { command: 'npm run lint 2>&1 | head -20', workdir: '' },
-        description: 'Running linter',
-        storeAs: 'lint_output',
-      },
-      {
-        tool: 'ask_agent', required: true,
-        params: {
-          agentRole: 'qa',
-          question: `QA Review for task: "${subtask.description}"
+  protected async generateDeliverable(subtask: SubTask): Promise<string> {
+    const deliverablePreview = subtask.deliverable
+      ? `Deliverable to review:\n${subtask.deliverable.slice(0, 1000)}`
+      : 'No deliverable provided for review.';
 
-TypeScript check:
-{tsc_output}
+    const prompt = `You are a QA engineer at AgentCorp. Review the following deliverable for QA task: "${subtask.description}"
 
-Lint output:
-{lint_output}
+${deliverablePreview}
 
-${subtask.deliverable ? `Deliverable preview:\n${subtask.deliverable.slice(0, 500)}` : ''}
+Evaluate: correctness, completeness, code quality, potential issues. Return QA_PASS or QA_FAIL with detailed reasoning. Format in markdown.`;
 
-Evaluate quality. Return QA_PASS or QA_FAIL with reason.`,
-        },
-        description: 'Performing QA review',
-        storeAs: 'qa_result',
-      },
-    ];
+    const result = await toolRegistry.executeTool('ask_agent', {
+      agentRole: 'qa',
+      question: prompt,
+    });
+
+    return result.success ? result.output : '';
   }
 }

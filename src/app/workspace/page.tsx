@@ -18,6 +18,7 @@ import ExecutionLogViewer from '@/components/ExecutionLogViewer';
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
+import { centralOrchestrator } from '@/orchestrator/CentralOrchestrator';
 import { Cpu, Loader2, Sparkles } from 'lucide-react';
 
 const BootLoader = () => {
@@ -63,8 +64,11 @@ export default function WorkspacePage() {
 
   const handleInjectCustom = () => {
     if (!taskIdea.trim()) return;
+    console.log('[AgentCorp] User submitted task from input bar:', taskIdea.trim());
     setIsInjecting(true);
-    addTaskWithTitle(taskIdea.trim());
+    centralOrchestrator.handleUserRequest(taskIdea.trim()).catch(err => {
+      console.error('[AgentCorp] handleUserRequest failed:', err);
+    });
     setTaskIdea('');
     setIsInjecting(false);
   };
