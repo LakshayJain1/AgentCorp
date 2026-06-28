@@ -73,7 +73,7 @@ export class CentralOrchestrator {
       streamId: `user_${Date.now()}`,
     });
 
-    const intent = classifyIntent(request);
+    const intent = await classifyIntent(request);
     console.log('[AgentCorp] classified intent:', intent.type, intent.requiredKeys);
 
     if (intent.type === 'needs_credentials') {

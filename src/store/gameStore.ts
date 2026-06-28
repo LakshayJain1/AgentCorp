@@ -4,27 +4,18 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Agent, Task, SubTask, ValidationResult, GameEvent, SimulationState, AgentRole, OfficeLocation, DeliverableType, AgentActivity, AgentPerformance, AgentWorkStatus, ConversationMessage, TaskExecutionLog, DeliverableProject } from '@/agents/AgentTypes';
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
+import { configLoader } from '@/config/ConfigLoader';
 import { agentRuntime } from '@/runtime/AgentRuntime';
 
-const TASK_TITLES = [
-  'Analyze customer feedback',
-  'Fix API issue',
-  'Review compliance report',
-  'Prepare deployment',
-  'Investigate hallucination',
-  'Optimize database queries',
-  'Update documentation',
-  'Refactor authentication module',
-  'Design new feature spec',
-  'Run security audit',
-  'Improve test coverage',
-  'Monitor system health',
-  'Research competitor product',
-  'Triage bug reports',
-  'Plan sprint roadmap',
+const DEFAULT_TASK_TITLES = [
+  'Analyze customer feedback', 'Fix API issue', 'Review compliance report', 'Prepare deployment',
+  'Investigate hallucination', 'Optimize database queries', 'Update documentation',
+  'Refactor authentication module', 'Design new feature spec', 'Run security audit',
+  'Improve test coverage', 'Monitor system health', 'Research competitor product',
+  'Triage bug reports', 'Plan sprint roadmap',
 ];
 
-const AGENT_NAMES: Record<AgentRole, { name: string; color: number; emoji: string }> = {
+const DEFAULT_AGENT_NAMES: Record<AgentRole, { name: string; color: number; emoji: string }> = {
   ceo: { name: 'Alex', color: 0xff6b6b, emoji: '👑' },
   pm: { name: 'Sam', color: 0x4ecdc4, emoji: '📋' },
   researcher: { name: 'Jill', color: 0x45b7d1, emoji: '🔬' },
@@ -33,7 +24,7 @@ const AGENT_NAMES: Record<AgentRole, { name: string; color: number; emoji: strin
   hr: { name: 'Riley', color: 0xf472b6, emoji: '📊' },
 };
 
-export const OFFICE_LOCATIONS: OfficeLocation[] = [
+const DEFAULT_OFFICE_LOCATIONS: OfficeLocation[] = [
   { id: 'ceo_office', name: 'CEO Office', x: 64, y: 94, role: 'ceo', width: 100, height: 80 },
   { id: 'pm_desk', name: 'PM Desk', x: 292, y: 104, role: 'pm', width: 80, height: 60 },
   { id: 'server_rack', name: 'Server Rack', x: 64, y: 280, role: 'researcher', width: 100, height: 70 },
@@ -44,6 +35,92 @@ export const OFFICE_LOCATIONS: OfficeLocation[] = [
   { id: 'meeting_room', name: 'Meeting Room', x: 328, y: 224, role: 'meeting', width: 160, height: 50 },
   { id: 'gaming_zone', name: 'Gaming Zone', x: 180, y: 330, role: 'gaming', width: 70, height: 60 },
 ];
+
+let cachedTaskTitles: string[] | null = null;
+let cachedAgentNames: Record<AgentRole, { name: string; color: number; emoji: string }> | null = null;
+let cachedOfficeLocations: OfficeLocation[] | null = null;
+let cachedExtraDevNames: string[] | null = null;
+let cachedExtraDevColors: number[] | null = null;
+
+export function EXTRA_DEV_NAMES(): string[] {
+  return cachedExtraDevNames ?? ['Dave', 'Priya', 'Leo'];
+}
+
+export function EXTRA_DEV_COLORS(): number[] {
+  return cachedExtraDevColors ?? [0x00cec9, 0xfd79a8, 0x6c5ce7];
+}
+
+export function TASK_TITLES(): string[] {
+  return cachedTaskTitles ?? DEFAULT_TASK_TITLES;
+}
+
+export function AGENT_NAMES(): Record<AgentRole, { name: string; color: number; emoji: string }> {
+  return cachedAgentNames ?? DEFAULT_AGENT_NAMES;
+}
+
+export function OFFICE_LOCATIONS(): OfficeLocation[] {
+  return cachedOfficeLocations ?? DEFAULT_OFFICE_LOCATIONS;
+}
+
+export async function loadGameConfig(): Promise<void> {
+  if (cachedTaskTitles && cachedAgentNames && cachedOfficeLocations) return;
+  try {
+    const md = await configLoader.fetchText('/config/game-config.md');
+
+    // Task titles
+    const tasksSection = configLoader.getSection(md, 'Task Titles');
+    if (tasksSection) {
+      cachedTaskTitles = configLoader.parseBulletList(tasksSection);
+    }
+
+    // Agent names table
+    const namesSection = configLoader.getSection(md, 'Agent Names');
+    if (namesSection) {
+      const rows = configLoader.parseTable(namesSection);
+      const names: Record<string, { name: string; color: number; emoji: string }> = {};
+      for (const row of rows) {
+        const hex = row.Color || '#ff6b6b';
+        names[row.Role] = {
+          name: row.Name || 'Unknown',
+          color: parseInt(hex.replace('#', ''), 16),
+          emoji: row.Emoji || '❓',
+        };
+      }
+      cachedAgentNames = names as Record<AgentRole, { name: string; color: number; emoji: string }>;
+    }
+
+    // Office locations table
+    const locsSection = configLoader.getSection(md, 'Office Locations');
+    if (locsSection) {
+      const rows = configLoader.parseTable(locsSection);
+      cachedOfficeLocations = rows.map(r => ({
+        id: r.Id || '',
+        name: r.Name || '',
+        x: parseInt(r.X || '0'),
+        y: parseInt(r.Y || '0'),
+        role: r.Role as OfficeLocation['role'],
+        width: parseInt(r.Width || '80'),
+        height: parseInt(r.Height || '60'),
+      }));
+    }
+
+    // Extra developer names
+    const devNamesSection = configLoader.getSection(md, 'Extra Developer Names');
+    if (devNamesSection) {
+      cachedExtraDevNames = configLoader.parseBulletList(devNamesSection);
+    }
+
+    // Extra developer colors
+    const devColorsSection = configLoader.getSection(md, 'Extra Developer Colors');
+    if (devColorsSection) {
+      cachedExtraDevColors = configLoader.parseBulletList(devColorsSection).map(c => parseInt(c.replace('#', ''), 16));
+    }
+  } catch {
+    cachedTaskTitles = DEFAULT_TASK_TITLES;
+    cachedAgentNames = DEFAULT_AGENT_NAMES;
+    cachedOfficeLocations = DEFAULT_OFFICE_LOCATIONS;
+  }
+}
 
 let eventIdCounter = 0;
 let taskIdCounter = 0;
@@ -60,13 +137,13 @@ function generateId(prefix: string): string {
 }
 
 function createAgent(role: AgentRole): Agent {
-  const info = AGENT_NAMES[role];
-  const location = OFFICE_LOCATIONS.find(l => l.role === role);
+  const info = AGENT_NAMES()[role];
+  const location = OFFICE_LOCATIONS().find(l => l.role === role);
   return {
     id: generateId('agent'),
     name: info.name,
     role,
-    traits: AGENT_PERSONALITIES[role] || AGENT_PERSONALITIES.engineer,
+    traits: AGENT_PERSONALITIES()[role] || AGENT_PERSONALITIES().engineer,
     energy: 100,
     maxEnergy: 100,
     mood: 'neutral',
@@ -157,7 +234,7 @@ function detectDeliverableType(title: string): { type: DeliverableType; lang?: s
 }
 
 function createTask(providedTitle?: string, contextFile?: string): Task {
-  const title = providedTitle || TASK_TITLES[Math.floor(Math.random() * TASK_TITLES.length)];
+  const title = providedTitle || TASK_TITLES()[Math.floor(Math.random() * TASK_TITLES().length)];
   const dt = detectDeliverableType(title);
   return {
     id: generateId('task'),
@@ -833,15 +910,15 @@ Comprehensive security audit of AgentCorp infrastructure.
 
     // Spawn additional engineer agents for each dev beyond 1
     if (developersCount > 1) {
-      const extraDevNames = ['Dave', 'Priya', 'Leo'];
-      const extraDevColors = [0x00cec9, 0xfd79a8, 0x6c5ce7];
+      const devNames = EXTRA_DEV_NAMES();
+      const devColors = EXTRA_DEV_COLORS();
       for (let i = 1; i < developersCount; i++) {
-        const devName = extraDevNames[(i - 1) % extraDevNames.length];
+        const devName = devNames[(i - 1) % devNames.length];
         const extraAgent: import('@/agents/AgentTypes').Agent = {
           id: generateId('agent'),
           name: devName,
           role: 'engineer',
-          traits: AGENT_PERSONALITIES['engineer'],
+          traits: AGENT_PERSONALITIES().engineer,
           energy: 100,
           maxEnergy: 100,
           mood: 'neutral',
@@ -857,7 +934,7 @@ Comprehensive security audit of AgentCorp infrastructure.
           targetY: 284 + i * 20,
           conversations: [],
           efficiency: 75 + Math.floor(Math.random() * 20),
-          color: extraDevColors[(i - 1) % extraDevColors.length],
+          color: devColors[(i - 1) % devColors.length],
           emoji: '💻',
           officeLocation: 'coding_desk',
           aiReady: false,

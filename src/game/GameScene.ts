@@ -3,6 +3,7 @@ import { useGameStore } from '@/store/gameStore';
 import { Agent } from '@/agents/AgentTypes';
 import { OFFICE_LOCATIONS } from '@/store/gameStore';
 import { centralOrchestrator } from '@/orchestrator/CentralOrchestrator';
+import { preloadAllConfigs } from '@/config/preload';
 import { maybeStartConversation, updateAgentMoods } from '@/systems/ConversationSystem';
 import { generateAmbientChatter } from '@/systems/EventSystem';
 
@@ -33,6 +34,10 @@ export class GameScene extends Phaser.Scene {
     this.drawOffice();
 
     const store = useGameStore.getState();
+    preloadAllConfigs().then(() => {
+      // Configs loaded; future agent creations will use config data
+      console.log('[GameScene] Configs preloaded');
+    });
     store.initAgents();
     centralOrchestrator.initWorkers();
 
@@ -191,8 +196,8 @@ export class GameScene extends Phaser.Scene {
       if (agent.cooldownType === 'onboarding') {
         agent.mood = 'neutral';
         // Stand/idle at the Gaming Zone or Coffee Machine
-        const gaming = OFFICE_LOCATIONS.find((l) => l.role === 'gaming');
-        const coffee = OFFICE_LOCATIONS.find((l) => l.role === 'coffee');
+        const gaming = OFFICE_LOCATIONS().find((l) => l.role === 'gaming');
+        const coffee = OFFICE_LOCATIONS().find((l) => l.role === 'coffee');
         const target = gaming || coffee;
         if (target) {
           const dist = Math.sqrt((agent.x - target.x) ** 2 + (agent.y - target.y) ** 2);
@@ -207,12 +212,12 @@ export class GameScene extends Phaser.Scene {
       } else if (agent.cooldownType === 'burnout') {
         agent.mood = 'happy';
         if (!agent.cooldownTargetLocId) {
-          const gaming = OFFICE_LOCATIONS.find((l) => l.role === 'gaming');
-          const coffee = OFFICE_LOCATIONS.find((l) => l.role === 'coffee');
+          const gaming = OFFICE_LOCATIONS().find((l) => l.role === 'gaming');
+          const coffee = OFFICE_LOCATIONS().find((l) => l.role === 'coffee');
           const target = Math.random() < 0.5 ? gaming : coffee;
           agent.cooldownTargetLocId = target?.id || 'gaming_zone';
         }
-        const targetLoc = OFFICE_LOCATIONS.find((l) => l.id === agent.cooldownTargetLocId);
+        const targetLoc = OFFICE_LOCATIONS().find((l) => l.id === agent.cooldownTargetLocId);
         if (targetLoc) {
           const dist = Math.sqrt((agent.x - targetLoc.x) ** 2 + (agent.y - targetLoc.y) ** 2);
           if (dist > 15 && agent.state !== 'walking') {
@@ -284,7 +289,7 @@ export class GameScene extends Phaser.Scene {
         agent.cooldownRemainingSeconds = undefined;
 
         // Reset target destination to desk
-        const location = OFFICE_LOCATIONS.find((l) => l.role === agent.role);
+        const location = OFFICE_LOCATIONS().find((l) => l.role === agent.role);
         if (location) {
           agent.targetX = location.x;
           agent.targetY = location.y;
@@ -314,8 +319,8 @@ export class GameScene extends Phaser.Scene {
       agent.mood = 'tired';
       agent.state = 'resting';
 
-      const coffee = OFFICE_LOCATIONS.find((l) => l.role === 'coffee');
-      const gaming = OFFICE_LOCATIONS.find((l) => l.role === 'gaming');
+      const coffee = OFFICE_LOCATIONS().find((l) => l.role === 'coffee');
+      const gaming = OFFICE_LOCATIONS().find((l) => l.role === 'gaming');
       const target = Math.random() < 0.5 ? gaming : coffee;
       agent.cooldownTargetLocId = target?.id || 'gaming_zone';
 
@@ -337,7 +342,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const coffee = OFFICE_LOCATIONS.find((l) => l.role === 'coffee');
+    const coffee = OFFICE_LOCATIONS().find((l) => l.role === 'coffee');
     if (coffee) {
       const dist = Math.sqrt(
         (agent.x - coffee.x) ** 2 + (agent.y - coffee.y) ** 2,
@@ -362,9 +367,9 @@ export class GameScene extends Phaser.Scene {
 
   private pickNextGoal(agent: Agent): void {
     const store = useGameStore.getState();
-    const location = OFFICE_LOCATIONS.find((l) => l.role === agent.role);
-    const meeting = OFFICE_LOCATIONS.find((l) => l.role === 'meeting');
-    const coffee = OFFICE_LOCATIONS.find((l) => l.role === 'coffee');
+    const location = OFFICE_LOCATIONS().find((l) => l.role === agent.role);
+    const meeting = OFFICE_LOCATIONS().find((l) => l.role === 'meeting');
+    const coffee = OFFICE_LOCATIONS().find((l) => l.role === 'coffee');
 
     // Pick a random action based on conditions
     const r = Math.random();
@@ -387,7 +392,7 @@ export class GameScene extends Phaser.Scene {
 
     // Visit a random location
     if (r < 0.25) {
-      const others = OFFICE_LOCATIONS.filter(
+      const others = OFFICE_LOCATIONS().filter(
         (l) => l.id !== location?.id && l.role !== 'coffee' && Math.random() < 0.4,
       );
       if (others.length > 0) {

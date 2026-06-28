@@ -4,13 +4,12 @@
 
 AgentCorp is a **multi-agent autonomous operating system** where AI agents collaborate to perform real software engineering work on a codebase. It combines a Phaser 2D office simulation (visual layer) with a Next.js runtime (execution layer) and state management via Zustand.
 
-The premise: AI agents (CEO, PM, Researcher, Engineer, QA, HR) work together to discover, plan, and execute real tasks — scanning for codebase issues, generating components, writing reports, running validations, and writing results to the actual file system.
+The premise: AI agents (CEO, PM, Researcher, Engineer, QA, HR) work together to discover, plan, and execute real tasks — scanning for codebase issues, generating deliverables, running validations, and writing results through tool calls.
 
-The project has evolved through two architectural phases:
-- **Old system**: `TaskSystem` handles task management flow (pending → prioritized → assigned) via CEO/PM AI prompts
-- **New system**: `CentralOrchestrator` + `PlannerAgent` + `TaskQueue` + Worker Agents handle subtask breakdown, dispatch, execution, and validation
-
-Both systems currently run in parallel with overlapping responsibilities.
+The project has a unified architecture built around the `CentralOrchestrator`:
+- **Task Management**: `TaskSystem` handles CEO/PM AI prompts (pending → prioritized → assigned)
+- **Execution**: `CentralOrchestrator` + `PlannerAgent` + `TaskQueue` + Worker Agents handle subtask breakdown, dispatch, execution, and validation
+- **User Requests**: `IntentClassifier` routes user requests to internal tasks or credential prompts
 
 ---
 
@@ -48,29 +47,27 @@ agentcorp/
 │   │   └── ThemeToggle.tsx           # Light/dark mode toggle
 │   │
 │   ├── agents/                       # Agent class hierarchy
-│   │   ├── AgentTypes.ts             # All TypeScript interfaces (Agent, Task, Activity, etc.)
-│   │   ├── BaseWorkerAgent.ts        # Abstract base class for worker agents with step execution
-│   │   ├── DeveloperAgent.ts         # Code/doc/analysis subtask execution (extends BaseWorkerAgent)
-│   │   ├── QAAgent.ts               # QA validation subtask execution (extends BaseWorkerAgent)
-│   │   ├── ResearchAgent.ts         # Research subtask execution (extends BaseWorkerAgent)
-│   │   └── ValidatorAgent.ts        # Standalone validator: tsc + lint + content checks with retry logic
+│   │   ├── AgentTypes.ts             # All TypeScript interfaces (Agent, Task, SubTask, Activity, etc.)
+│   │   ├── BaseWorkerAgent.ts        # Abstract base: tick(), assignSubtask(), isBusy(), stream events
+│   │   ├── DeveloperAgent.ts         # Code/doc/analysis deliverable generation (extends BaseWorkerAgent)
+│   │   ├── QAAgent.ts               # QA deliverable review (extends BaseWorkerAgent)
+│   │   ├── ResearchAgent.ts         # Research report generation (extends BaseWorkerAgent)
+│   │   └── ValidatorAgent.ts        # Queued validation: content length + AI review with retry (≤3)
 │   │
 │   ├── runtime/                      # Core execution engines
-│   │   ├── AgentRuntime.ts           # Tick-based agent work loop (engineer 10-step pipeline)
-│   │   ├── SimpleRuntime.ts          # AI-prompt → code-block extraction → write → tsc verify
-│   │   ├── ToolRegistry.ts           # 7 registered tools (read/write/search/execute/ask AI)
+│   │   ├── AgentRuntime.ts           # Simplified: calls ask_agent tool → marks task complete/fail
+│   │   ├── ToolRegistry.ts           # 1 registered tool (ask_agent → /api/ai)
 │   │   ├── AgentMemory.ts            # Per-agent + shared memory (localStorage-backed)
 │   │   └── AgentCommunication.ts     # Inter-agent send/reply/broadcast
 │   │
 │   ├── orchestrator/                 # Central orchestration system
-│   │   ├── CentralOrchestrator.ts    # 6-phase tick: processTasks → plan → dispatch → worker tick → validate → complete
+│   │   ├── CentralOrchestrator.ts    # 6-phase tick + user request handling with IntentClassifier
 │   │   ├── PlannerAgent.ts           # AI-powered task breakdown into subtasks (max 5 per task)
 │   │   └── TaskQueue.ts              # Priority queue with dependency resolution + retry support
 │   │
 │   ├── systems/                      # Game logic systems
-│   │   ├── TaskSystem.ts             # Task state machine: processTasks() + maybeCreateNewTask()
-│   │   ├── TaskDiscovery.ts          # Scans for reportable issues (tsc errors, file count) → analysis tasks
-│   │   ├── TaskReviewSystem.ts       # PM-led task review → SimpleRuntime execution flow
+│   │   ├── TaskSystem.ts             # Task state machine: pending → prioritized → assigned via CEO/PM AI
+│   │   ├── TaskDiscovery.ts          # Stub — returns empty array
 │   │   ├── ConversationSystem.ts     # Ambient inter-agent conversation generation (AI + mock fallback)
 │   │   └── EventSystem.ts            # Ambient office chatter + background noise
 │   │
@@ -81,12 +78,13 @@ agentcorp/
 │   │   └── ComplianceDocumentation.md
 │   │
 │   ├── ai/                           # AI service layer
+│   │   ├── IntentClassifier.ts       # Classifies user requests as internal or needs_credentials
 │   │   ├── AIService.ts              # AI request queue + mock fallback + 20 deliverable templates
 │   │   └── AgentPersonalities.ts     # 6 role definitions + system prompts + stage prompts
 │   │
 │   ├── execution/                    # Execution infrastructure
 │   │   ├── ExecutionLogStream.ts     # Real-time event streaming with client subscriptions
-│   │   └── Sandbox.ts                # Path/command validation (Docker not implemented)
+│   │   └── Sandbox.ts                # Stub — minimal config only
 │   │
 │   ├── memory/                       # Long-term memory
 │   │   ├── MemoryStore.ts            # Per-agent + shared memory with persistence (localStorage)
@@ -145,8 +143,8 @@ centralOrchestrator.tick()
 ├─ Phase 1: processTasks()          # pending→prioritized→assigned (CEO/PM via TaskSystem)
 ├─ Phase 2: planner.processPending() # assigned→plan subtasks (PlannerAgent, max 5 subtasks)
 ├─ Phase 3: taskQueue.dispatch()    # assign ready subtasks to available workers
-├─ Phase 4: worker.tick() × N       # each busy worker executes its subtask steps
-├─ Phase 5: validator.process()     # validate completed subtasks (tsc + lint + content)
+├─ Phase 4: worker.tick() × N       # each busy worker calls generateDeliverable()
+├─ Phase 5: validator.process()     # validate completed subtasks (content length + AI review)
 └─ Phase 6: processCompleted()      # pass/fail subtasks, retry up to 3x, HR eval
 ```
 
@@ -196,16 +194,13 @@ aiService.generateTaskIdea() → random from 20-item list of analysis/QA/review/
 
 ### 3. Task Execution (Worker Agents)
 
-Each worker type has its own step pipeline:
+Each worker type has a single `generateDeliverable()` method that calls `ask_agent` tool:
 
-**DeveloperAgent** (code/doc/analysis subtasks):
-1. `search_codebase` → 2. `read_directory` → 3. `ask_agent` (plan file path) → 4. `read_file` (check exist) → 5. `ask_agent` (generate content) → 6. `write_file` → 7. `execute_command` (tsc verify) → 8. `ask_agent` (summarize)
+- **DeveloperAgent** — prompts AI to generate code, documentation, or analysis content based on subtask type
+- **ResearchAgent** — prompts AI to produce a research report with executive summary, methodology, findings
+- **QAAgent** — prompts AI to review a deliverable and return QA_PASS or QA_FAIL with reasoning
 
-**ResearchAgent** (research subtasks):
-1. `search_codebase` → 2. `read_directory` → 3. `ask_agent` (generate report) → 4. `write_file` → 5. `ask_agent` (summarize)
-
-**QAAgent** (qa subtasks):
-1. `execute_command` (tsc) → 2. `execute_command` (lint) → 3. `ask_agent` (evaluate → QA_PASS/QA_FAIL)
+Worker execution is single-step: `tick()` → `generateDeliverable()` → store result. No multi-step tool pipelines.
 
 ---
 
@@ -215,39 +210,40 @@ Each worker type has its own step pipeline:
 |------|----------------|----------------|
 | **CEO** | If task `pending`: AI-prioritizes, transitions to `prioritized` | Not involved in execution |
 | **PM** | If task `prioritized` & unassigned: picks random worker, assigns via AI | Not involved in execution |
-| **Engineer** | Not involved in management | If assigned as `developer`: runs DeveloperAgent pipeline on subtask |
-| **Researcher** | Not involved in management | If assigned as `research_worker`: runs ResearchAgent pipeline on subtask |
-| **QA** | Not involved in management | If assigned as `qa_worker`: runs QAAgent pipeline on subtask |
+| **Engineer** | Not involved in management | If assigned as `developer`: runs DeveloperAgent.generateDeliverable() |
+| **Researcher** | Not involved in management | If assigned as `research_worker`: runs ResearchAgent.generateDeliverable() |
+| **QA** | Not involved in management | If assigned as `qa_worker`: runs QAAgent.generateDeliverable() |
 | **HR** | Every ~200 ticks: `evaluateTeam()` — scores agents, fires alerts | Tracks performance metrics, promotions via PromotionManager |
 
 All agents have autonomous movement AI (`pickNextGoal()`): go to coffee if energy < 40, visit meeting room (15% chance), wander near workstation, or visit random office locations.
 
 ---
 
-## Two Competing Execution Paths
+## Execution Flow
 
-The project has **two parallel execution systems** that both operate on the same tasks:
+The project has a **unified execution architecture** with two cooperating paths:
 
-### System A — AgentRuntime (src/runtime/AgentRuntime.ts)
-- Runs via `agentRuntime.tick()` called from GameScene (every ~120 frames)
-- Operates on `assigned` tasks directly: AI generates a 10-step plan → executes → marks complete/failed
-- Only runs for `engineer` and `researcher` agents
-- Tends to **conflict** with System B since both try to claim `assigned` tasks
+### AgentRuntime (src/runtime/AgentRuntime.ts) — Direct Task Execution
+- Called from `gameStore.generateDeliverableForTask()` when a new task is added via `addTaskWithTitle()`
+- Also triggered from `CentralOrchestrator.tick()` for any `assigned` task without a deliverable
+- Simplified: calls `toolRegistry.executeTool('ask_agent', ...)` with a system prompt → stores deliverable → marks task complete/fail
+- Single call per task, no multi-step pipeline
 
-### System B — CentralOrchestrator (src/orchestrator/CentralOrchestrator.ts)
+### CentralOrchestrator (src/orchestrator/CentralOrchestrator.ts) — Subtask Orchestration
 - Runs via `centralOrchestrator.tick()` called from GameScene (every ~30 frames)
-- Calls `processTasks()` (management flow) → PlannerAgent → TaskQueue → Worker Agents → Validator
-- Worker agents use `BaseWorkerAgent` subclasses (DeveloperAgent, QAAgent, ResearchAgent)
-- Has its own subtask lifecycle independent of the main task status
+- Calls `processTasks()` (CEO/PM management flow) → PlannerAgent → TaskQueue → Worker Agents → Validator
+- Worker agents use `BaseWorkerAgent` subclasses (DeveloperAgent, QAAgent, ResearchAgent) with single-step `generateDeliverable()`
+- Also handles user requests via `handleUserRequest()` using `IntentClassifier` for credential detection
 
-### SimpleRuntime (src/runtime/SimpleRuntime.ts)
-- A third path used by `TaskReviewSystem.ts`
-- AI prompt → extract code blocks → write files → tsc verify
-- Called when "Review" button is clicked or when PM-led review triggers it
-- Only targets `engineer` role agent
-
-### Why This Exists
-Transitional architecture. The old TaskSystem does management (CEO/PM delegation). The CentralOrchestrator handles subtask planning/dispatch/execution. The AgentRuntime handles direct engineer execution. Eventually they should be unified.
+### User Request Flow
+```
+User types a request
+  └─ CentralOrchestrator.handleUserRequest()
+       ├─ IntentClassifier.classifyIntent()
+       │    ├─ "needs_credentials" → CredentialDialog → user provides keys → task resumes
+       │    └─ "internal" → addTaskWithTitle() → agentRuntime.processTask()
+       └─ Task added to Zustand store for the tick loop to pick up
+```
 
 ---
 
@@ -257,33 +253,32 @@ Transitional architecture. The old TaskSystem does management (CEO/PM delegation
                      ┌──────────────────────────────────────────┐
                      │           GameScene.update()             │
                      │            (Phaser loop)                  │
-                     └──┬──────────┬──────────┬─────────────────┘
-                        │          │          │
-                ~30fr  │  ~120fr  │  ~6fr   │
-                        │          │          │
-              ┌─────────▼──┐ ┌─────▼──────┐ ┌─▼──────────────┐
-              │centralOrch │ │agentRuntime│ │ syncAgents()   │
-              │.tick()     │ │.tick()     │ │ to Zustand     │
-              └──────┬─────┘ └─────┬──────┘ └────────────────┘
-                     │             │
-                     └──────┬──────┘
-                            │
-              ┌─────────────▼───────────────────┐
-              │       Zustand Store (gameStore)   │
-              │  agents[] tasks[] events[] mem[]  │
-              └──┬───────────────────────┬───────┘
+                     └──┬──────────────────────┬─────────────────┘
+                        │                      │
+                ~30fr  │              ~6fr    │
+                        │                      │
+              ┌─────────▼──┐        ┌──────────▼──────────┐
+              │centralOrch │        │ syncAgents()         │
+              │.tick()     │        │ to Zustand           │
+              └──────┬─────┘        └─────────────────────┘
+                     │
+                     │
+              ┌──────▼────────────────────────────┐
+              │       Zustand Store (gameStore)     │
+              │  agents[] tasks[] events[] mem[]    │
+              └──┬───────────────────────┬─────────┘
                  │                       │
-        ┌────────▼────────┐    ┌─────────▼─────────┐
-        │   AIService     │    │   ToolRegistry     │
-        │  (queue, 1s     │    │  (7 tools →        │
-        │   rate limit)   │    │   /api/tool)       │
-        └────────┬────────┘    └─────────┬──────────┘
+        ┌────────▼────────┐    ┌─────────▼──────────┐
+        │   AIService     │    │   ToolRegistry      │
+        │  (queue, 1s     │    │  (1 tool: ask_agent │
+        │   rate limit)   │    │   → /api/ai)        │
+        └────────┬────────┘    └─────────┬───────────┘
                  │                       │
-        ┌────────▼────────┐    ┌─────────▼─────────┐
-        │  /api/ai        │    │  /api/tool         │
-        │  OpenRouter     │    │  fs ops + exec     │
-        │  / Gemini       │    │  (whitelisted cmds)│
-        └─────────────────┘    └───────────────────┘
+        ┌────────▼────────┐    ┌─────────▼──────────┐
+        │  /api/ai        │    │  /api/ai            │
+        │  OpenRouter     │    │  (same endpoint)    │
+        │  / Gemini       │    │                     │
+        └─────────────────┘    └─────────────────────┘
 
 React UI  ← reads from Zustand via useGameStore hook (reactive, 10fps throttle)
 Phaser    ← reads from Zustand via getState() (non-reactive snapshots, 60fps)
@@ -297,21 +292,21 @@ Live SSE  ← ExecutionLogStream + LiveServer → /api/sse → client EventSourc
 - **React thrashing**: Agents synced to store every frame × 6 agents = 360+ Zustand updates/sec → browser crash. Fixed with 10fps batched sync (every 6 frames).
 - **AI rate limiting**: 1s minimum interval between AI requests via AIService queue
 - **Array bounding**: Activities (20), conversations (20), execution logs (100), events (50), execution chunks (200), memory entries (100/agent, 500 vectors) — all bounded
-- **Processing locks**: `processTasks`/`maybeCreateNewTask` have `processing` boolean; `CentralOrchestrator` has `processing` lock; `ValidatorAgent` has `processing` lock
-- **Agent busy lock**: `AgentRuntime` tracks `busyAgents` Set; `BaseWorkerAgent` has `currentSubtask` null check
+- **Processing locks**: `processTasks` has `processing` boolean; `PlannerAgent` has `processing` lock; `ValidatorAgent` has `processing` lock; `AIService` has `processing` lock
+- **Agent busy lock**: `BaseWorkerAgent` has `currentSubtask` null check; `TaskQueue` tracks `inProgress` subtask IDs
 - **Task cap**: max 8 active tasks at once
 
 ---
 
 ## Known Issues / Pain Points
 
-1. **Two competing execution systems** — AgentRuntime and CentralOrchestrator both try to claim `assigned` tasks, creating duplicate writes and conflicting state transitions.
+1. **Only one AI tool** — `ToolRegistry` only has `ask_agent` tool registered. No file read/write, search, or execute tools are exposed to agents. All tool interactions go through the AI prompt itself.
 
-2. **AI hallucinates imports** — The AI content prompt explicitly lists available packages (next, react, lucide-react, tailwindcss, zustand, phaser) and forbids `@heroicons`/`react-redux`, but still generates broken imports. The write API rejects content < 50 chars as a guard.
+2. **AI hallucinates imports** — The AI content prompt explicitly lists available packages (next, react, lucide-react, tailwindcss, zustand, phaser) and forbids `@heroicons`/`react-redux`, but still generates broken imports.
 
-3. **No file modification** — Agents can only create new files. No `edit_line` or `patch_file` tool. `write_file` is overwrite-only.
+3. **No file modification** — Agents can only create deliverables through AI text generation. No `edit_line`, `patch_file`, `write_file`, or `execute_command` tools are available.
 
-4. **Task completion is per-tick, not per-step** — The AgentRuntime regenerates the entire step plan every tick (~2 seconds). If a previous tick wrote a file and `tsc` passed, the next tick starts from scratch.
+4. **Validator doesn't run tsc/lint** — The `ValidatorAgent` only checks content length (≥50 chars) and asks AI for review. No actual TypeScript compilation or linting runs.
 
 5. **No API key = all mock** — Without an API key, `aiService.askTaskAgent()` returns canned dialogue and `ask_agent` returns generic mock responses. The system still creates tasks and writes template deliverables.
 
@@ -328,23 +323,21 @@ Live SSE  ← ExecutionLogStream + LiveServer → /api/sse → client EventSourc
 | File | Purpose |
 |------|---------|
 | `src/agents/AgentTypes.ts` | All TypeScript interfaces |
-| `src/agents/BaseWorkerAgent.ts` | Abstract worker: step execution, stream events, busy lock |
-| `src/agents/DeveloperAgent.ts` | Code/doc/analysis subtask steps |
-| `src/agents/QAAgent.ts` | QA subtask: tsc + lint + AI evaluation |
-| `src/agents/ResearchAgent.ts` | Research subtask: search + analyze + write report |
-| `src/agents/ValidatorAgent.ts` | Queued validation with retry (≤3), scoring |
+| `src/agents/BaseWorkerAgent.ts` | Abstract worker: tick(), assignSubtask(), isBusy(), stream events |
+| `src/agents/DeveloperAgent.ts` | Code/doc/analysis deliverable generation via ask_agent |
+| `src/agents/QAAgent.ts` | QA deliverable review via ask_agent |
+| `src/agents/ResearchAgent.ts` | Research report generation via ask_agent |
+| `src/agents/ValidatorAgent.ts` | Queued validation: content length + AI review with retry (≤3) |
 | `src/store/gameStore.ts` | Zustand state + all mutations |
 | `src/game/GameScene.ts` | Phaser game loop + office rendering |
-| `src/systems/TaskSystem.ts` | Task state machine + task creation |
-| `src/systems/TaskDiscovery.ts` | Codebase scanning (tsc errors, file count) |
-| `src/systems/TaskReviewSystem.ts` | PM-led review → SimpleRuntime execution |
+| `src/systems/TaskSystem.ts` | Task state machine: pending → prioritized → assigned via CEO/PM |
+| `src/systems/TaskDiscovery.ts` | Stub — returns empty array |
 | `src/systems/ConversationSystem.ts` | Agent-to-agent chat (AI + mock fallback) |
-| `src/runtime/AgentRuntime.ts` | Tick-based engineer execution pipeline |
-| `src/runtime/SimpleRuntime.ts` | AI → code blocks → write → tsc verify |
-| `src/runtime/ToolRegistry.ts` | 7 tool definitions + API dispatch |
+| `src/runtime/AgentRuntime.ts` | Simplified: calls ask_agent tool → marks task complete/fail |
+| `src/runtime/ToolRegistry.ts` | 1 registered tool (ask_agent → /api/ai) |
 | `src/runtime/AgentMemory.ts` | localStorage-backed per-agent + shared memory |
 | `src/runtime/AgentCommunication.ts` | Inter-agent send/reply/broadcast |
-| `src/orchestrator/CentralOrchestrator.ts` | 6-phase orchestration tick |
+| `src/orchestrator/CentralOrchestrator.ts` | 6-phase tick + user request handling with IntentClassifier |
 | `src/orchestrator/PlannerAgent.ts` | AI subtask breakdown (≤5 subtasks) |
 | `src/orchestrator/TaskQueue.ts` | Priority queue with dependency resolution |
 | `src/hr/HRSystem.ts` | Performance tracking + team evaluation |
@@ -352,12 +345,12 @@ Live SSE  ← ExecutionLogStream + LiveServer → /api/sse → client EventSourc
 | `src/hr/PromotionManager.ts` | Agent promotion thresholds |
 | `src/memory/MemoryStore.ts` | Persistent per-agent + shared memory |
 | `src/memory/VectorMemory.ts` | Keyword-similarity memory store |
-| `src/execution/Sandbox.ts` | Path/command validation (not Docker) |
+| `src/execution/Sandbox.ts` | Stub — minimal config only |
 | `src/execution/ExecutionLogStream.ts` | Real-time streaming event bus |
 | `src/websocket/LiveServer.ts` | SSE client management + broadcast |
-| `src/ai/AIService.ts` | AI queue + mock fallback + 20 template deliverables |
+| `src/ai/IntentClassifier.ts` | Classifies user requests as internal or needs_credentials |
+| `src/ai/AIService.ts` | AI queue + mock fallback + 20 deliverable templates |
 | `src/ai/AgentPersonalities.ts` | 6 role definitions + system prompts |
-| `src/app/api/tool/route.ts` | Server-side file/command execution API |
 | `src/app/api/ai/route.ts` | Server-side AI proxy (OpenRouter → Gemini) |
 | `src/app/api/gemini/route.ts` | Direct Gemini endpoint |
 | `src/app/api/sse/route.ts` | Server-Sent Events endpoint |
