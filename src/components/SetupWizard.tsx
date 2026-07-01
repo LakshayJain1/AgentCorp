@@ -1,8 +1,10 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
+import { completeClerkOnboarding } from '@/app/onboard/_actions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUser, SignIn, SignUp } from '@clerk/nextjs';
 import {
   GitBranch, Play, Key, Sparkles, Server, Check, ArrowRight,
@@ -12,7 +14,8 @@ import {
 
 export default function SetupWizard() {
   const { initializePersonalizedOffice } = useGameStore();
-  const { isSignedIn } = useUser();
+  const { isSignedIn, user } = useUser();
+  const router = useRouter();
 
   const [step, setStep] = useState<number>(1);
   const [authComponent, setAuthComponent] = useState<'signin' | 'signup'>('signin');
@@ -154,8 +157,30 @@ export default function SetupWizard() {
     }, 2000);
   };
 
-  const handleLaunchSequence = () => {
+  const handleLaunchSequence = async () => {
     setStep(5);
+
+    // 1. Save Clerk metadata FIRST, while the session is fresh and authenticated.
+    //    This must happen before any animation delay so the auth() call in the
+    //    server action has a valid session token.
+    sessionStorage.removeItem('wizardState');
+    try {
+      const res = await completeClerkOnboarding({
+        companyName,
+        companyProduct,
+        developersCount: devCount,
+      });
+      if (res?.success) {
+        // Reload so the client-side Clerk session picks up publicMetadata changes.
+        await user?.reload();
+      } else {
+        console.warn('[Clerk] Onboarding metadata not saved:', res?.error);
+      }
+    } catch (err) {
+      console.error('[Clerk] Onboarding server action threw unexpectedly:', err);
+    }
+
+    // 2. Run the deploy animation logs.
     const deployLogs = [
       'Establishing secure local workspace cluster...',
       'Spinning up Phaser 2D visual office floor...',
@@ -167,25 +192,35 @@ export default function SetupWizard() {
       'All departments active. Deploying visual layer...'
     ];
     let currentLogIndex = 0;
-    const interval = setInterval(() => {
-      if (currentLogIndex < deployLogs.length) {
-        setDeployStatus((prev) => [...prev, deployLogs[currentLogIndex]]);
-        setCurrentDeployStep(currentLogIndex);
-        currentLogIndex++;
-      } else {
-        clearInterval(interval);
-        setTimeout(() => {
-          sessionStorage.removeItem('wizardState');
-          initializePersonalizedOffice(companyName, companyProduct, devCount, {
-            github: { connected: ghConnected, repoUrl: ghRepo, token: ghToken, autoCommit: ghCommit },
-            vercel: { connected: vConnected, token: vToken, autoDeploy: vDeploy },
-            slack: { connected: sConnected, webhookUrl: sUrl, broadcastEvents: sBroadcast },
-            ai: { provider: aiProvider, apiKey: aiKey },
-          });
-        }, 1000);
-      }
-    }, 900);
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if (currentLogIndex < deployLogs.length) {
+          setDeployStatus((prev) => [...prev, deployLogs[currentLogIndex]]);
+          setCurrentDeployStep(currentLogIndex);
+          currentLogIndex++;
+        } else {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 900);
+    });
+
+    // 3. Short pause to let the final log message render, then initialize and navigate.
+    await new Promise((r) => setTimeout(r, 800));
+
+    // 4. Initialize the in-memory game store.
+    initializePersonalizedOffice(companyName, companyProduct, devCount, {
+      github: { connected: ghConnected, repoUrl: ghRepo, token: ghToken, autoCommit: ghCommit },
+      vercel: { connected: vConnected, token: vToken, autoDeploy: vDeploy },
+      slack: { connected: sConnected, webhookUrl: sUrl, broadcastEvents: sBroadcast },
+      ai: { provider: aiProvider, apiKey: aiKey },
+    });
+
+    // 5. Explicitly navigate to /workspace — don't rely on the useEffect in onboard/page.tsx
+    //    which may race against the store update.
+    router.replace('/workspace');
   };
+
 
   const wizardVariants = {
     enter: { opacity: 0, y: 15 },
