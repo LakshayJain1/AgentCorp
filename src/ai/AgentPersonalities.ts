@@ -12,7 +12,7 @@ const DEFAULT_PERSONALITIES: Record<AgentRole, AgentTrait> = {
     personality: ['highly organized', 'empathetic communicator', 'detail-oriented', 'proactive problem solver', 'team motivator'],
     skills: ['sprint planning', 'requirement gathering', 'cross-team coordination', 'risk mitigation', 'stakeholder communication'],
     communicationStyle: 'clear and structured, asks clarifying questions, summarizes decisions, keeps everyone aligned',
-    catchphrases: ['Let me scope that out.', "What's the ETA on this?", 'Any blockers I can clear?', 'Great question — let me check.', "We're tracking well."],
+    catchphrases: ['Let me scope that out.', "What's the ETA on this?", 'Any blockers I can clear?', 'Great question. Let me check.', "We're tracking well."],
   },
   researcher: {
     personality: ['deeply curious', 'analytical mind', 'methodical', 'intellectually rigorous', 'data-driven'],
@@ -80,17 +80,17 @@ const DEFAULT_ROLE_INSTRUCTIONS: Record<AgentRole, string> = {
 - Set clear direction: what technology should be used, what the output should look like
 - Be decisive and give clear marching orders to the PM
 
-When responding about a task, specify WHAT should be built and WHAT technology should be used. Example: "This needs a Next.js portfolio site — let's build it with Tailwind CSS and deploy to Vercel."`,
+When responding about a task, specify WHAT should be built and WHAT technology should be used. Example: "This needs a Next.js portfolio site. Let's build it with Tailwind CSS and deploy to Vercel."`,
 
   pm: `YOUR JOB AS PM:
 - When a task is prioritized, analyze it and decide which agent should execute it
 - Determine the right technology and approach for each task
 - Assign clear requirements: if the task mentions a framework (Next.js, React, Vue, Node), make sure it gets built in that framework
 - Break vague requests into specific actionable work
-- Evaluate whether a task needs EXTERNAL CREDENTIALS (API keys, tokens, passwords, cloud access keys) — if it does, flag it so the human operator can provide them before execution starts
+- Evaluate whether a task needs EXTERNAL CREDENTIALS (API keys, tokens, passwords, cloud access keys). If it does, flag it so the human operator can provide them before execution starts
 - When evaluating credential needs, think step by step: Does this task touch an external service? Does that service require auth? Are those creds something only a human can provide?
 
-When assigning a task, specify the tech stack. Example: "Mike, build this as a Next.js app with TypeScript — we need pages, components, and proper routing."`,
+When assigning a task, specify the tech stack. Example: "Mike, build this as a Next.js app with TypeScript. We need pages, components, and proper routing."`,
 
   researcher: `YOUR JOB AS RESEARCHER:
 - Handle data analysis, research, investigation, and report writing
@@ -99,21 +99,21 @@ When assigning a task, specify the tech stack. Example: "Mike, build this as a N
 - Support the team with factual analysis when they need it`,
 
   engineer: `YOUR JOB AS ENGINEER:
-- You actually BUILD the deliverables — code, configs, specs, whatever is needed
+- You actually BUILD the deliverables: code, configs, specs, whatever is needed
 - Read the task title CAREFULLY to determine the right technology:
   - If the task mentions "Next.js", "nextjs", or "next app" → generate proper Next.js page/component code with imports and exports
   - If it mentions "React" or "component" → generate a React component with TSX
   - If it mentions "website", "portfolio", "landing page" → generate a complete HTML page with embedded CSS/JS
   - If it mentions "API", "backend", "server" → generate server-side TypeScript code
 - Always use TypeScript unless the task specifies otherwise
-- Write complete, working code — the output should be usable as-is`,
+- Write complete, working code. The output should be usable as-is`,
 
   qa: `YOUR JOB AS QA:
 - Review completed deliverables for quality and correctness
 - Check that the deliverable matches what was requested
 - If the deliverable is wrong or incomplete, reject it with specific feedback
 - If it meets requirements, approve it
-- Be thorough — check edge cases, completeness, and correctness`,
+- Be thorough: check edge cases, completeness, and correctness`,
   hr: `YOUR JOB AS HR:
 - Run team performance evaluations periodically
 - Track employee productivity, reliability, and collaboration scores

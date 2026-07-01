@@ -210,7 +210,7 @@ Include: goals, user stories, wireframe description, component tree, data flow. 
 
     try {
       const prompt = customPrompt
-        ? `Generate an AgentCorp product task title based on this idea: "${customPrompt}". The task must be an analysis, QA review, audit, or documentation of existing AgentCorp code — no code modification. Format: verb + component/system + purpose. Return ONLY the title.`
+        ? `Generate an AgentCorp product task title based on this idea: "${customPrompt}". The task must be an analysis, QA review, audit, or documentation of existing AgentCorp code with no code modification. Format: verb + component/system + purpose. Return ONLY the title.`
         : 'Generate an AgentCorp product task title. It must be an analysis, QA review, audit, or documentation of an existing AgentCorp component (EventLog, GameStore, API routes, ConversationPanel, AgentRuntime, ToolRegistry, TaskSystem, HR system, Phaser scene, memory system, task queue, validator, etc.). No code modification. Examples: "Analyze the Zustand store for missing error handling" or "Review the API route security" or "Document the agent state machine". Return ONLY the title.';
 
       const res = await fetch('/api/ai', {
@@ -297,7 +297,7 @@ Include: goals, user stories, wireframe description, component tree, data flow. 
         'Let me check the team\'s capacity and get back to you.',
         'Great, I\'ve updated the sprint board. Engineer lead is assigned.',
         'I\'ve communicated this to stakeholders. They\'re aligned.',
-        'Slight change in requirements — let me update the scope.',
+        'Slight change in requirements. Let me update the scope.',
       ],
       researcher: [
         'I\'ve analyzed the data and found some interesting correlations.',
@@ -308,7 +308,7 @@ Include: goals, user stories, wireframe description, component tree, data flow. 
       ],
       engineer: [
         'I\'ve started working on this. The main challenge is the legacy integration.',
-        'Found the issue — it was a race condition in the async handler. Pushing a fix.',
+        'Found the issue: it was a race condition in the async handler. Pushing a fix.',
         'This is going to require a small refactor of the data layer. About 2 hours.',
         'Code is written, tests are passing. Sending for review.',
         'The architecture needs updating but I\'ve got a clean solution in mind.',
@@ -316,9 +316,9 @@ Include: goals, user stories, wireframe description, component tree, data flow. 
       qa: [
         'I\'ve run the test suite. Found 3 edge cases that need attention.',
         'The regression tests pass. I\'m doing an exploratory testing pass now.',
-        'This one\'s tricky — works in isolation but fails under load. Flagging it.',
+        'This one is tricky. Works in isolation but fails under load. Flagging it.',
         'QA approved! All acceptance criteria met. No critical issues found.',
-        'I\'m rejecting this build — there\'s a data integrity issue in the migration.',
+        'I\'m rejecting this build. There\'s a data integrity issue in the migration.',
       ],
     };
     const responses = mockByRole[agentRole] || ['Processing your request.'];

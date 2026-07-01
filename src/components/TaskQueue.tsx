@@ -83,7 +83,7 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
               <div key={i} className="flex items-center gap-3 text-sm text-gray-600">
                 <div className={`w-2 h-2 rounded-full shrink-0 ${step.completed ? 'bg-green-400' : 'bg-gray-200'}`} />
                 <span className={step.completed ? 'text-gray-400 line-through' : 'text-gray-700'}>{step.description}</span>
-                {step.aiOutput && <span className="text-gray-400 text-xs ml-auto shrink-0">— {step.aiOutput.slice(0, 30)}...</span>}
+                {step.aiOutput && <span className="text-gray-400 text-xs ml-auto shrink-0 truncate max-w-[160px]">{step.aiOutput.slice(0, 30)}...</span>}
               </div>
             ))}
           </div>
@@ -162,7 +162,7 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
         {task.status !== 'completed' && task.status !== 'failed' && (
           <div className="p-5 text-center text-gray-400 text-sm flex items-center justify-center gap-2">
             <Loader2 className="w-3 h-3 animate-spin" />
-            Operation active — deliverable will sync upon completion.
+            Operation active. Deliverable will sync upon completion.
           </div>
         )}
       </motion.div>

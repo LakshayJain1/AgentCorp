@@ -594,7 +594,7 @@ export default function SetupWizard() {
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2.5">
                 <span className="text-amber-500 text-base shrink-0">⚠️</span>
                 <p className="text-[10px] text-amber-700 leading-relaxed">
-                  <strong>Beta Disclaimer:</strong> AgentCorp is in early testing. Agents may make mistakes, produce incorrect outputs, or take unintended actions. <strong>Use on your own risk</strong> — do not run on production repositories without review. No data is guaranteed to be safe.
+                  <strong>Beta Disclaimer:</strong> AgentCorp is in early testing. Agents may make mistakes, produce incorrect outputs, or take unintended actions. <strong>Use at your own risk.</strong> Do not run on production repositories without review. No data is guaranteed to be safe.
                 </p>
               </div>
 

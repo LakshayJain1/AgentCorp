@@ -3,12 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ArrowRight, Cpu, Shield, Sparkles,
-  Layers, Settings, Share2,
-  Play, ArrowDownToLine, Users, Disc, FileText, Check, Folder, Heart,
-  ChevronDown, RefreshCw, Coffee, PlayCircle
-} from 'lucide-react';
+import { Cpu, Sparkles, ArrowRight, ChevronDown, Heart, Coffee, Shield, RefreshCw, Layers, PlayCircle, Check } from 'lucide-react';
 import AgentEcosystemIllustration from '@/components/AgentEcosystemIllustration';
 
 export default function LandingPage() {
@@ -18,639 +13,516 @@ export default function LandingPage() {
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 40);
-    };
+    const handleScroll = () => setIsScrolled(window.scrollY > 40);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    const revealEls = document.querySelectorAll('.reveal, .reveal-stagger');
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -60px 0px' });
+    revealEls.forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+
   const teamMembers = {
     engineering: [
-      { name: 'Mike (Engineer)', status: 'Coding React UI', morale: 94, tools: ['git', 'nextjs', 'tsc'], color: 'text-amber-500 bg-amber-50' },
-      { name: 'Tina (QA)', status: 'Verifying Router tests', morale: 90, tools: ['jest', 'eslint', 'cypress'], color: 'text-violet-500 bg-violet-50' },
-      { name: 'Dev-2 (Engineer)', status: 'Spare Pool - Ready', morale: 100, tools: ['git', 'nextjs', 'node'], color: 'text-emerald-500 bg-emerald-50' },
+      { name: 'Mike (Engineer)', status: 'Coding React UI', morale: 94, tools: ['git', 'nextjs', 'tsc'] },
+      { name: 'Tina (QA)', status: 'Verifying Router tests', morale: 90, tools: ['jest', 'eslint', 'cypress'] },
+      { name: 'Dev-2 (Engineer)', status: 'Spare Pool - Ready', morale: 100, tools: ['git', 'nextjs', 'node'] },
     ],
     product: [
-      { name: 'Sam (PM)', status: 'Drafting Spec: v3', morale: 88, tools: ['linear', 'figma', 'notion'], color: 'text-cyan-500 bg-cyan-50' },
-      { name: 'Alex (CEO)', status: 'Reviewing proposal priority', morale: 92, tools: ['analytics', 'stripe'], color: 'text-red-500 bg-red-50' },
+      { name: 'Sam (PM)', status: 'Drafting Spec: v3', morale: 88, tools: ['linear', 'figma', 'notion'] },
+      { name: 'Alex (CEO)', status: 'Reviewing proposal priority', morale: 92, tools: ['analytics', 'stripe'] },
     ],
     marketing: [
-      { name: 'Chloe (Marketer)', status: 'Drafting Launch Spec', morale: 95, tools: ['seo', 'copy', 'trends'], color: 'text-rose-500 bg-rose-50' },
-      { name: 'Jack (Sales)', status: 'Auditing outbound templates', morale: 85, tools: ['outreach', 'crd'], color: 'text-blue-500 bg-blue-50' },
+      { name: 'Chloe (Marketer)', status: 'Drafting Launch Spec', morale: 95, tools: ['seo', 'copy', 'trends'] },
+      { name: 'Jack (Sales)', status: 'Auditing outbound templates', morale: 85, tools: ['outreach', 'crd'] },
     ],
     research: [
-      { name: 'Sarah (Researcher)', status: 'Analyzing logs archive', morale: 96, tools: ['crawler', 'md-gen'], color: 'text-purple-500 bg-purple-50' },
+      { name: 'Sarah (Researcher)', status: 'Analyzing logs archive', morale: 96, tools: ['crawler', 'md-gen'] },
     ],
   };
 
   const steps = [
-    {
-      title: 'Agent Spawning',
-      desc: 'CEO accepts objectives, creates sandboxed directories, and spawns roles.',
-      icon: <Sparkles className="w-5 h-5 text-sky-500" />,
-      detail: 'Morale: 100% | CPU Sandbox Isolated'
-    },
-    {
-      title: 'Task Decomposition',
-      desc: 'PM splits goal into 5 subtask items in the task queue backlog.',
-      icon: <Layers className="w-5 h-5 text-cyan-500" />,
-      detail: 'Backlog Status: Ready'
-    },
-    {
-      title: 'Morale & Energy Tracking',
-      desc: 'HR constantly checks performance metrics, energy drain, and burnout.',
-      icon: <Heart className="w-5 h-5 text-rose-500" />,
-      detail: 'Interval: Every 20 ticks'
-    },
-    {
-      title: 'Automatic Cooldown',
-      desc: 'Fatigued agents automatically walk to gaming/coffee zones to recharge.',
-      icon: <Coffee className="w-5 h-5 text-amber-500" />,
-      detail: 'Morale recovery: +2.5% / sec'
-    },
-    {
-      title: 'Knowledge Handoff',
-      desc: 'HR spawns backups. Knowledge transfer is completed via memory sync.',
-      icon: <RefreshCw className="w-5 h-5 text-emerald-500" />,
-      detail: 'Sync rate: 100% lossless'
-    },
-    {
-      title: 'Validation & Push',
-      desc: 'QA runs compilers, lints routes, and issues pull request approval.',
-      icon: <Shield className="w-5 h-5 text-violet-500" />,
-      detail: 'Checks: tsc, eslint'
-    }
+    { title: 'Agent Spawning', desc: 'CEO accepts objectives, creates sandboxed directories, and spawns roles.', icon: <Sparkles className="w-5 h-5 text-ocean" />, detail: 'Morale: 100% | CPU Sandbox Isolated' },
+    { title: 'Task Decomposition', desc: 'PM splits goal into 5 subtask items in the task queue backlog.', icon: <Layers className="w-5 h-5 text-sky" />, detail: 'Backlog Status: Ready' },
+    { title: 'Morale & Energy Tracking', desc: 'HR constantly checks performance metrics, energy drain, and burnout.', icon: <Heart className="w-5 h-5 text-rose-400" />, detail: 'Interval: Every 20 ticks' },
+    { title: 'Automatic Cooldown', desc: 'Fatigued agents automatically walk to gaming/coffee zones to recharge.', icon: <Coffee className="w-5 h-5 text-amber-400" />, detail: 'Morale recovery: +2.5% / sec' },
+    { title: 'Knowledge Handoff', desc: 'HR spawns backups. Knowledge transfer is completed via memory sync.', icon: <RefreshCw className="w-5 h-5 text-emerald-400" />, detail: 'Sync rate: 100% lossless' },
+    { title: 'Validation & Push', desc: 'QA runs compilers, lints routes, and issues pull request approval.', icon: <Shield className="w-5 h-5 text-violet-400" />, detail: 'Checks: tsc, eslint' },
   ];
 
   const faqs = [
-    {
-      q: "How does AgentCorp write code locally?",
-      a: "AgentCorp runs inside a secure local sandbox workspace. It reads files, decomposes architectural needs, compiles via tsc, and automatically fixes syntax errors, committing directly to your local workspace once validation passes."
-    },
-    {
-      q: "What keeps agents from writing buggy code?",
-      a: "Our integrated Quality Assurance (QA) loop runs automated tests and lints (`eslint`) on every iteration. If an error is detected, the stack trace is fed back to the developer agent to debug. The cycle repeats up to 3 times before requiring human review."
-    },
-    {
-      q: "Can I customise the agent roles?",
-      a: "Yes! During onboarding, you define the company name, goals, and role structures. You can adjust agent energy conservation settings, morale triggers, and local connector access settings."
-    },
-    {
-      q: "Do I need online accounts to use AgentCorp?",
-      a: "No. You can run AgentCorp entirely locally. To use advanced AI features, configure your Gemini API Key or OpenRouter fallback token in your local `.env.local` file."
-    }
+    { q: "How does AgentCorp write code locally?", a: "AgentCorp runs inside a secure local sandbox workspace. It reads files, decomposes architectural needs, compiles via tsc, and automatically fixes syntax errors, committing directly to your local workspace once validation passes." },
+    { q: "What keeps agents from writing buggy code?", a: "Our integrated Quality Assurance (QA) loop runs automated tests and lints (eslint) on every iteration. If an error is detected, the stack trace is fed back to the developer agent to debug." },
+    { q: "Can I customise the agent roles?", a: "Yes! During onboarding, you define the company name, goals, and role structures. You can adjust agent energy conservation settings, morale triggers, and local connector access settings." },
+    { q: "Do I need online accounts to use AgentCorp?", a: "No. You can run AgentCorp entirely locally. To use advanced AI features, configure your Gemini API Key or OpenRouter fallback token in your local .env.local file." },
   ];
 
   return (
-    <div className="min-h-screen bg-ghibli-sky text-[#0F172A] relative selection:bg-sky-100 font-sans">
+    <div className="min-h-screen bg-paper text-navy antialiased overflow-x-hidden">
 
-      {/* Sunlight Glow Background effect */}
-      <div className="absolute top-0 left-0 right-0 h-[600px] bg-sunlight-glow pointer-events-none z-0" />
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[999] focus:bg-ocean focus:text-white focus:px-4 focus:py-2 focus:rounded-full">Skip to content</a>
 
-      {/* Floating Header */}
-      <header className={`fixed top-4 left-1/2 -translate-x-1/2 w-[92%] max-w-5xl z-50 transition-all duration-300 ${isScrolled ? 'floating-pill py-2.5 px-4 md:px-6 rounded-full' : 'py-4 px-2'}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-500 to-emerald-400 flex items-center justify-center text-white shadow-md">
-              <Cpu className="w-4 h-4" />
-            </div>
-            <span className="font-sans font-bold text-sm tracking-tight text-gray-900">AgentCorp</span>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-6 text-xs text-slate-500 font-semibold">
-            <a href="#landscape" className="hover:text-sky-500 transition-colors">Ecosystem</a>
-            <a href="#teams" className="hover:text-sky-500 transition-colors">Agent Teams</a>
-            <a href="#lifecycle" className="hover:text-sky-500 transition-colors">Lifecycle</a>
-            <a href="#dashboard" className="hover:text-sky-500 transition-colors">Workspace OS</a>
-            <a href="#faq" className="hover:text-sky-500 transition-colors">FAQs</a>
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <a
-              href="https://discord.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-1.5 hover:bg-slate-100 rounded-full transition-colors hidden sm:inline-block"
-              title="Discord"
-            >
-              <Disc className="w-4 h-4 text-[#5865F2]" />
+      {/* ============ NAV ============ */}
+      <header className="fixed top-0 inset-x-0 z-50">
+        <nav className="mx-auto max-w-7xl px-3 md:px-6 mt-3">
+          <div className={`glass rounded-full shadow-[0_8px_40px_rgba(11,30,51,0.08)] flex items-center justify-between px-3 md:px-4 py-2 transition-all duration-300 ${isScrolled ? 'bg-white/70' : ''}`}>
+            <a href="#main" className="flex items-center gap-2 font-display font-bold text-lg text-navy">
+              <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-ocean to-teal shadow-[0_0_40px_rgba(0,212,255,0.35)]">
+                <span className="h-2.5 w-2.5 rounded-full bg-white" />
+              </span>
+              AgentCorp
             </a>
+            <ul className="hidden md:flex items-center gap-7 text-sm font-medium text-navy/70">
+              <li><a href="#landscape" className="hover:text-ocean transition-colors">Ecosystem</a></li>
+              <li><a href="#teams" className="hover:text-ocean transition-colors">Agent teams</a></li>
+              <li><a href="#lifecycle" className="hover:text-ocean transition-colors">Lifecycle</a></li>
+              <li><a href="#dashboard" className="hover:text-ocean transition-colors">Dashboard</a></li>
+              <li><a href="#faq" className="hover:text-ocean transition-colors">FAQ</a></li>
+            </ul>
             <button
               onClick={() => router.push('/onboard')}
-              className="glow-btn px-4 py-1.5 rounded-full bg-gradient-to-r from-sky-500 to-emerald-400 text-white font-bold text-xs transition-colors shadow-sm shadow-sky-400/25 cursor-pointer"
+              className="rounded-full bg-navy text-white text-sm font-semibold px-4 py-2 hover:bg-ocean transition-colors cursor-pointer"
             >
-              Launch Setup
+              Get started
             </button>
           </div>
-        </div>
+        </nav>
       </header>
 
-      {/* Hero Section */}
-      <section className="relative pt-32 pb-20 px-6 max-w-6xl mx-auto w-full flex flex-col lg:flex-row items-center gap-12 z-10">
+      <main id="main">
 
-        {/* Left text column */}
-        <div className="flex-1 text-left space-y-6">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-semibold">
-            <Sparkles className="w-3.5 h-3.5" />
-            An entire company running itself
-          </div>
+        {/* ============ HERO ============ */}
+        <section className="relative section-pad pt-[176px] md:pt-[200px] grid-dots overflow-hidden">
+          <div aria-hidden="true" className="pointer-events-none absolute -top-40 -right-40 h-[520px] w-[520px] rounded-full bg-sky/25 blur-[120px] animate-driftSlow" />
+          <div aria-hidden="true" className="pointer-events-none absolute top-60 -left-32 h-[420px] w-[420px] rounded-full bg-ocean-300/30 blur-[110px] animate-driftSlow" style={{ animationDelay: '-6s' }} />
 
-          <h1 className="font-sans font-extrabold text-5xl md:text-6xl lg:text-7xl leading-[1.05] tracking-tight text-slate-900">
-            Run a self-operating business with <span className="gradient-text-sky italic font-serif font-normal">autonomous agents</span>
-          </h1>
+          <div className="mx-auto max-w-7xl px-3 md:px-6 relative">
+            <div className="grid lg:grid-cols-1 gap-10 lg:gap-6 items-center">
 
-          <p className="text-slate-500 text-base md:text-lg max-w-xl font-normal leading-relaxed">
-            Welcome to a living digital ecosystem. Define your company, assign high-level goals, and watch your automated workforce brainstorm, write scripts, audit code quality, and launch deliverables locally.
-          </p>
+              {/* Copy */}
+              <div className="reveal">
+                <span className="inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-xs font-semibold tracking-wide text-ocean shadow-[0_8px_40px_rgba(11,30,51,0.08)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-teal animate-pulseGlow" />
+                  NOW ORCHESTRATING v2.0
+                </span>
 
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <button
-              onClick={() => router.push('/onboard')}
-              className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm rounded-full transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
-            >
-              Launch Agent Setup
-              <ArrowRight className="w-4 h-4" />
-            </button>
-            <a
-              href="#landscape"
-              className="px-6 py-3 border border-slate-200 bg-white/60 hover:bg-white text-slate-700 font-bold text-sm rounded-full transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              Explore Landscape
-            </a>
-          </div>
+                <h1 className="mt-4 font-display font-bold text-[2.6rem] leading-[1.08] sm:text-5xl md:text-[3.4rem] lg:text-[3.8rem] tracking-tight text-navy max-w-4xl">
+                  Run a self-operating business with
+                  <span className="font-serif italic text-ocean"> autonomous agents</span>.
+                </h1>
 
-          <div className="grid grid-cols-3 gap-6 pt-6 border-t border-slate-200/60 max-w-md">
-            <div>
-              <div className="text-2xl font-bold text-slate-900">45k+</div>
-              <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Agents Spawned</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-900">100%</div>
-              <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Locally Sandboxed</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-900">1.2s</div>
-              <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Cycle Frequency</div>
-            </div>
-          </div>
-        </div>
+                <p className="mt-5 text-lg text-navy/65 leading-relaxed">
+                  Spawn a CEO agent. It hires manager agents. They brief specialists.
+                  Work gets planned, built, reviewed, and shipped. You set direction from one dashboard.
+                </p>
 
-        {/* Right visualization column */}
-        <div className="w-full lg:w-[460px] shrink-0">
-          <AgentEcosystemIllustration />
-        </div>
-      </section>
-
-      {/* Section: Landscape Vector Art */}
-      <section id="landscape" className="py-24 bg-white/50 border-y border-sky-100/50 relative overflow-hidden">
-        <div className="max-w-6xl mx-auto px-6 w-full flex flex-col items-center">
-
-          <div className="text-center space-y-4 max-w-2xl mb-12">
-            <h2 className="font-sans font-extrabold text-3xl md:text-5xl text-slate-900 tracking-tight">
-              A Living Ecosystem, <span className="font-serif italic font-normal text-sky-500">Not Just a Dashboard</span>
-            </h2>
-            <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-              Step away from corporate charts and entering an autonomous, nature-tech digital village. Watch agents gather at meeting centers, rest near coffee hubs, and coordinate via pathfinding routes.
-            </p>
-          </div>
-
-          {/* Ghibli Vector Landscape Container */}
-          <div className="w-full h-[240px] md:h-[340px] bg-gradient-to-b from-[#E0F2FE] to-[#F0FDFA] rounded-3xl relative overflow-hidden border border-sky-100 shadow-inner flex items-end">
-
-            {/* Sun in the background */}
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-12 w-48 h-48 rounded-full bg-amber-100/30 blur-2xl pointer-events-none" />
-
-            {/* Clouds floating */}
-            <motion.div
-              animate={{ x: [0, 80, 0] }}
-              transition={{ repeat: Infinity, duration: 40, ease: 'linear' }}
-              className="absolute top-8 left-12 w-20 h-8 bg-white/80 rounded-full blur-sm"
-            />
-            <motion.div
-              animate={{ x: [0, -60, 0] }}
-              transition={{ repeat: Infinity, duration: 32, ease: 'linear' }}
-              className="absolute top-16 right-20 w-28 h-10 bg-white/60 rounded-full blur-sm"
-            />
-
-            {/* Simulated Data Streams / Pulses (Nature Tech Windmills) */}
-            <div className="absolute left-[20%] bottom-16 flex flex-col items-center group">
-              {/* Windmill blades spinning */}
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 12, ease: 'linear' }}
-                className="w-14 h-14 border-t-2 border-r-2 border-emerald-400/60 rounded-full absolute -top-7"
-              />
-              <div className="w-1.5 h-16 bg-slate-400/40 rounded-full" />
-              <span className="text-[9px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded mt-2 border border-emerald-100 font-semibold font-mono">CEO Office</span>
-            </div>
-
-            <div className="absolute right-[25%] bottom-16 flex flex-col items-center group">
-              <motion.div
-                animate={{ rotate: -360 }}
-                transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}
-                className="w-12 h-12 border-b-2 border-l-2 border-sky-400/60 rounded-full absolute -top-6"
-              />
-              <div className="w-1.5 h-14 bg-slate-400/40 rounded-full" />
-              <span className="text-[9px] text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded mt-2 border border-sky-100 font-semibold font-mono">Dev Hub</span>
-            </div>
-
-            {/* Central path network overlay */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M 20% 85% C 35% 75%, 65% 75%, 75% 85%" stroke="rgba(16, 185, 129, 0.2)" strokeWidth="3" fill="none" />
-              <path d="M 50% 85% L 50% 68%" stroke="rgba(14, 165, 233, 0.2)" strokeWidth="2.5" fill="none" />
-              <circle cx="50%" cy="68%" r="4" fill="#0ea5e9" className="animate-ping" />
-            </svg>
-
-            {/* Landscape hills / mountains bottom overlap */}
-            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-emerald-100/80 to-teal-50/50 flex items-center justify-around px-12 z-10 border-t border-emerald-100/20">
-              <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Morale Level: Stable
-              </div>
-              <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
-                Network Traffic: Nominal
-              </div>
-              <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                Energy Usage: Eco
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </section>
-
-      {/* Bento Grid: Agent Teams */}
-      <section id="teams" className="py-24 max-w-6xl mx-auto px-6 w-full">
-        <div className="text-center space-y-4 max-w-xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-1 bg-sky-50 text-sky-600 px-3 py-1 rounded-full text-xs font-semibold border border-sky-100">
-            Workforces
-          </div>
-          <h2 className="font-sans font-extrabold text-3xl md:text-5xl text-slate-900 tracking-tight">
-            Specialised <span className="font-serif italic font-normal text-sky-500">Agent Teams</span>
-          </h2>
-          <p className="text-slate-400 text-sm">
-            AgentCorp splits work across 4 departments. Click to inspect current agents and live stats.
-          </p>
-        </div>
-
-        {/* Tab Buttons */}
-        <div className="flex justify-center gap-1 mb-8 max-w-md mx-auto bg-slate-100 p-1 rounded-full border border-slate-200/50">
-          {(['engineering', 'product', 'marketing', 'research'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTeamTab(tab)}
-              className={`flex-1 py-2 px-3 text-xs font-bold rounded-full transition-all capitalize cursor-pointer ${activeTeamTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-700'}`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        {/* Dynamic Bento Cards Display */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-          {/* Card 1: Team summary details */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-6 bg-sky-500 rounded-full" />
-                <h3 className="font-sans font-bold text-lg text-slate-900 capitalize">{activeTeamTab} Team</h3>
-              </div>
-              <p className="text-slate-400 text-xs mt-3 leading-relaxed">
-                This unit processes local source files, crawls repository definitions, and prepares code structures for integration.
-              </p>
-            </div>
-            <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Morale morae</span>
-              <span className="text-xs font-mono font-bold text-emerald-600">92% Average</span>
-            </div>
-          </div>
-
-          {/* Card 2: List of active agent nodes */}
-          <div className="md:col-span-2 bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
-            <h4 className="font-sans font-bold text-sm text-slate-800 mb-4">Active Roster & Tasks</h4>
-            <div className="space-y-3">
-              {teamMembers[activeTeamTab].map((member, i) => (
-                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition-all duration-300">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-800">
-                      <Cpu className="w-5 h-5 text-sky-500" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-xs text-slate-800">{member.name}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{member.status}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {/* Tool Badges */}
-                    <div className="flex gap-1">
-                      {member.tools.map((tool, idx) => (
-                        <span key={idx} className="text-[9px] font-mono text-slate-500 bg-white border border-slate-100 px-1.5 py-0.5 rounded-md">
-                          {tool}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="h-6 w-px bg-slate-200" />
-                    <div className="text-[10px] text-emerald-600 font-mono font-bold flex items-center gap-1">
-                      <Heart className="w-3 h-3 fill-current text-rose-400" /> {member.morale}%
-                    </div>
-                  </div>
+                <div className="mt-8 flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={() => router.push('/onboard')}
+                    className="group inline-flex items-center justify-center gap-2 rounded-full bg-ocean text-white font-display font-semibold px-6 py-3.5 shadow-[0_0_60px_rgba(0,134,255,0.25)] hover:bg-ocean transition-all hover:-translate-y-0.5 cursor-pointer"
+                  >
+                    Spawn Your First Virtual Team
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </button>
+                  <a href="#landscape" className="inline-flex items-center justify-center gap-2 rounded-full glass text-navy font-display font-semibold px-6 py-3.5 shadow-[0_8px_40px_rgba(11,30,51,0.08)] hover:bg-white/80 transition-all">
+                    See the ecosystem
+                  </a>
                 </div>
-              ))}
-            </div>
-          </div>
 
-        </div>
-      </section>
-
-      {/* Section: Agent Lifecycle Timeline */}
-      <section id="lifecycle" className="py-24 bg-[#F4F7FB]/60 border-y border-slate-200/40">
-        <div className="max-w-6xl mx-auto px-6 w-full">
-
-          <div className="text-center space-y-4 max-w-xl mx-auto mb-16">
-            <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-semibold border border-emerald-100">
-              Operations Loop
-            </div>
-            <h2 className="font-sans font-extrabold text-3xl md:text-5xl text-slate-900 tracking-tight">
-              The Agent <span className="font-serif italic font-normal text-emerald-500">Lifecycle</span>
-            </h2>
-            <p className="text-slate-400 text-sm">
-              Watch how our HR operations coordinate agent happiness, rest, and knowledge preservation.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {steps.map((step, idx) => (
-              <div key={idx} className="bg-white rounded-3xl p-6 border border-slate-200/50 shadow-sm flex flex-col justify-between group hover:scale-[1.02] transition-transform duration-300">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100">
-                      {step.icon}
-                    </div>
-                    <span className="font-mono text-slate-200 group-hover:text-slate-300 text-4xl font-bold transition-colors">0{idx + 1}</span>
-                  </div>
-                  <h3 className="font-sans font-bold text-slate-800 text-base mt-6">{step.title}</h3>
-                  <p className="text-slate-400 text-xs mt-2 leading-relaxed">{step.desc}</p>
-                </div>
-                <div className="mt-6 pt-3 border-t border-slate-50 text-[10px] text-slate-400 font-semibold font-mono flex items-center justify-between">
-                  <span>Audit Parameter</span>
-                  <span className="text-sky-500 font-bold">{step.detail}</span>
+                <div className="mt-10 flex items-center gap-8 text-sm text-navy/50">
+                  <div><span className="font-display font-bold text-navy text-2xl">45k+</span> <span className="text-xs">agents spawned</span></div>
+                  <div className="h-8 w-px bg-navy/10" />
+                  <div><span className="font-display font-bold text-navy text-2xl">340+</span> <span className="text-xs">teams live</span></div>
+                  <div className="h-8 w-px bg-navy/10" />
+                  <div><span className="font-display font-bold text-navy text-2xl">1.2s</span> <span className="text-xs">cycle freq</span></div>
                 </div>
               </div>
-            ))}
-          </div>
 
-        </div>
-      </section>
 
-      {/* Section: Company OS Dashboard Showcase */}
-      <section id="dashboard" className="py-24 max-w-6xl mx-auto px-6 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
 
-          <div className="space-y-6">
-            <div className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-semibold border border-rose-100">
-              Autonomous OS
             </div>
-            <h2 className="font-sans font-extrabold text-3xl md:text-5xl text-slate-900 tracking-tight">
-              Manage your entire company <span className="font-serif italic font-normal text-sky-500">from one tab</span>
-            </h2>
-            <p className="text-slate-500 text-sm leading-relaxed">
-              No complex terminal commands or messy configurations. Launch the Agent Setup wizard, specify your business, and interact via a beautifully simplified sensory GUI panel.
-            </p>
+          </div>
+        </section>
 
-            <div className="space-y-4">
+        {/* ============ ECOSYSTEM SIMULATOR ============ */}
+        <section id="landscape" className="relative section-pad bg-gradient-to-b from-transparent via-ocean-50 to-transparent">
+          <div className="mx-auto max-w-7xl px-3 md:px-6">
+            <div className="max-w-2xl reveal">
+              <span className="text-xs font-display font-bold tracking-[0.2em] text-ocean">LIVING ECOSYSTEM</span>
+              <h2 className="mt-3 font-display font-bold text-3xl md:text-[2.6rem] leading-tight text-navy">
+                A Living Ecosystem, <span className="font-serif italic text-ocean">Not Just a Dashboard</span>
+              </h2>
+              <p className="mt-4 text-navy/60 text-lg leading-relaxed">Step away from corporate charts into an autonomous digital village. Watch agents coordinate, rest, and ship.</p>
+            </div>
+            <div className="mt-14 reveal">
+              <AgentEcosystemIllustration />
+            </div>
+          </div>
+        </section>
+
+        {/* ============ HOW IT WORKS ============ */}
+        <section id="how" className="relative section-pad" aria-labelledby="how-heading">
+          <div className="mx-auto max-w-7xl px-3 md:px-6">
+            <div className="max-w-2xl reveal">
+              <span className="text-xs font-display font-bold tracking-[0.2em] text-ocean">HOW IT WORKS</span>
+              <h2 id="how-heading" className="mt-3 font-display font-bold text-3xl md:text-[2.6rem] leading-tight text-navy">
+                One instruction becomes a <span className="font-serif italic text-ocean">running company</span>.
+              </h2>
+              <p className="mt-4 text-navy/60 text-lg leading-relaxed">Four stages, fully orchestrated.</p>
+            </div>
+
+            <div className="mt-16 space-y-8">
               {[
-                { title: 'Interactive 2D Office Simulator', desc: 'Watch agents navigate between workstations, coffee makers, and meetings.' },
-                { title: 'Live Performance Logs', desc: 'Trace script execution, compiler outputs, and automated PR reviews in real-time.' },
-                { title: 'Integrated Morale Tracking', desc: 'Check agent energy drain levels and automatic replacements instantly.' }
-              ].map((item, idx) => (
-                <div key={idx} className="flex gap-3">
-                  <div className="w-5 h-5 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                { num: '01', title: 'Describe the outcome', desc: 'Tell your CEO agent the goal in plain language: "launch a landing page" or "run a content sprint." No workflow builder required.' },
+                { num: '02', title: 'The CEO agent staffs the org', desc: 'It breaks the goal into functions, spins up manager agents for each, and sets scope, deadlines, and success criteria.' },
+                { num: '03', title: 'Specialists execute in parallel', desc: 'Managers brief specialist agents (copy, design, code, research) who work simultaneously and report progress back up the chain.' },
+                { num: '04', title: 'Review, approve, ship', desc: 'Work rolls up to a single dashboard. Approve, request changes, or let the CEO agent auto-ship once quality checks pass.' },
+              ].map((step, i) => (
+                <div key={i} className="reveal grid md:grid-cols-[80px_1fr] gap-5 md:gap-8 items-start">
+                  <div className="flex md:flex-col items-center gap-3 md:gap-2">
+                    <div className={`h-14 w-14 rounded-full glass shadow-[0_8px_40px_rgba(11,30,51,0.08)] flex items-center justify-center font-display font-bold ${i === 3 ? 'bg-ocean text-white shadow-[0_0_60px_rgba(0,134,255,0.25)]' : 'text-ocean'}`}>
+                      {step.num}
+                    </div>
+                    {i < 3 && <div className="hidden md:block w-px h-24 bg-gradient-to-b from-ocean-300 to-transparent" />}
                   </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-slate-800">{item.title}</h4>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-normal">{item.desc}</p>
+                  <div className="glass rounded-[24px] p-6 md:p-8 shadow-[0_8px_40px_rgba(11,30,51,0.08)]">
+                    <h3 className="font-display font-bold text-xl text-navy">{step.title}</h3>
+                    <p className="mt-2 text-navy/60 leading-relaxed">{step.desc}</p>
                   </div>
                 </div>
               ))}
             </div>
+          </div>
+        </section>
 
-            <div className="pt-2">
+        {/* ============ AGENT TEAMS ============ */}
+        <section id="teams" className="relative section-pad bg-gradient-to-b from-transparent via-ocean-50 to-transparent" aria-labelledby="teams-heading">
+          <div className="mx-auto max-w-7xl px-3 md:px-6">
+            <div className="max-w-2xl reveal">
+              <span className="text-xs font-display font-bold tracking-[0.2em] text-ocean">AGENT TEAMS</span>
+              <h2 id="teams-heading" className="mt-3 font-display font-bold text-3xl md:text-[2.6rem] leading-tight text-navy">
+                Departments that <span className="font-serif italic text-ocean">hire themselves</span>.
+              </h2>
+              <p className="mt-4 text-navy/60 text-lg leading-relaxed">Each team is a self-contained unit: a manager agent plus specialists, spun up on demand.</p>
+            </div>
+
+            {/* Tabs */}
+            <div className="mt-14 flex justify-center gap-1 mb-8 max-w-md mx-auto bg-white/70 p-1 rounded-full border border-ocean-100/50 shadow-sm">
+              {(['engineering', 'product', 'marketing', 'research'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTeamTab(tab)}
+                  className={`flex-1 py-2 px-3 text-xs font-bold rounded-full transition-all capitalize cursor-pointer ${activeTeamTab === tab ? 'bg-white text-navy shadow-sm' : 'text-navy/40 hover:text-navy/70'}`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="glass rounded-[24px] p-6 shadow-[0_8px_40px_rgba(11,30,51,0.08)] flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-6 bg-ocean rounded-full" />
+                    <h3 className="font-display font-bold text-lg text-navy capitalize">{activeTeamTab} Team</h3>
+                  </div>
+                  <p className="text-navy/50 text-xs mt-3 leading-relaxed">
+                    This unit processes local source files, crawls repository definitions, and prepares code structures for integration.
+                  </p>
+                </div>
+                <div className="mt-8 pt-4 border-t border-ocean-100/50 flex items-center justify-between">
+                  <span className="text-[10px] text-navy/40 font-semibold uppercase tracking-wider">Avg. Morale</span>
+                  <span className="text-xs font-mono font-bold text-emerald-600">92%</span>
+                </div>
+              </div>
+
+              <div className="md:col-span-2 glass rounded-[24px] p-6 shadow-[0_8px_40px_rgba(11,30,51,0.08)]">
+                <h4 className="font-display font-bold text-sm text-navy mb-4">Active Roster & Tasks</h4>
+                <div className="space-y-3">
+                  {teamMembers[activeTeamTab].map((member, i) => (
+                    <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl bg-white/70 border border-ocean-100/30 hover:border-ocean-300/50 transition-all duration-300">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white border border-ocean-100/50 flex items-center justify-center">
+                          <Cpu className="w-5 h-5 text-ocean" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-navy">{member.name}</div>
+                          <div className="text-[10px] text-navy/50 mt-0.5">{member.status}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex gap-1">
+                          {member.tools.map((tool, idx) => (
+                            <span key={idx} className="text-[9px] font-mono text-navy/50 bg-white border border-ocean-100/30 px-1.5 py-0.5 rounded-md">{tool}</span>
+                          ))}
+                        </div>
+                        <div className="h-6 w-px bg-ocean-100/50" />
+                        <div className="text-[10px] text-emerald-600 font-mono font-bold flex items-center gap-1">
+                          <Heart className="w-3 h-3 fill-current text-rose-400" /> {member.morale}%
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============ LIFECYCLE ============ */}
+        <section id="lifecycle" className="relative section-pad" aria-labelledby="lifecycle-heading">
+          <div className="mx-auto max-w-7xl px-3 md:px-6">
+            <div className="max-w-2xl reveal">
+              <span className="text-xs font-display font-bold tracking-[0.2em] text-ocean">PROJECT LIFECYCLE</span>
+              <h2 id="lifecycle-heading" className="mt-3 font-display font-bold text-3xl md:text-[2.6rem] leading-tight text-navy">
+                From brief to shipped, <span className="font-serif italic text-ocean">continuously</span>.
+              </h2>
+            </div>
+
+            <div className="mt-14 glass rounded-[24px] p-6 md:p-10 shadow-[0_8px_40px_rgba(11,30,51,0.08)] reveal">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {steps.map((step, idx) => (
+                  <div key={idx} className="bg-white/70 rounded-3xl p-6 border border-ocean-100/30 flex flex-col justify-between group hover:border-ocean-300/50 transition-all duration-300">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-ocean-100/50">
+                          {step.icon}
+                        </div>
+                        <span className="font-mono text-ocean-100 group-hover:text-ocean-300 text-4xl font-bold transition-colors">0{idx + 1}</span>
+                      </div>
+                      <h3 className="font-display font-bold text-navy text-base mt-6">{step.title}</h3>
+                      <p className="text-navy/50 text-xs mt-2 leading-relaxed">{step.desc}</p>
+                    </div>
+                    <div className="mt-6 pt-3 border-t border-ocean-100/30 text-[10px] text-navy/40 font-semibold font-mono flex items-center justify-between">
+                      <span>Audit Parameter</span>
+                      <span className="text-ocean font-bold">{step.detail}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============ DASHBOARD ============ */}
+        <section id="dashboard" className="relative section-pad bg-navy overflow-hidden" aria-labelledby="dashboard-heading">
+          <div aria-hidden="true" className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 h-[400px] w-[800px] bg-ocean-500/20 blur-[140px]" />
+
+          <div className="mx-auto max-w-7xl px-3 md:px-6 relative">
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
+              <div className="space-y-6 reveal">
+                <span className="text-xs font-display font-bold tracking-[0.2em] text-teal">COMMAND CENTER</span>
+                <h2 id="dashboard-heading" className="font-display font-bold text-3xl md:text-[2.6rem] leading-tight text-white">
+                  Every agent, <span className="font-serif italic text-sky">one screen</span>.
+                </h2>
+                <p className="text-white/60 text-lg leading-relaxed">Watch the org chart work in real time. Zoom into any agent's task queue, reasoning trace, or output.</p>
+
+                <div className="space-y-4">
+                  {[
+                    { title: 'Interactive 2D Office Simulator', desc: 'Watch agents navigate between workstations, coffee makers, and meetings.' },
+                    { title: 'Live Performance Logs', desc: 'Trace script execution, compiler outputs, and automated PR reviews in real-time.' },
+                    { title: 'Integrated Morale Tracking', desc: 'Check agent energy drain levels and automatic replacements instantly.' },
+                  ].map((item, idx) => (
+                    <div key={idx} className="flex gap-3">
+                      <div className="w-5 h-5 rounded-full bg-teal/10 border border-teal/20 flex items-center justify-center shrink-0 mt-0.5">
+                        <Check className="w-3.5 h-3.5 text-teal" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-xs text-white">{item.title}</h4>
+                        <p className="text-[10px] text-white/50 mt-0.5 leading-normal">{item.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => router.push('/onboard')}
+                  className="px-5 py-2.5 bg-white text-navy font-bold text-xs rounded-full transition-all flex items-center gap-1.5 hover:bg-white/90 cursor-pointer"
+                >
+                  Start Dashboard Preview
+                  <PlayCircle className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Dashboard Mockup */}
+              <div className="glass-dark rounded-[24px] shadow-2xl p-2 md:p-3 reveal">
+                <div className="flex items-center gap-2 px-3 py-2.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-400/70" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
+                  <span className="ml-3 text-xs text-white/40 font-mono">agentcorp.ai/dashboard</span>
+                </div>
+
+                <div className="grid lg:grid-cols-[200px_1fr] gap-3 p-2">
+                  <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-1">
+                    <div className="text-[11px] uppercase tracking-wider text-white/35 px-2 mb-2 font-semibold">Active teams</div>
+                    <div className="flex items-center gap-2 rounded-lg bg-ocean/20 px-2.5 py-2 text-sm">
+                      <span className="h-2 w-2 rounded-full bg-teal animate-pulseGlow" /> Design <span className="ml-auto text-xs text-white/40">4 tasks</span>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-white/70 hover:bg-white/5">
+                      <span className="h-2 w-2 rounded-full bg-sky" /> Engineering <span className="ml-auto text-xs text-white/40">9 tasks</span>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-white/70 hover:bg-white/5">
+                      <span className="h-2 w-2 rounded-full bg-sky" /> Growth <span className="ml-auto text-xs text-white/40">3 tasks</span>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-white/70 hover:bg-white/5">
+                      <span className="h-2 w-2 rounded-full bg-white/30" /> Support <span className="ml-auto text-xs text-white/40">1 task</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+                    <div className="flex items-center justify-between mb-5">
+                      <h3 className="font-display font-semibold text-white">CEO Agent: live reasoning</h3>
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-teal/15 text-teal font-semibold">Running</span>
+                    </div>
+                    <div className="space-y-3 font-mono text-[13px] text-white/70 leading-relaxed">
+                      <p><span className="text-teal">›</span> Reviewed brief: "Launch product landing page"</p>
+                      <p><span className="text-teal">›</span> Assigned Design Mgr → wireframe + visual system</p>
+                      <p><span className="text-teal">›</span> Assigned Eng Mgr → build + deploy pipeline</p>
+                      <p className="text-white/40"><span className="text-teal">›</span> Waiting on: hero copy approval <span className="inline-block h-3 w-1.5 bg-teal ml-1 animate-pulseGlow align-middle" /></p>
+                    </div>
+                    <div className="mt-6 grid grid-cols-3 gap-3">
+                      <div className="rounded-xl bg-white/5 p-3">
+                        <div className="text-2xl font-display font-bold text-teal">94%</div>
+                        <div className="text-xs text-white/40 mt-1">Tasks on schedule</div>
+                      </div>
+                      <div className="rounded-xl bg-white/5 p-3">
+                        <div className="text-2xl font-display font-bold text-sky">17</div>
+                        <div className="text-xs text-white/40 mt-1">Active agents</div>
+                      </div>
+                      <div className="rounded-xl bg-white/5 p-3">
+                        <div className="text-2xl font-display font-bold text-white">2.3h</div>
+                        <div className="text-xs text-white/40 mt-1">Avg. task time</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============ USE CASES ============ */}
+        <section className="relative section-pad" aria-labelledby="usecases-heading">
+          <div className="mx-auto max-w-7xl px-3 md:px-6">
+            <div className="max-w-2xl reveal">
+              <span className="text-xs font-display font-bold tracking-[0.2em] text-ocean">USE CASES</span>
+              <h2 id="usecases-heading" className="mt-3 font-display font-bold text-3xl md:text-[2.6rem] leading-tight text-navy">
+                Built for <span className="font-serif italic text-ocean">real work</span>, not demos.
+              </h2>
+            </div>
+
+            <div className="mt-14 grid md:grid-cols-2 gap-6 reveal-stagger">
+              {[
+                { title: 'Solo founders', desc: 'Run a full go-to-market motion covering landing page, launch copy, and outreach, without hiring your first employee.' },
+                { title: 'Product teams', desc: 'Offload spec-to-ship busywork so your human team spends time on judgment calls, not tickets.' },
+                { title: 'Agencies', desc: 'Spin up a dedicated virtual team per client, scoped and billed independently.' },
+                { title: 'Internal ops', desc: 'Automate recurring cross-functional work like reporting, content refreshes, and QA sweeps, all on a schedule.' },
+              ].map((useCase, idx) => (
+                <div key={idx} className="glass rounded-[24px] p-8 shadow-[0_8px_40px_rgba(11,30,51,0.08)] hover:-translate-y-1 hover:shadow-[0_0_60px_rgba(0,134,255,0.25)] transition-all duration-300">
+                  <h3 className="font-display font-bold text-xl text-navy">{useCase.title}</h3>
+                  <p className="mt-2 text-navy/60 leading-relaxed">{useCase.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ============ FAQ ============ */}
+        <section id="faq" className="relative section-pad bg-ocean-50/60" aria-labelledby="faq-heading">
+          <div className="mx-auto max-w-3xl px-3 md:px-6">
+            <div className="text-center reveal">
+              <span className="text-xs font-display font-bold tracking-[0.2em] text-ocean">FAQ</span>
+              <h2 id="faq-heading" className="mt-3 font-display font-bold text-3xl md:text-4xl text-navy">Questions, answered</h2>
+            </div>
+
+            <div className="mt-12 space-y-3 reveal-stagger">
+              {faqs.map((faq, idx) => {
+                const isOpen = activeFaq === idx;
+                return (
+                  <div key={idx} className="glass rounded-[24px] shadow-[0_8px_40px_rgba(11,30,51,0.08)] overflow-hidden transition-all duration-300">
+                    <button
+                      onClick={() => setActiveFaq(isOpen ? null : idx)}
+                      className="w-full py-4 px-6 text-left flex items-center justify-between font-display font-semibold text-navy text-sm cursor-pointer"
+                    >
+                      <span>{faq.q}</span>
+                      <ChevronDown className={`w-4 h-4 text-ocean transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.25 }}
+                        >
+                          <div className="px-6 pb-4 text-xs text-navy/60 leading-relaxed border-t border-ocean-100/30 pt-2.5">
+                            {faq.a}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* ============ CTA ============ */}
+        <section className="relative section-pad overflow-hidden">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-br from-ocean via-ocean to-navy" />
+          <div aria-hidden="true" className="pointer-events-none absolute -top-24 right-10 h-72 w-72 rounded-full bg-teal/30 blur-[100px] animate-driftSlow" />
+
+          <div className="mx-auto max-w-4xl px-3 md:px-6 relative text-center reveal">
+            <h2 className="font-display font-bold text-4xl md:text-5xl text-white leading-tight">
+              Ready to run your <span className="font-serif italic text-sky">virtual company</span>?
+            </h2>
+            <p className="mt-5 text-white/70 text-lg max-w-xl mx-auto">Set a goal. Watch the org chart build itself. Ship your first project today.</p>
+
+            <div className="mt-9 flex flex-col sm:flex-row gap-3 justify-center">
               <button
                 onClick={() => router.push('/onboard')}
-                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-full transition-all flex items-center gap-1.5 cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-white text-ocean font-display font-bold px-7 py-4 shadow-2xl hover:-translate-y-0.5 hover:shadow-[0_0_40px_rgba(0,212,255,0.35)] transition-all cursor-pointer"
               >
-                Start Dashboard Preview
-                <PlayCircle className="w-4 h-4" />
+                Spawn Your First Virtual Team
+                <ArrowRight className="h-4 w-4" />
               </button>
+              <a href="#landscape" className="inline-flex items-center justify-center gap-2 rounded-full border border-white/30 text-white font-display font-semibold px-7 py-4 hover:bg-white/10 transition-all">
+                Explore the ecosystem
+              </a>
             </div>
           </div>
+        </section>
 
-          {/* Premium Apple-Polish Dashboard Mockup */}
-          <div className="bg-slate-900 rounded-3xl p-4 md:p-6 border border-slate-800 shadow-xl relative overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-rose-500" />
-                <div className="w-3 h-3 rounded-full bg-amber-500" />
-                <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="text-[10px] font-bold text-slate-500 font-mono ml-3 uppercase">AgentCorp.app/workspace</span>
-              </div>
-              <span className="text-[9px] bg-sky-500/10 text-sky-400 px-2 py-0.5 rounded-full font-bold">1.2x Simulator</span>
-            </div>
+      </main>
 
-            {/* Dashboard grid preview mockup */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800/80">
-                <span className="text-[9px] text-slate-500 font-bold uppercase"> MORALE Morale</span>
-                <div className="text-xl font-bold text-emerald-400 mt-1">94%</div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full mt-2 overflow-hidden">
-                  <div className="h-full bg-emerald-400 rounded-full" style={{ width: '94%' }} />
-                </div>
-              </div>
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800/80">
-                <span className="text-[9px] text-slate-500 font-bold uppercase">Tasks Resolved</span>
-                <div className="text-xl font-bold text-sky-400 mt-1">112 / 115</div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full mt-2 overflow-hidden">
-                  <div className="h-full bg-sky-400 rounded-full" style={{ width: '97%' }} />
-                </div>
-              </div>
-            </div>
-
-            {/* Live Terminal ticker box */}
-            <div className="mt-4 bg-slate-950 p-3 rounded-2xl border border-slate-800/80 font-mono text-[9px] text-slate-400 space-y-1">
-              <div className="text-sky-400 flex items-center justify-between border-b border-slate-900 pb-1 mb-1 font-bold">
-                <span>SYSTEM LOGS</span>
-                <span>Active</span>
-              </div>
-              <div className="truncate text-slate-400">$ tsc --noEmit && eslint .</div>
-              <div className="text-emerald-500 font-bold">✓ Compilation complete. 0 Errors.</div>
-              <div className="truncate">$ git commit -m "feature: auth migration complete"</div>
-            </div>
-
-            {/* Float sun logo overlay */}
-            <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-sky-500/10 rounded-full blur-xl pointer-events-none" />
+      {/* ============ FOOTER ============ */}
+      <footer className="border-t border-navy/10 py-10 bg-paper">
+        <div className="mx-auto max-w-7xl px-3 md:px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-navy/50">
+          <div className="flex items-center gap-2 font-display font-bold text-navy">
+            <span className="h-6 w-6 rounded-full bg-gradient-to-br from-ocean to-teal" />
+            AgentCorp
           </div>
-
-        </div>
-      </section>
-
-      {/* Section: Industry Use Cases */}
-      <section className="py-24 bg-white border-t border-sky-100/50">
-        <div className="max-w-6xl mx-auto px-6 w-full">
-          <div className="text-center space-y-4 max-w-xl mx-auto mb-16">
-            <h2 className="font-sans font-extrabold text-3xl md:text-5xl text-slate-900 tracking-tight">
-              Tailored for <span className="font-serif italic font-normal text-emerald-500">Every Business</span>
-            </h2>
-            <p className="text-slate-400 text-sm">
-              Explore how AgentCorp automates operations across different industries.
-            </p>
+          <p>&copy; 2026 AgentCorp. Multi-agent orchestration for real work.</p>
+          <div className="flex gap-5">
+            <a href="#" className="hover:text-ocean transition-colors">Privacy</a>
+            <a href="#" className="hover:text-ocean transition-colors">Terms</a>
+            <a href="#" className="hover:text-ocean transition-colors">Status</a>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { title: 'SaaS Startup', desc: 'Deploy new UI landing pages, test auth routers, and release scripts autonomously.' },
-              { title: 'Digital Agency', desc: 'Automate content updates, write client summaries, and monitor project timelines.' },
-              { title: 'E-commerce Brand', desc: 'Audit system databases, scrape competitor prices, and log inventory sync feeds.' },
-              { title: 'Content Studio', desc: 'Research target topics, generate formatted markdown reports, and verify SEO scores.' },
-              { title: 'Game Studio', desc: 'Initialize interactive canvas frameworks, script sprites, and run integrity tests.' },
-              { title: 'Research Lab', desc: 'Scan research publications, structure research summaries, and compile metrics.' }
-            ].map((useCase, idx) => (
-              <div key={idx} className="p-6 bg-slate-50 hover:bg-white rounded-3xl border border-slate-100 hover:border-sky-200/50 transition-all duration-300 shadow-sm flex flex-col justify-between group cursor-pointer">
-                <div>
-                  <h3 className="font-sans font-bold text-slate-800 text-base group-hover:text-sky-600 transition-colors">{useCase.title}</h3>
-                  <p className="text-slate-400 text-xs mt-2.5 leading-relaxed">{useCase.desc}</p>
-                </div>
-                <div className="mt-6 flex items-center gap-1 text-[10px] text-sky-500 font-bold font-mono opacity-0 group-hover:opacity-100 transition-opacity">
-                  Learn more <ArrowRight className="w-3.5 h-3.5" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Section: Accordion FAQ */}
-      <section id="faq" className="py-24 bg-[#F4F7FB]/60 border-t border-slate-200/40">
-        <div className="max-w-4xl mx-auto px-6 w-full">
-
-          <div className="text-center space-y-4 max-w-xl mx-auto mb-16">
-            <h2 className="font-sans font-extrabold text-3xl md:text-5xl text-slate-900 tracking-tight">
-              Frequently Asked <span className="font-serif italic font-normal text-sky-500">Questions</span>
-            </h2>
-            <p className="text-slate-400 text-sm">
-              Everything you need to know about the AgentCorp local operating system.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {faqs.map((faq, idx) => {
-              const isOpen = activeFaq === idx;
-              return (
-                <div key={idx} className="bg-white rounded-2xl border border-slate-200/40 shadow-sm overflow-hidden transition-all duration-300">
-                  <button
-                    onClick={() => setActiveFaq(isOpen ? null : idx)}
-                    className="w-full py-4 px-5 text-left flex items-center justify-between font-sans font-bold text-slate-800 text-xs md:text-sm cursor-pointer"
-                  >
-                    <span>{faq.q}</span>
-                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  <AnimatePresence initial={false}>
-                    {isOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.25 }}
-                      >
-                        <div className="px-5 pb-4 text-xs text-slate-500 leading-relaxed border-t border-slate-50 pt-2.5">
-                          {faq.a}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
-          </div>
-
-        </div>
-      </section>
-
-      {/* Final CTA Banner */}
-      <section className="py-24 max-w-5xl mx-auto px-6 w-full text-center relative">
-        <div className="bg-gradient-to-r from-sky-500 to-emerald-400 rounded-3xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden flex flex-col items-center">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
-
-          <span className="bg-white/20 text-white font-bold text-[10px] uppercase px-3 py-1 rounded-full border border-white/20 tracking-wider">
-            GET STARTED NOW
-          </span>
-          <h2 className="font-sans font-extrabold text-3xl md:text-5xl mt-6 max-w-xl leading-tight">
-            Spawn your first virtual team today
-          </h2>
-          <p className="text-white/80 text-sm mt-3 max-w-md">
-            Set objectives, configure secure directories, and launch an entire autonomous workspace.
-          </p>
-
-          <button
-            onClick={() => router.push('/onboard')}
-            className="mt-8 px-6 py-3 bg-white text-slate-900 font-bold text-xs rounded-full hover:bg-slate-50 transition-all flex items-center gap-1.5 shadow shadow-emerald-500/20 cursor-pointer"
-          >
-            Launch Agent Setup
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-16 px-6 border-t border-slate-800">
-        <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
-
-          <div className="col-span-2 space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-sky-500 to-emerald-400 flex items-center justify-center text-white font-bold text-xs">
-                C
-              </div>
-              <span className="font-sans font-bold text-white text-sm">AgentCorp</span>
-            </div>
-            <p className="text-xs text-slate-500 max-w-sm">
-              An innovative workspace of AI agents collaborating in real-time. Just assign goals, and watch your automated workforce research, build, test, and deploy.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-sans font-bold text-white text-xs uppercase tracking-wider mb-4">Navigations</h4>
-            <ul className="space-y-2.5 text-xs text-slate-500 font-semibold">
-              <li><a href="#landscape" className="hover:text-white transition-colors">Ecosystem Map</a></li>
-              <li><a href="#teams" className="hover:text-white transition-colors">Agent Teams</a></li>
-              <li><a href="#lifecycle" className="hover:text-white transition-colors">Lifecycle Timeline</a></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-sans font-bold text-white text-xs uppercase tracking-wider mb-4">Community</h4>
-            <ul className="space-y-2.5 text-xs text-slate-500 font-semibold">
-              <li><a href="https://discord.com" className="hover:text-white transition-colors">Discord Guild</a></li>
-              <li><a href="https://github.com" className="hover:text-white transition-colors">GitHub Repository</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Developer SDK</a></li>
-            </ul>
-          </div>
-
-        </div>
-
-        <div className="max-w-6xl mx-auto border-t border-slate-800/80 mt-12 pt-6 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-600 font-semibold">
-          <span>&copy; 2026 AgentCorp Inc. All rights reserved.</span>
-          <span className="flex gap-4 mt-3 sm:mt-0">
-            <a href="#" className="hover:text-slate-400">Privacy Policy</a>
-            <a href="#" className="hover:text-slate-400">Terms of Service</a>
-          </span>
         </div>
       </footer>
 
     </div>
   );
 }
-

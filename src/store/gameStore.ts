@@ -658,7 +658,7 @@ Comprehensive security audit of AgentCorp infrastructure.
     }
 
     // Add event
-    const ev = createGameEvent('system', `Task "${task?.title}" paused — waiting for ${credentialLabel} from operator`);
+    const ev = createGameEvent('system', `Task "${task?.title}" paused. Waiting for ${credentialLabel} from operator`);
     set((state) => ({ events: [ev, ...state.events.slice(0, 49)] }));
   },
 

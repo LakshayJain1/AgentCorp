@@ -39,7 +39,7 @@ export class AgentRuntime {
     builder.push(assignedAgent.id, 'thinking', `Working on: "${task.title}"`);
     store.updateWorkStatus(assignedAgent.id, 'thinking');
 
-    const systemContext = `You are a ${assignedAgent.role} at AgentCorp. The user has requested: "${task.title}". Generate a complete, high-quality deliverable. Return ONLY the content — no explanations, no markdown fences.`;
+    const systemContext = `You are a ${assignedAgent.role} at AgentCorp. The user has requested: "${task.title}". Generate a complete, high-quality deliverable. Return only the content. No explanations or markdown fences.`;
 
     console.log('[AgentCorp] calling ask_agent tool for:', task.id, 'agent:', assignedAgent.name);
     const startTime = Date.now();

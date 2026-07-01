@@ -80,7 +80,7 @@ const CONNECTORS: ConnectorDef[] = [
   {
     id: 'linear',
     label: 'Linear',
-    desc: 'Sync tasks with Linear issues — agents create tickets and update statuses automatically',
+    desc: 'Sync tasks with Linear issues. Agents create tickets and update statuses automatically',
     icon: <Zap size={15} />,
     color: 'hover:border-violet-400',
     badgeColor: 'bg-violet-50 text-violet-700 border-violet-200',
@@ -127,7 +127,7 @@ const CONNECTORS: ConnectorDef[] = [
   {
     id: 'ai',
     label: 'AI Model Provider',
-    desc: 'Override the default AI model used by all agents — supports Gemini, OpenAI, Anthropic, OpenRouter',
+    desc: 'Override the default AI model used by all agents. Supports Gemini, OpenAI, Anthropic, OpenRouter',
     icon: <Bot size={15} />,
     color: 'hover:border-sky-400',
     badgeColor: 'bg-sky-50 text-sky-700 border-sky-200',
@@ -240,7 +240,7 @@ export default function ConnectorsTab() {
         <div className="mt-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
           <AlertTriangle size={12} className="text-amber-500 shrink-0 mt-0.5" />
           <p className="text-[10px] text-amber-700 leading-relaxed">
-            <strong>Beta:</strong> Integrations may behave unexpectedly. Agents can push commits, send messages, and trigger deploys — <strong>use at your own risk</strong> on test environments only.
+            <strong>Beta:</strong> Integrations may behave unexpectedly. Agents can push commits, send messages, and trigger deploys. <strong>Use at your own risk</strong> on test environments only.
           </p>
         </div>
       </div>

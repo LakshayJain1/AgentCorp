@@ -90,7 +90,7 @@ class PerformanceTracker {
       id: `hr_review_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       timestamp: Date.now(),
       type: 'review',
-      message: `📋 HR Performance Review — evaluating ${members.length} team members`,
+      message: `📋 HR Performance Review: evaluating ${members.length} team members`,
       agentId: hrAgent.id,
       taskId: null,
     });
@@ -103,7 +103,7 @@ class PerformanceTracker {
       this.pushActivity(
         hrAgent.id,
         score > 50 ? 'researching' : 'blocked',
-        `${member.emoji} ${member.name} (${member.role}): ${bar} ${score}/100 — ${status}`,
+        `${member.emoji} ${member.name} (${member.role}): ${bar} ${score}/100: ${status}`,
       );
 
       // Check for promotion eligibility using PromotionManager
@@ -128,7 +128,7 @@ class PerformanceTracker {
       // Store evaluation in shared memory
       agentMemory.addSharedMemory({
         type: 'knowledge',
-        content: `HR evaluation: ${member.name} (${member.role}) — score ${score}/100, seniority ${member.performance.seniority}, promotion level ${member.performance.promotionLevel}, ${member.performance.tasksCompleted} tasks completed`,
+        content: `HR evaluation: ${member.name} (${member.role}). Score ${score}/100, seniority ${member.performance.seniority}, promotion level ${member.performance.promotionLevel}, ${member.performance.tasksCompleted} tasks completed`,
         tags: ['hr', 'evaluation', member.role, member.name.toLowerCase()],
         importance: 3,
       });
@@ -172,7 +172,7 @@ class PerformanceTracker {
           id: `hr_alert_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           timestamp: Date.now(),
           type: 'error',
-          message: `🚨 HR Alert: ${member.name} score is critical (${score}/100) — placed on probation`,
+          message: `🚨 HR Alert: ${member.name} score is critical (${score}/100). Placed on probation`,
           agentId: hrAgent.id,
           taskId: null,
         });
@@ -184,7 +184,7 @@ class PerformanceTracker {
       id: `hr_done_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       timestamp: Date.now(),
       type: 'review',
-      message: `📊 HR evaluation complete — ${members.filter(m => this.getScore(m) > 75).length}/${members.length} agents in good standing`,
+      message: `📊 HR evaluation complete: ${members.filter(m => this.getScore(m) > 75).length}/${members.length} agents in good standing`,
       agentId: hrAgent.id,
       taskId: null,
     });
