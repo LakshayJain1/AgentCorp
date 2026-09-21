@@ -1,5 +1,5 @@
 import { useGameStore } from '@/store/gameStore';
-import { Agent, SubTask, WorkerRole, StreamEvent } from '@/agents/AgentTypes';
+import { Agent, SubTask, StreamEvent } from '@/agents/AgentTypes';
 import { PlannerAgent } from './PlannerAgent';
 import { TaskQueue } from './TaskQueue';
 import { BaseWorkerAgent } from '@/agents/BaseWorkerAgent';
@@ -13,6 +13,7 @@ import { QAAgent } from '@/agents/QAAgent';
 import { ResearchAgent } from '@/agents/ResearchAgent';
 import { classifyIntent } from '@/ai/IntentClassifier';
 import { agentRuntime } from '@/runtime/AgentRuntime';
+import { LoopOrchestrator } from './LoopOrchestrator';
 
 export class CentralOrchestrator {
   private planner: PlannerAgent;
@@ -21,14 +22,25 @@ export class CentralOrchestrator {
   private workers: BaseWorkerAgent[] = [];
   private memStore: MemoryStore;
   private logStream: ExecutionLogStream;
+  private loopOrchestrator: LoopOrchestrator;
   private tickCounter = 0;
   private listeners: Set<(event: StreamEvent) => void> = new Set();
 
-  constructor() {
+  constructor(storeAccessor?: () => { tasks: ReturnType<typeof useGameStore.getState>['tasks']; agents: ReturnType<typeof useGameStore.getState>['agents'] }) {
     this.planner = new PlannerAgent();
     this.taskQueue = new TaskQueue();
     this.validator = new ValidatorAgent();
     this.memStore = new MemoryStore();
+    this.loopOrchestrator = new LoopOrchestrator({
+      goal: 'Autonomous task completion via phased loop',
+      successCriteria: 'All tasks completed, tsc+build pass',
+      memStore: this.memStore,
+      // Headless seam: phases read via injected accessor; defaults to Zustand snapshot.
+      storeAccessor: storeAccessor ?? (() => {
+        const s = useGameStore.getState();
+        return { tasks: s.tasks, agents: s.agents };
+      }),
+    });
     this.logStream = new ExecutionLogStream();
     console.log('[AgentCorp] CentralOrchestrator constructed');
   }
@@ -213,6 +225,18 @@ export class CentralOrchestrator {
       if (!passed) {
         const storeNow = useGameStore.getState();
         const agent = storeNow.agents.find((a) => a.id === subtask.assignedAgentId);
+        // Outer loop budget governs the inner QA-reject retry: escalate after 2 build-verify cycles
+        // even if the legacy retryCount (<3) would allow another attempt.
+        const verdict = this.loopOrchestrator.recordBuildVerifyCycle();
+        if (verdict === 'escalate') {
+          this.emit({
+            type: 'log',
+            data: { message: `Subtask "${subtask.description.slice(0, 40)}..." escalated: build-verify budget exhausted` },
+            timestamp: Date.now(),
+            streamId: `escalate_${subtask.id}`,
+          });
+          continue;
+        }
         if (agent && validation.result.retryCount < 3) {
           store.updateAgent(agent.id, {
             currentSubTaskId: subtask.id,
@@ -227,6 +251,10 @@ export class CentralOrchestrator {
         }
       }
     }
+  }
+
+  getLoopSnapshot(): { phase: string; cycles: number; blocked: string | null } {
+    return this.loopOrchestrator.snapshot();
   }
 
   getLogStream(): ExecutionLogStream {
