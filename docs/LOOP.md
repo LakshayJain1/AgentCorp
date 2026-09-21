@@ -12,7 +12,7 @@ Budget per loop: 2 retries per slice / 2 build-verify cycles max, then escalate
 - BUILD:  done
 - VERIFY: done
 - REVIEW: done
-- SHIP:   in-progress
+- SHIP:   done
 
 ## Notes
 - DEFINE: docs/LOOP_SPEC.md + roles/FSM/QA-reject loop studied; scope=refactor, headless, MemoryStore/localStorage
