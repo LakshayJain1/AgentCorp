@@ -203,6 +203,40 @@ ipcMain.handle('app:get-info', () => ({
   webUrl: WEB_URL,
 }));
 
+// ─── P3b: local checks runner (desktop only) ─────────────────────────
+// Runs an allowlisted check command inside the user's workspace clone.
+// Deny by default: only tsc/eslint/vitest, cwd jailed to workspaces/<workspaceId>.
+const { execFile } = require('child_process');
+const ALLOWED_CHECKS = {
+  typecheck: { cmd: 'npx', args: ['tsc', '--noEmit'] },
+  lint: { cmd: 'npx', args: ['eslint', '--ext', '.ts', 'src'] },
+  test: { cmd: 'npx', args: ['vitest', 'run'] },
+};
+
+function workspaceDir(workspaceId) {
+  const safe = String(workspaceId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+  if (!safe) return null;
+  return path.join(app.getPath('userData'), 'workspaces', safe);
+}
+
+ipcMain.handle('checks:run', async (_event, { workspaceId, check }) => {
+  const spec = ALLOWED_CHECKS[check];
+  const cwd = workspaceDir(workspaceId);
+  if (!spec || !cwd) return { success: false, error: 'denied: unknown check or workspace' };
+  if (!fs.existsSync(cwd)) return { success: false, error: 'denied: workspace not cloned on this machine' };
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ success: false, error: 'timeout after 120s', check }), 120000);
+    execFile(spec.cmd, spec.args, { cwd, timeout: 115000, maxBuffer: 1024 * 512 }, (err, stdout, stderr) => {
+      clearTimeout(timer);
+      const out = `${stdout || ''}${stderr || ''}`.slice(-4000); // truncated log, no env dump
+      if (err) return resolve({ success: false, check, output: out, error: `exit ${err.code ?? '?'}` });
+      return resolve({ success: true, check, output: out.slice(-2000) });
+    });
+  });
+});
+
+ipcMain.handle('checks:list', () => Object.keys(ALLOWED_CHECKS));
+
 // ─── App lifecycle ──────────────────────────────────────────────────
 app.whenReady().then(() => {
   createMainWindow();

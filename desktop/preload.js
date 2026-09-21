@@ -10,6 +10,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // App info
   getInfo: () => ipcRenderer.invoke('app:get-info'),
 
+  // P3b: local checks (desktop runner)
+  listChecks: () => ipcRenderer.invoke('checks:list'),
+  runChecks: (workspaceId, check) => ipcRenderer.invoke('checks:run', { workspaceId, check }),
+
   // Platform
   platform: process.platform,
+});
+
+// Marker read by the web app's detectExecutorEnv() to enable desktop capabilities.
+contextBridge.exposeInMainWorld('agentcorpDesktop', {
+  available: true,
 });

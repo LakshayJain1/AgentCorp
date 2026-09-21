@@ -67,7 +67,45 @@ export class ValidatorAgent {
       details.push('Content length check: FAILED (empty)');
     }
 
+    // P3a: real CI verdict when the subtask links a repo ref. Fail-closed on
+    // CI failure; pending CI never passes on its own (falls back to base score).
+    let ciFailed = false;
+    if (subtask.repoRef?.repo && subtask.repoRef?.ref) {
+      try {
+        const url = `/api/github/checks?repo=${encodeURIComponent(subtask.repoRef.repo)}&ref=${encodeURIComponent(subtask.repoRef.ref)}`;
+        const res = await fetch(url);
+        const data = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          verdict?: string;
+          details?: string[];
+          error?: string;
+        } | null;
+        if (res.ok && data?.success) {
+          details.push(`CI checks (${subtask.repoRef.ref}): ${data.verdict?.toUpperCase()}`);
+          for (const d of (data.details ?? []).slice(0, 10)) details.push(d);
+          ciFailed = data.verdict === 'fail';
+        } else {
+          details.push(`CI checks: UNAVAILABLE (${(data?.error ?? `http ${res.status}`).slice(0, 120)})`);
+        }
+      } catch (e) {
+        details.push(`CI checks: UNAVAILABLE (${String(e).slice(0, 120)})`);
+      }
+    }
+
     const score = this.computeScore(details);
+    if (ciFailed) {
+      return {
+        passed: false,
+        score: Math.min(score, 40),
+        details,
+        typeCheckOutput: '',
+        lintOutput: '',
+        testOutput: '',
+        validatorAgentId: 'validator',
+        validatedAt: Date.now(),
+        retryCount,
+      };
+    }
 
     return {
       passed: score >= 60,

@@ -48,6 +48,9 @@ export interface SubTask {
   dependencies: string[];
   deliverable?: string;
   validationResult?: ValidationResult;
+  // P3: opt-in link to a real repo ref (branch/sha). When present, the validator
+  // folds live CI check-runs into the verdict; otherwise legacy length+AI scoring.
+  repoRef?: { repo: string; ref: string };
   createdAt: number;
   completedAt: number | null;
 }
