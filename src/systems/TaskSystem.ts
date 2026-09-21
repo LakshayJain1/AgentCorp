@@ -80,8 +80,20 @@ const taskActions: TaskAction[] = [
         timestamp: Date.now(),
       });
 
+      // P4: skill-based pick (was random). Analysis-flavored tasks go to
+      // researchers, build-flavored to engineers; ties break by least load.
       const workers = agents.filter((a) => a.role !== 'ceo' && a.role !== 'pm' && a.role !== 'qa' && a.role !== 'hr');
-      const worker = workers[Math.floor(Math.random() * workers.length)];
+      const researchKind = task.deliverableType === 'analysis' || task.deliverableType === 'research';
+      const wantRole: 'researcher' | 'engineer' = researchKind ? 'researcher' : 'engineer';
+      const loadOf = (id: string) => agents.filter((a) => a.currentTaskId && a.id === id).length;
+      const ranked = [...workers].sort((x, y) => {
+        const affinity = (a: (typeof workers)[number]) =>
+          a.role === wantRole ? 0 : 1;
+        const ax = affinity(x) * 10 + (x.currentTaskId ? 5 : 0) + loadOf(x.id);
+        const ay = affinity(y) * 10 + (y.currentTaskId ? 5 : 0) + loadOf(y.id);
+        return ax - ay;
+      });
+      const worker = ranked[0];
       if (!worker) {
         console.warn('[AgentCorp] no worker available to assign task:', task.id);
         return { task, events: [] };

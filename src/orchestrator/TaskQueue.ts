@@ -101,11 +101,24 @@ export class TaskQueue {
       return !w.isBusy() && agent.online && !inCooldown;
     };
 
+    // P4: load-aware — least-loaded available worker wins (was first-match).
+    const loadOf = (w: BaseWorkerAgent): number => {
+      const agent = store.agents.find((a) => a.id === w.id);
+      if (!agent) return 99;
+      let n = agent.currentSubTaskId ? 1 : 0;
+      for (const t of store.tasks) {
+        for (const s of t.subtasks) {
+          if (s.assignedAgentId === agent.id && (s.status === 'assigned' || s.status === 'in_progress')) n += 1;
+        }
+      }
+      return n;
+    };
+    const available = workers.filter(isAvailable).sort((a, b) => loadOf(a) - loadOf(b));
     if (preferredRole) {
-      const preferred = workers.find((w) => w.getWorkerRole() === preferredRole && isAvailable(w));
+      const preferred = available.find((w) => w.getWorkerRole() === preferredRole);
       if (preferred) return preferred;
     }
-    return workers.find(isAvailable) || null;
+    return available[0] || null;
   }
 
   markComplete(subtaskId: string): void {

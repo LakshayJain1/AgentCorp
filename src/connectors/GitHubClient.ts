@@ -60,6 +60,40 @@ export async function readRepoFile(
   return { content: text, sha: j.sha ?? '' };
 }
 
+// P4: idempotent per-task branch. Returns existing branch info if already present.
+export async function ensureBranch(
+  repoInput: string,
+  branch: string,
+  base = 'main',
+): Promise<{ branch: string; created: boolean } | { error: string; status: number }> {
+  const token = devToken();
+  if (!token) return { error: 'GITHUB_DEV_TOKEN is not set (server env).', status: 503 };
+  const parsed = parseRepo(repoInput);
+  if (!parsed) return { error: `invalid repo '${repoInput}'`, status: 400 };
+  if (!/^agentcorp\/[A-Za-z0-9_.-]+$/.test(branch)) return { error: `denied branch '${branch}'`, status: 403 };
+  const h = headers();
+  const { owner, repo } = parsed;
+  const exists = await fetch(`${API}/repos/${owner}/${repo}/git/ref/heads/${branch.replace('agentcorp/', 'agentcorp%2F')}`, { headers: h });
+  // GitHub ref API: branch names with slashes must be matched fully; fall back to listing
+  if (exists.ok) return { branch, created: false };
+  const baseRes = await fetch(`${API}/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(base)}`, { headers: h });
+  if (!baseRes.ok) return { error: `base branch '${base}' not found (${baseRes.status})`, status: 400 };
+  const baseJson = (await baseRes.json()) as { object?: { sha?: string } };
+  if (!baseJson.object?.sha) return { error: 'could not resolve base sha', status: 500 };
+  const cr = await fetch(`${API}/repos/${owner}/${repo}/git/refs`, {
+    method: 'POST',
+    headers: { ...h, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: baseJson.object.sha }),
+  });
+  if (!cr.ok) {
+    // Race: another tick created it first — treat 422 as exists
+    if (cr.status === 422) return { branch, created: false };
+    const t = await cr.text().catch(() => '');
+    return { error: `branch create failed (${cr.status}): ${t.slice(0, 200)}`, status: 500 };
+  }
+  return { branch, created: true };
+}
+
 export async function proposeRepoFile(
   repoInput: string,
   path: string,

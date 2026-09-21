@@ -51,6 +51,10 @@ export interface SubTask {
   // P3: opt-in link to a real repo ref (branch/sha). When present, the validator
   // folds live CI check-runs into the verdict; otherwise legacy length+AI scoring.
   repoRef?: { repo: string; ref: string };
+  // P4: verifiable completion contract. verifyCommand examples:
+  //   "ci:<repo>@<branch>" (GitHub check-runs) | "desktop:typecheck|lint|test"
+  acceptanceCriteria?: string;
+  verifyCommand?: string;
   createdAt: number;
   completedAt: number | null;
 }
@@ -216,6 +220,10 @@ export interface Task {
   parentTaskId: string | null;
   validationResult?: ValidationResult;
   plannerOutput?: string;
+  // P4: per-task isolation on the USER's repo. When set, the planner ensures a
+  // dedicated branch and all subtasks inherit repoRef {repo, ref: taskBranch}.
+  repoScope?: { repo: string; base?: string };
+  taskBranch?: string;
 }
 
 export interface ConversationMessage {
