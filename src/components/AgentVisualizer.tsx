@@ -35,7 +35,7 @@ const AgentVisualizer = () => {
                 className="h-full rounded-full transition-all duration-300"
                 style={{
                   width: `${agent.energy}%`,
-                  backgroundColor: agent.energy > 60 ? '#22c55e' : agent.energy > 30 ? '#eab308' : '#ef4444',
+                  backgroundColor: agent.energy > 60 ? '#22c55e' : agent.energy > 30 ? '#eab308' : '#FF453A',
                 }}
               />
             </div>

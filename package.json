@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "desktop:install": "cd desktop && npm install",
+    "desktop:dev": "concurrently \"next dev\" \"cd desktop && npm run dev\"",
+    "desktop:build": "next build && cd desktop && npm run build",
+    "desktop:build:mac": "next build && cd desktop && npm run build:mac",
+    "desktop:build:win": "next build && cd desktop && npm run build:win"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.4.2",

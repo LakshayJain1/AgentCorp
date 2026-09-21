@@ -48,7 +48,7 @@ export default function AgentEcosystemIllustration() {
       id: 'ceo',
       name: 'Alex (CEO)',
       role: 'Chief Executive',
-      color: '#EF4444',
+      color: '#FF453A',
       bgLight: 'bg-red-50/80',
       borderClass: 'border-red-200 hover:border-red-400',
       icon: <Award className="w-5 h-5 text-red-500" />,
@@ -61,8 +61,8 @@ export default function AgentEcosystemIllustration() {
       role: 'Product Manager',
       color: '#06B6D4',
       bgLight: 'bg-cyan-50/80',
-      borderClass: 'border-cyan-200 hover:border-cyan-400',
-      icon: <Users className="w-5 h-5 text-cyan-500" />,
+      borderClass: 'border-teal/30 hover:border-teal/60',
+      icon: <Users className="w-5 h-5 text-teal" />,
       x: 18,
       y: 50,
     },
@@ -70,7 +70,7 @@ export default function AgentEcosystemIllustration() {
       id: 'dev',
       name: currentStep === 'transfer' || currentStep === 'testing' || currentStep === 'deployed' ? 'Mike-2 (Dev)' : 'Mike (Dev)',
       role: 'Software Engineer',
-      color: '#F59E0B',
+      color: '#FF9F0A',
       bgLight: 'bg-amber-50/80',
       borderClass: 'border-amber-200 hover:border-amber-400',
       icon: <Cpu className="w-5 h-5 text-amber-500" />,
@@ -81,7 +81,7 @@ export default function AgentEcosystemIllustration() {
       id: 'qa',
       name: 'Tina (QA)',
       role: 'Quality Assurance',
-      color: '#8B5CF6',
+      color: '#BF5AF2',
       bgLight: 'bg-violet-50/80',
       borderClass: 'border-violet-200 hover:border-violet-400',
       icon: <Shield className="w-5 h-5 text-violet-500" />,
@@ -201,21 +201,21 @@ export default function AgentEcosystemIllustration() {
   };
 
   return (
-    <div className="w-full flex flex-col bg-white rounded-3xl border border-sky-100/80 p-5 shadow-inner">
+    <div className="w-full flex flex-col bg-white rounded-3xl border border-ocean-100/80 p-5 shadow-inner">
       {/* Simulation Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-4 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy/5 pb-4 mb-4">
         <div>
-          <h3 className="font-sans font-bold text-gray-900 text-sm flex items-center gap-1.5">
-            <Zap className="w-4 h-4 text-sky-500" />
+          <h3 className="font-sans font-bold text-navy text-sm flex items-center gap-1.5">
+            <Zap className="w-4 h-4 text-ocean-600" />
             Ecosystem Simulator
           </h3>
-          <p className="text-gray-400 text-xs mt-0.5">Visualize autonomous multi-agent task flows & lifecycle rules</p>
+          <p className="text-navy/40 text-xs mt-0.5">Visualize autonomous multi-agent task flows & lifecycle rules</p>
         </div>
         <div className="flex items-center gap-2">
           {currentStep === 'idle' ? (
             <button
               onClick={startSimulation}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-full text-xs font-semibold shadow-sm transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-ocean-600 hover:bg-ocean-700 text-white rounded-full text-xs font-semibold shadow-sm transition-all cursor-pointer"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
               Run Demo
@@ -226,13 +226,13 @@ export default function AgentEcosystemIllustration() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-              <span className="text-xs text-gray-500 font-mono capitalize">Phase: {currentStep}</span>
+              <span className="text-xs text-navy/55 font-mono capitalize">Phase: {currentStep}</span>
               <button
                 onClick={() => {
                   setCurrentStep('idle');
                   addLog('Simulation reset.');
                 }}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors cursor-pointer text-gray-400"
+                className="p-1 hover:bg-[rgba(23,23,31,0.05)] rounded-full transition-colors cursor-pointer text-navy/40"
                 title="Reset simulation"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -243,9 +243,9 @@ export default function AgentEcosystemIllustration() {
       </div>
 
       {/* Main Canvas Area */}
-      <div className="relative w-full aspect-[4/3] max-h-[350px] bg-slate-50/50 rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center p-4">
+      <div className="relative w-full aspect-[4/3] max-h-[350px] bg-slate-50/50 rounded-2xl overflow-hidden border border-navy/5 flex items-center justify-center p-4">
         {/* Sky Background landscape grid */}
-        <div className="absolute inset-0 bg-gradient-to-b from-sky-50/30 to-white/70 opacity-80" />
+        <div className="absolute inset-0 bg-gradient-to-b from-ocean-50/40 to-white/70 opacity-80" />
 
         {/* Pulse connecting lines using SVGs */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
@@ -267,7 +267,7 @@ export default function AgentEcosystemIllustration() {
           {currentStep === 'assigning' && (
             <motion.path
               d="M 50% 18% L 18% 50%"
-              stroke="#0EA5E9"
+              stroke="#0A84FF"
               strokeWidth="2.5"
               fill="none"
               strokeDasharray="6 6"
@@ -277,7 +277,7 @@ export default function AgentEcosystemIllustration() {
           {currentStep === 'decomposing' && (
             <motion.path
               d="M 18% 50% L 50% 82%"
-              stroke="#0EA5E9"
+              stroke="#0A84FF"
               strokeWidth="2.5"
               fill="none"
               strokeDasharray="6 6"
@@ -287,7 +287,7 @@ export default function AgentEcosystemIllustration() {
           {currentStep === 'fatigue' && (
             <motion.path
               d="M 50% 82% L 50% 50%"
-              stroke="#EF4444"
+              stroke="#FF453A"
               strokeWidth="2.5"
               fill="none"
               strokeDasharray="6 6"
@@ -297,7 +297,7 @@ export default function AgentEcosystemIllustration() {
           {currentStep === 'cooldown' && (
             <motion.path
               d="M 50% 50% L 50% 82%"
-              stroke="#10B981"
+              stroke="#34C759"
               strokeWidth="2.5"
               fill="none"
               strokeDasharray="6 6"
@@ -309,7 +309,7 @@ export default function AgentEcosystemIllustration() {
               cx="50%"
               cy="82%"
               r="24"
-              stroke="#F59E0B"
+              stroke="#FF9F0A"
               strokeWidth="2"
               fill="none"
               initial={{ scale: 0.6, opacity: 0.8 }}
@@ -320,7 +320,7 @@ export default function AgentEcosystemIllustration() {
           {currentStep === 'testing' && (
             <motion.path
               d="M 50% 82% L 82% 50%"
-              stroke="#8B5CF6"
+              stroke="#BF5AF2"
               strokeWidth="2.5"
               fill="none"
               strokeDasharray="6 6"
@@ -330,7 +330,7 @@ export default function AgentEcosystemIllustration() {
           {currentStep === 'deployed' && (
             <motion.path
               d="M 82% 50% L 50% 18%"
-              stroke="#10B981"
+              stroke="#34C759"
               strokeWidth="3"
               fill="none"
               strokeDasharray="6 6"
@@ -383,11 +383,11 @@ export default function AgentEcosystemIllustration() {
                 (currentStep === 'cooldown' && (agent.id === 'hr' || agent.id === 'dev')) ||
                 (currentStep === 'transfer' && agent.id === 'dev') ||
                 (currentStep === 'testing' && agent.id === 'qa')) && (
-                  <span className="absolute -inset-2.5 rounded-2xl bg-sky-400/10 blur-md animate-pulse" />
+                  <span className="absolute -inset-2.5 rounded-2xl bg-ocean-500/10 blur-md animate-pulse" />
                 )}
 
               {/* Node content box */}
-              <div className={`flex flex-col items-center p-2 rounded-2xl glass-panel border ${agent.borderClass} ${agent.bgLight} transition-all duration-300 w-24 relative ${isSelected ? 'ring-2 ring-offset-2 ring-sky-500 shadow-md' : 'shadow-sm'}`}>
+              <div className={`flex flex-col items-center p-2 rounded-2xl glass-panel border ${agent.borderClass} ${agent.bgLight} transition-all duration-300 w-24 relative ${isSelected ? 'ring-2 ring-offset-2 ring-ocean-500 shadow-md' : 'shadow-sm'}`}>
                 {/* Micro energy pill indicator */}
                 <div className="absolute top-1 right-2 flex items-center gap-0.5">
                   <div className="h-1.5 w-6 bg-gray-200 rounded-full overflow-hidden">
@@ -399,13 +399,13 @@ export default function AgentEcosystemIllustration() {
                 </div>
 
                 {/* Main Icon */}
-                <div className={`p-1.5 bg-white rounded-xl shadow-inner border border-gray-100 ${isOnCooldown ? 'animate-bounce' : ''}`}>
+                <div className={`p-1.5 bg-white rounded-xl shadow-inner border border-navy/5 ${isOnCooldown ? 'animate-bounce' : ''}`}>
                   {isOnCooldown ? <Coffee className="w-5 h-5 text-amber-500" /> : agent.icon}
                 </div>
 
                 {/* Labels */}
-                <span className="text-[10px] font-bold text-gray-800 mt-1 truncate max-w-full">{agent.name}</span>
-                <span className="text-[8px] text-gray-400 font-semibold tracking-wide uppercase mt-0.5">{agent.role.split(' ')[0]}</span>
+                <span className="text-[10px] font-bold text-navy mt-1 truncate max-w-full">{agent.name}</span>
+                <span className="text-[8px] text-navy/40 font-semibold tracking-wide uppercase mt-0.5">{agent.role.split(' ')[0]}</span>
 
                 {/* Cooldown progress indicator label */}
                 {isOnCooldown && (
@@ -427,22 +427,22 @@ export default function AgentEcosystemIllustration() {
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 5, scale: 0.95 }}
-                    className="absolute left-1/2 -translate-x-1/2 -top-24 bg-slate-900 text-white p-2.5 rounded-xl text-[10px] w-36 shadow-lg z-20"
+                    className="absolute left-1/2 -translate-x-1/2 -top-24 bg-navy-900 text-white p-2.5 rounded-xl text-[10px] w-36 shadow-lg z-20"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="font-bold flex items-center justify-between">
                       <span>{agent.name}</span>
                       <span className="text-[8px] bg-white/20 px-1 py-0.2 rounded font-normal uppercase tracking-wider">{agent.id}</span>
                     </div>
-                    <div className="mt-1 flex items-center justify-between text-gray-300">
+                    <div className="mt-1 flex items-center justify-between text-navy/25">
                       <span>Morale Morale:</span>
                       <span className="font-mono text-emerald-400">{metrics.morale}%</span>
                     </div>
-                    <div className="flex items-center justify-between text-gray-300">
+                    <div className="flex items-center justify-between text-navy/25">
                       <span>Energy Levels:</span>
-                      <span className="font-mono text-sky-400">{Math.round(metrics.energy)}%</span>
+                      <span className="font-mono text-ocean-400">{Math.round(metrics.energy)}%</span>
                     </div>
-                    <div className="mt-1.5 border-t border-white/10 pt-1 text-[9px] text-gray-400 font-semibold italic truncate">
+                    <div className="mt-1.5 border-t border-white/10 pt-1 text-[9px] text-navy/40 font-semibold italic truncate">
                       "{metrics.status}"
                     </div>
                   </motion.div>
@@ -454,19 +454,19 @@ export default function AgentEcosystemIllustration() {
       </div>
 
       {/* Terminal Live Feed logs */}
-      <div className="mt-4 bg-slate-900 border border-slate-800 rounded-2xl p-3 flex flex-col font-mono">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-1.5">
+      <div className="mt-4 bg-navy-900 border border-white/10 rounded-2xl p-3 flex flex-col font-mono">
+        <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-rose-500" />
             <span className="h-2 w-2 rounded-full bg-amber-500" />
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="text-slate-400 text-[10px] font-bold uppercase ml-2">Console Stream</span>
+            <span className="text-white/40 text-[10px] font-bold uppercase ml-2">Console Stream</span>
           </div>
-          <span className="text-slate-600 text-[9px]">Rate: 100fps</span>
+          <span className="text-white/25 text-[9px]">Rate: 100fps</span>
         </div>
         <div className="space-y-1 h-[120px] overflow-y-auto pr-1">
           {logs.map((log, index) => (
-            <div key={index} className={`text-[10px] leading-relaxed ${log.includes('⚠️') ? 'text-amber-400' : log.includes('🎉') || log.includes('✅') ? 'text-emerald-400' : 'text-slate-300'}`}>
+            <div key={index} className={`text-[10px] leading-relaxed ${log.includes('⚠️') ? 'text-amber-400' : log.includes('🎉') || log.includes('✅') ? 'text-emerald-400' : 'text-white/70'}`}>
               {log}
             </div>
           ))}

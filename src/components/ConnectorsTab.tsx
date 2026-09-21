@@ -37,7 +37,7 @@ const CONNECTORS: ConnectorDef[] = [
     desc: 'Commit code, open PRs, push agent-generated code to your repo',
     icon: <GitBranch size={15} />,
     color: 'hover:border-gray-400',
-    badgeColor: 'bg-gray-100 text-gray-700 border-gray-300',
+    badgeColor: 'bg-[rgba(23,23,31,0.05)] text-navy/80 border-navy/15',
     fields: [
       { key: 'repoUrl', label: 'Repository URL', placeholder: 'https://github.com/username/repo', type: 'url' },
       { key: 'token', label: 'Personal Access Token', placeholder: 'ghp_xxxxxxxxxxxxxxxx', type: 'password' },
@@ -95,7 +95,7 @@ const CONNECTORS: ConnectorDef[] = [
     desc: 'Write reports, specs, and meeting notes directly into your Notion workspace',
     icon: <Globe size={15} />,
     color: 'hover:border-gray-400',
-    badgeColor: 'bg-gray-100 text-gray-700 border-gray-300',
+    badgeColor: 'bg-[rgba(23,23,31,0.05)] text-navy/80 border-navy/15',
     fields: [
       { key: 'token', label: 'Integration Token', placeholder: 'secret_xxxxxxxxxxxxxxxx', type: 'password' },
       { key: 'databaseId', label: 'Database ID', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', type: 'text' },
@@ -129,8 +129,8 @@ const CONNECTORS: ConnectorDef[] = [
     label: 'AI Model Provider',
     desc: 'Override the default AI model used by all agents. Supports Gemini, OpenAI, Anthropic, OpenRouter',
     icon: <Bot size={15} />,
-    color: 'hover:border-sky-400',
-    badgeColor: 'bg-sky-50 text-sky-700 border-sky-200',
+    color: 'hover:border-ocean-400',
+    badgeColor: 'bg-ocean-50 text-ocean-700 border-ocean-200',
     fields: [
       { key: 'provider', label: 'Provider', placeholder: 'gemini | openai | anthropic | openrouter', type: 'text' },
       { key: 'apiKey', label: 'API Key', placeholder: 'sk-... / AIza...', type: 'password' },
@@ -217,16 +217,16 @@ export default function ConnectorsTab() {
   ).length;
 
   return (
-    <div className="space-y-3 text-gray-900">
+    <div className="space-y-3 text-navy">
       {/* Header */}
-      <div className="p-4 rounded-xl bg-white border border-gray-100 soft-shadow relative overflow-hidden">
+      <div className="p-4 rounded-xl bg-white border border-navy/5 soft-shadow relative overflow-hidden">
         <div className="absolute top-0 right-0 w-28 h-28 bg-violet-100/40 rounded-full blur-2xl pointer-events-none" />
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-xs font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-violet-500 uppercase tracking-wider">
+            <h3 className="text-xs font-bold text-transparent bg-clip-text bg-gradient-to-r from-ocean-600 to-violet-500 uppercase tracking-wider">
               Integrations
             </h3>
-            <p className="text-[10px] text-gray-400 mt-0.5">
+            <p className="text-[10px] text-navy/40 mt-0.5">
               {connectedCount} of {CONNECTORS.length} connected
             </p>
           </div>
@@ -256,24 +256,24 @@ export default function ConnectorsTab() {
           return (
             <div
               key={connector.id}
-              className={`rounded-xl border bg-white soft-shadow overflow-hidden transition-all duration-200 ${connector.color} ${isConnected ? 'border-emerald-200' : 'border-gray-100'}`}
+              className={`rounded-xl border bg-white soft-shadow overflow-hidden transition-all duration-200 ${connector.color} ${isConnected ? 'border-emerald-200' : 'border-navy/5'}`}
             >
               <button
                 onClick={() => toggleAccordion(connector.id)}
                 className="w-full flex items-center justify-between p-3 text-left focus:outline-none cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-gray-600 ${isConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100'}`}>
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-navy/70 ${isConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-[rgba(23,23,31,0.05)]'}`}>
                     {connector.icon}
                   </div>
                   <div>
-                    <h4 className="text-xs font-semibold text-gray-900 flex items-center gap-1.5">
+                    <h4 className="text-xs font-semibold text-navy flex items-center gap-1.5">
                       {connector.label}
                       {connector.comingSoon && (
-                        <span className="text-[8px] px-1 py-0.5 rounded bg-gray-100 text-gray-400 font-medium uppercase">Soon</span>
+                        <span className="text-[8px] px-1 py-0.5 rounded bg-[rgba(23,23,31,0.05)] text-navy/40 font-medium uppercase">Soon</span>
                       )}
                     </h4>
-                    <p className="text-[9px] text-gray-400 mt-0.5 line-clamp-1 max-w-[180px]">{connector.desc}</p>
+                    <p className="text-[9px] text-navy/40 mt-0.5 line-clamp-1 max-w-[180px]">{connector.desc}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -282,13 +282,13 @@ export default function ConnectorsTab() {
                       Set
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[8px] font-semibold bg-gray-50 text-gray-400 border border-gray-200 uppercase">
+                    <span className="px-2 py-0.5 rounded-full text-[8px] font-semibold bg-white/70 text-navy/40 border border-navy/10 uppercase">
                       Off
                     </span>
                   )}
                   <ChevronDown
                     size={13}
-                    className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    className={`text-navy/40 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                   />
                 </div>
               </button>
@@ -300,26 +300,26 @@ export default function ConnectorsTab() {
                     animate={{ height: 'auto' }}
                     exit={{ height: 0 }}
                     transition={{ duration: 0.18 }}
-                    className="overflow-hidden border-t border-gray-100"
+                    className="overflow-hidden border-t border-navy/5"
                   >
-                    <div className="p-3 space-y-2.5 bg-gray-50/60">
-                      <p className="text-[10px] text-gray-500 leading-relaxed">{connector.desc}</p>
+                    <div className="p-3 space-y-2.5 bg-white/70/60">
+                      <p className="text-[10px] text-navy/55 leading-relaxed">{connector.desc}</p>
 
                       {connector.fields.map((field) => (
                         <div key={field.key}>
-                          <label className="block text-[9px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                          <label className="block text-[9px] font-semibold text-navy/55 uppercase tracking-wider mb-1">
                             {field.label}
                           </label>
                           <div className="relative">
                             {field.type === 'password' && (
-                              <Lock size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300" />
+                              <Lock size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-navy/25" />
                             )}
                             <input
                               type={field.type ?? 'text'}
                               placeholder={field.placeholder}
                               value={getFieldValue(connector.id, field.key)}
                               onChange={(e) => setFieldValue(connector.id, field.key, e.target.value)}
-                              className={`w-full py-1.5 bg-white border border-gray-200 rounded-lg text-gray-900 text-[11px] outline-none focus:border-sky-400/70 transition-all ${field.type === 'password' ? 'pl-7 pr-2.5' : 'px-2.5'}`}
+                              className={`w-full py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-[11px] outline-none focus:border-ocean-400/70 transition-all ${field.type === 'password' ? 'pl-7 pr-2.5' : 'px-2.5'}`}
                             />
                           </div>
                         </div>
@@ -328,14 +328,14 @@ export default function ConnectorsTab() {
                       <div className="flex gap-2 pt-1">
                         <a
                           href="#"
-                          className="flex items-center gap-1 text-[9px] text-sky-500 hover:text-sky-700 font-medium transition-colors"
+                          className="flex items-center gap-1 text-[9px] text-ocean-600 hover:text-ocean-700 font-medium transition-colors"
                           onClick={(e) => e.preventDefault()}
                         >
                           <ExternalLink size={9} /> Docs
                         </a>
                         <button
                           onClick={() => handleSave(connector)}
-                          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-600 font-semibold text-[10px] transition-colors cursor-pointer"
+                          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ocean-50 hover:bg-ocean-100 border border-ocean-200 text-ocean-600 font-semibold text-[10px] transition-colors cursor-pointer"
                         >
                           {isSaved ? (
                             <><Check size={11} /> Saved!</>
@@ -354,7 +354,7 @@ export default function ConnectorsTab() {
       </div>
 
       {/* Footer hint */}
-      <p className="text-[9px] text-gray-400 text-center leading-relaxed px-2">
+      <p className="text-[9px] text-navy/40 text-center leading-relaxed px-2">
         All credentials are stored locally in your browser session and never sent to external servers beyond the target integration.
       </p>
     </div>

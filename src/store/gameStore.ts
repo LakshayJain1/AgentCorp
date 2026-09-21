@@ -6,6 +6,7 @@ import { Agent, Task, SubTask, ValidationResult, GameEvent, SimulationState, Age
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
 import { configLoader } from '@/config/ConfigLoader';
 import { agentRuntime } from '@/runtime/AgentRuntime';
+import { toOfficeLocations } from '@/game/officeLayout';
 
 const DEFAULT_TASK_TITLES = [
   'Analyze customer feedback', 'Fix API issue', 'Review compliance report', 'Prepare deployment',
@@ -24,17 +25,7 @@ const DEFAULT_AGENT_NAMES: Record<AgentRole, { name: string; color: number; emoj
   hr: { name: 'Riley', color: 0xf472b6, emoji: '📊' },
 };
 
-const DEFAULT_OFFICE_LOCATIONS: OfficeLocation[] = [
-  { id: 'ceo_office', name: 'CEO Office', x: 64, y: 94, role: 'ceo', width: 100, height: 80 },
-  { id: 'pm_desk', name: 'PM Desk', x: 292, y: 104, role: 'pm', width: 80, height: 60 },
-  { id: 'server_rack', name: 'Server Rack', x: 64, y: 280, role: 'researcher', width: 100, height: 70 },
-  { id: 'coding_desk', name: 'Coding Desk', x: 292, y: 284, role: 'engineer', width: 80, height: 60 },
-  { id: 'qa_desk', name: 'QA Desk', x: 472, y: 284, role: 'qa', width: 80, height: 60 },
-  { id: 'hr_desk', name: 'HR Desk', x: 472, y: 80, role: 'hr', width: 80, height: 60 },
-  { id: 'coffee_machine', name: 'Coffee Machine', x: 464, y: 88, role: 'coffee', width: 60, height: 50 },
-  { id: 'meeting_room', name: 'Meeting Room', x: 328, y: 224, role: 'meeting', width: 160, height: 50 },
-  { id: 'gaming_zone', name: 'Gaming Zone', x: 180, y: 330, role: 'gaming', width: 70, height: 60 },
-];
+const DEFAULT_OFFICE_LOCATIONS: OfficeLocation[] = toOfficeLocations();
 
 let cachedTaskTitles: string[] | null = null;
 let cachedAgentNames: Record<AgentRole, { name: string; color: number; emoji: string }> | null = null;
@@ -79,7 +70,7 @@ export async function loadGameConfig(): Promise<void> {
       const rows = configLoader.parseTable(namesSection);
       const names: Record<string, { name: string; color: number; emoji: string }> = {};
       for (const row of rows) {
-        const hex = row.Color || '#ff6b6b';
+        const hex = row.Color || row.ColorHex || '#ff6b6b';
         names[row.Role] = {
           name: row.Name || 'Unknown',
           color: parseInt(hex.replace('#', ''), 16),
@@ -94,7 +85,7 @@ export async function loadGameConfig(): Promise<void> {
     if (locsSection) {
       const rows = configLoader.parseTable(locsSection);
       cachedOfficeLocations = rows.map(r => ({
-        id: r.Id || '',
+        id: r.Id || r.ID || '',
         name: r.Name || '',
         x: parseInt(r.X || '0'),
         y: parseInt(r.Y || '0'),
@@ -289,6 +280,14 @@ export interface CredentialRequest {
   value?: string;
 }
 
+export interface UserMessage {
+  id: string;
+  message: string;
+  timestamp: number;
+}
+
+type CenterView = 'chat' | 'office';
+
 interface GameStore {
   agents: Agent[];
   tasks: Task[];
@@ -298,6 +297,8 @@ interface GameStore {
   selectedTaskId: string | null;
   credentialRequest: CredentialRequest | null;
   deliverableProjects: DeliverableProject[];
+  userMessages: UserMessage[];
+  centerView: CenterView;
 
   initAgents: () => void;
   addTask: () => void;
@@ -331,6 +332,10 @@ interface GameStore {
   updateSubtaskAgent: (subtaskId: string, agentId: string) => void;
   updateSubtaskValidation: (subtaskId: string, result: ValidationResult) => void;
   updateSubtaskDeliverable: (subtaskId: string, content: string, path?: string) => void;
+
+  // Center Panel
+  addUserMessage: (message: string) => void;
+  setCenterView: (view: CenterView) => void;
 
   // Deliverable Projects
   addDeliverableProject: (project: DeliverableProject) => void;
@@ -387,6 +392,8 @@ export const useGameStore = create<GameStore>()(
   selectedTaskId: null,
   credentialRequest: null,
   deliverableProjects: [],
+  userMessages: [],
+  centerView: 'chat',
 
   initAgents: () => {
     const roles: AgentRole[] = ['ceo', 'pm', 'researcher', 'engineer', 'qa', 'hr'];
@@ -603,8 +610,6 @@ Comprehensive security audit of AgentCorp infrastructure.
         },
       };
     });
-    // Generate a deliverable project for the completed task
-    get().generateDeliverableForTask(taskId);
   },
 
   failTask: (taskId) => {
@@ -959,6 +964,21 @@ Comprehensive security audit of AgentCorp infrastructure.
     // Add custom event log
     const event = createGameEvent('system', `🏢 Personalized office for ${companyName} initialized! All departments active.`);
     get().addEvent(event);
+  },
+
+  addUserMessage: (message) => {
+    const userMsg: UserMessage = {
+      id: generateId('msg'),
+      message,
+      timestamp: Date.now(),
+    };
+    set((state) => ({
+      userMessages: [...state.userMessages, userMsg],
+    }));
+  },
+
+  setCenterView: (view) => {
+    set({ centerView: view });
   },
 
   updateConnectors: (updates) => {

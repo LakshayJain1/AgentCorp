@@ -36,17 +36,17 @@ export default function ScrumMeeting() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 10 }}
-          className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-xl card-shadow p-4 w-64 z-50"
+          className="absolute top-full right-0 mt-2 bg-white border border-navy/10 rounded-xl card-shadow p-4 w-64 z-50"
         >
           <div className="flex justify-between items-center mb-2">
-            <h2 className="text-gray-900 font-semibold text-sm">Scrum Meeting</h2>
-            <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+            <h2 className="text-navy font-semibold text-sm">Scrum Meeting</h2>
+            <button onClick={() => setIsOpen(false)} className="text-navy/40 hover:text-navy/70 cursor-pointer">
               <X className="w-4 h-4" />
             </button>
           </div>
           <div className="flex flex-col gap-2">
             {tasks.map((task, index) => (
-              <div key={index} className="bg-gray-50 p-2 rounded-lg text-xs text-gray-600 border border-gray-100">
+              <div key={index} className="bg-white/70 p-2 rounded-lg text-xs text-navy/70 border border-navy/5">
                 {task}
               </div>
             ))}
@@ -54,7 +54,7 @@ export default function ScrumMeeting() {
           <input
             type="text"
             placeholder="Add a new task..."
-            className="mt-2 w-full px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100 transition-all"
+            className="mt-2 w-full px-3 py-1.5 text-xs bg-white/70 border border-navy/10 rounded-xl text-navy placeholder:text-navy/35 outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100 transition-all"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && e.currentTarget.value.trim()) {
                 handleAddTask(e.currentTarget.value.trim());

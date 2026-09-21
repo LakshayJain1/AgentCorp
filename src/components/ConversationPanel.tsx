@@ -4,12 +4,12 @@ import { useGameStore } from '@/store/gameStore';
 import { useMemo, useRef, useEffect } from 'react';
 
 const ROLE_COLORS: Record<string, string> = {
-  ceo: '#EF4444',
-  pm: '#59C7FF',
-  researcher: '#8B7CF6',
-  engineer: '#F59E0B',
-  qa: '#8B7CF6',
-  hr: '#EC4899',
+  ceo: '#FF453A',
+  pm: '#0A84FF',
+  researcher: '#BF5AF2',
+  engineer: '#FF9F0A',
+  qa: '#BF5AF2',
+  hr: '#FF375F',
 };
 
 export default function ConversationPanel() {
@@ -52,21 +52,21 @@ export default function ConversationPanel() {
         {allMessages.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-400/20 to-magenta-400/20 flex items-center justify-center mb-3">
-              <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-[#BF5AF2] animate-pulse" />
             </div>
-            <span className="text-sm font-semibold text-gray-400 mb-1">No messages yet</span>
-            <span className="text-xs text-gray-300 mb-4">Agent conversations will appear here...</span>
+            <span className="text-sm font-semibold text-navy/40 mb-1">No messages yet</span>
+            <span className="text-xs text-navy/25 mb-4">Agent conversations will appear here...</span>
             <div className="w-full max-w-[160px] space-y-2">
-              <div className="h-1.5 bg-gray-100 rounded-full pulse-skeleton w-2/3 mx-auto" />
-              <div className="h-1.5 bg-gray-100 rounded-full pulse-skeleton w-5/6 mx-auto" />
+              <div className="h-1.5 bg-[rgba(23,23,31,0.05)] rounded-full pulse-skeleton w-2/3 mx-auto" />
+              <div className="h-1.5 bg-[rgba(23,23,31,0.05)] rounded-full pulse-skeleton w-5/6 mx-auto" />
             </div>
           </div>
         )}
         {allMessages.map((msg, i) => {
           const isNewSender = i === 0 || allMessages[i - 1].fromAgentId !== msg.fromAgentId;
-          const color = ROLE_COLORS[msg.fromRole] || '#9CA3AF';
+          const color = ROLE_COLORS[msg.fromRole] || '#86868B';
           return (
-            <div key={msg.id} className="flex items-start gap-2.5 hover:bg-gray-50/50 p-1.5 rounded-lg transition-all">
+            <div key={msg.id} className="flex items-start gap-2.5 hover:bg-white/70/50 p-1.5 rounded-lg transition-all">
               {isNewSender && (
                 <div
                   className="w-7 h-7 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5 border-2"
@@ -80,15 +80,15 @@ export default function ConversationPanel() {
               <div className="min-w-0 flex-1">
                 {isNewSender && (
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-gray-900 font-semibold text-xs">{msg.fromName}</span>
+                    <span className="text-navy font-semibold text-xs">{msg.fromName}</span>
                     <span
-                      className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-gray-50 border border-gray-100"
+                      className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-white/70 border border-navy/5"
                       style={{ color }}
                     >
                       {msg.fromRole}
                     </span>
-                    <span className="text-gray-400 text-[9px]">→ {msg.toName}</span>
-                    <span className="text-gray-400 text-[9px] ml-auto shrink-0">
+                    <span className="text-navy/40 text-[9px]">→ {msg.toName}</span>
+                    <span className="text-navy/40 text-[9px] ml-auto shrink-0">
                       {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
@@ -99,7 +99,7 @@ export default function ConversationPanel() {
                     backgroundColor: `${color}08`,
                     borderColor: `${color}20`,
                     border: `1px solid ${color}20`,
-                    color: '#374151',
+                    color: '#3A3A3C',
                   }}
                 >
                   {msg.message}

@@ -218,14 +218,21 @@ export default function SetupWizard() {
 
     // 5. Explicitly navigate to /workspace — don't rely on the useEffect in onboard/page.tsx
     //    which may race against the store update.
-    router.replace('/workspace');
+    //    If running inside Electron, redirect to the desktop-redirect route
+    //    which will trigger the deep link back to the desktop app.
+    const isElectron = typeof window !== 'undefined' && window.navigator.userAgent.includes('Electron');
+    if (isElectron) {
+      router.replace('/desktop-redirect');
+    } else {
+      router.replace('/workspace');
+    }
   };
 
 
   const wizardVariants = {
-    enter: { opacity: 0, y: 15 },
-    center: { opacity: 1, y: 0 },
-    exit: { opacity: 0, y: -15 }
+    enter: { opacity: 0, y: 18, scale: 0.985 },
+    center: { opacity: 1, y: 0, scale: 1 },
+    exit: { opacity: 0, y: -12, scale: 0.99 }
   };
 
   if (isRestoring) {
@@ -233,26 +240,26 @@ export default function SetupWizard() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-white text-gray-900 overflow-y-auto overflow-x-hidden font-sans select-none">
-      <div className="absolute top-[-20%] right-[-10%] w-[700px] h-[700px] bg-sky-200/40 rounded-full blur-[160px] pointer-events-none" />
-      <div className="absolute bottom-[-20%] left-[-15%] w-[800px] h-[800px] bg-violet-200/40 rounded-full blur-[180px] pointer-events-none" />
-      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none" />
+    <div className="fixed inset-0 z-50 bg-paper text-navy overflow-y-auto overflow-x-hidden font-sans select-none">
+      <div className="absolute top-[-20%] right-[-10%] w-[700px] h-[700px] bg-ocean-300/25 rounded-full blur-[160px] pointer-events-none animate-driftSlow" />
+      <div className="absolute bottom-[-20%] left-[-15%] w-[800px] h-[800px] bg-teal/15 rounded-full blur-[180px] pointer-events-none animate-driftSlow" style={{ animationDelay: '-8s' }} />
+      <div className="absolute inset-0 grid-dots opacity-60 pointer-events-none" />
 
-      <div className="fixed top-0 left-0 right-0 h-16 border-b border-gray-100 bg-white/80 backdrop-blur-md flex items-center justify-between px-6 z-40">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400 to-cyan-400 flex items-center justify-center shadow-sm">
+      <div className="fixed top-0 left-0 right-0 h-16 border-b border-navy/5 bg-white/70 backdrop-blur-xl flex items-center justify-between px-6 z-40">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-[10px] bg-gradient-to-br from-ocean to-teal flex items-center justify-center shadow-sm">
             <Cpu className="w-4 h-4 text-white" />
           </div>
-          <span className="font-semibold text-sm text-gray-900">AgentCorp</span>
+          <span className="font-semibold text-sm text-navy font-display">AgentCorp</span>
         </div>
-        <div className="flex items-center gap-4 text-xs text-gray-400">
-          <span className="hover:text-gray-600 cursor-pointer transition-colors">Docs</span>
-          <span className="hover:text-gray-600 cursor-pointer transition-colors">Pricing</span>
-          <span className="hover:text-gray-600 cursor-pointer transition-colors">Status</span>
+        <div className="flex items-center gap-4 text-xs text-navy/40">
+          <span className="hover:text-navy cursor-pointer transition-colors">Docs</span>
+          <span className="hover:text-navy cursor-pointer transition-colors">Pricing</span>
+          <span className="hover:text-navy cursor-pointer transition-colors">Status</span>
           {step === 0 && (
             <button
               onClick={() => setStep(1)}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-400 text-white font-semibold hover:from-sky-500 hover:to-cyan-500 transition-all cursor-pointer shadow-sm text-xs"
+              className="px-3.5 py-1.5 rounded-full bg-ocean-600 text-white font-semibold hover:bg-ocean-700 transition-all cursor-pointer shadow-[0_4px_16px_rgba(10,132,255,0.3)] text-xs"
             >
               Sign In
             </button>
@@ -272,116 +279,116 @@ export default function SetupWizard() {
               transition={{ duration: 0.4 }}
               className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6"
             >
-              <div className="lg:col-span-2 flex flex-col justify-between p-8 bg-white border border-gray-100 rounded-3xl card-shadow relative overflow-hidden group">
-                <div className="absolute -right-24 -top-24 w-64 h-64 bg-sky-100/60 rounded-full blur-[80px] group-hover:bg-sky-100/80 transition-colors duration-500" />
+              <div className="lg:col-span-2 flex flex-col justify-between p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow relative overflow-hidden group">
+                <div className="absolute -right-24 -top-24 w-64 h-64 bg-ocean-100/60 rounded-full blur-[80px] group-hover:bg-ocean-100/80 transition-colors duration-500" />
                 <div className="space-y-6">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 border border-sky-100 text-sky-600 text-[10px] font-semibold tracking-wider">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-ocean-50 border border-ocean-100 text-ocean-600 text-[10px] font-semibold tracking-wider">
                     <Sparkles size={10} /> Active Agent Sandbox v2.0.6
                   </div>
-                  <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight leading-[1.1] text-gray-900">
+                  <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight leading-[1.1] text-navy">
                     Build <span className="gradient-text">AI teammates</span>,<br />not automations.
                   </h1>
-                  <p className="text-sm md:text-base text-gray-500 font-normal leading-relaxed max-w-xl">
+                  <p className="text-sm md:text-base text-navy/55 font-normal leading-relaxed max-w-xl">
                     Instantly deploy an autonomous department of AI teammates directly to your project workspace. Watch them coordinate, write, review, and deploy code in real-time.
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-4 mt-8">
                   <button
                     onClick={() => setStep(1)}
-                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-500 hover:to-cyan-500 text-white font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                    className="px-6 py-3 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
                     Deploy AI Department <ArrowRight size={14} />
                   </button>
                   <button
                     onClick={() => setStep(1)}
-                    className="px-6 py-3 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-semibold text-xs tracking-wider transition-all cursor-pointer"
+                    className="px-6 py-3 rounded-xl bg-white/70 hover:bg-[rgba(23,23,31,0.04)] border border-navy/10 text-navy/80 font-semibold text-xs tracking-wider transition-all cursor-pointer"
                   >
                     Configure Sandbox
                   </button>
                 </div>
               </div>
 
-              <div className="p-6 bg-white border border-gray-100 rounded-3xl card-shadow flex flex-col justify-between overflow-hidden">
-                <div className="border-b border-gray-100 pb-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-sky-600 flex items-center gap-1.5">
+              <div className="p-6 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow flex flex-col justify-between overflow-hidden">
+                <div className="border-b border-navy/5 pb-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-ocean-600 flex items-center gap-1.5">
                     <Users size={12} /> Active Department
                   </h3>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Pre-configured agent models</p>
+                  <p className="text-[10px] text-navy/40 mt-0.5">Pre-configured agent models</p>
                 </div>
                 <div className="space-y-2.5 my-4">
                   {[
                     { role: 'CEO', name: 'Alex', color: 'from-rose-100 to-rose-50', text: 'text-rose-600', emoji: '👑' },
-                    { role: 'PM', name: 'Sam', color: 'from-sky-100 to-sky-50', text: 'text-sky-600', emoji: '📋' },
+                    { role: 'PM', name: 'Sam', color: 'from-ocean-100 to-ocean-50', text: 'text-ocean-600', emoji: '📋' },
                     { role: 'Engineer', name: 'Mike', color: 'from-amber-100 to-amber-50', text: 'text-amber-600', emoji: '💻' },
                     { role: 'QA', name: 'Tina', color: 'from-violet-100 to-violet-50', text: 'text-violet-600', emoji: '🔍' },
                   ].map((agent, i) => (
-                    <div key={i} className={`flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r ${agent.color} border border-gray-100`}>
+                    <div key={i} className={`flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r ${agent.color} border border-navy/5`}>
                       <div className="flex items-center gap-2">
                         <span className="text-sm">{agent.emoji}</span>
                         <div className="leading-none">
-                          <span className="text-xs font-semibold text-gray-900 block">{agent.name}</span>
-                          <span className="text-[9px] text-gray-500">{agent.role} Agent</span>
+                          <span className="text-xs font-semibold text-navy block">{agent.name}</span>
+                          <span className="text-[9px] text-navy/55">{agent.role} Agent</span>
                         </div>
                       </div>
                       <span className={`text-[9px] font-semibold ${agent.text} uppercase tracking-wider`}>Active</span>
                     </div>
                   ))}
                 </div>
-                <div className="text-[10px] text-gray-400 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                <div className="text-[10px] text-navy/40 bg-white/70 p-2.5 rounded-lg border border-navy/5">
                   Spawns additional developers dynamically on scale.
                 </div>
               </div>
 
-              <div className="lg:col-span-2 p-6 bg-white border border-gray-100 rounded-3xl card-shadow flex flex-col justify-between group overflow-hidden">
-                <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="lg:col-span-2 p-6 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow flex flex-col justify-between group overflow-hidden">
+                <div className="flex items-center justify-between border-b border-navy/5 pb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-sky-600">
+                    <div className="w-2 h-2 rounded-full bg-ocean-500 animate-pulse" />
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-ocean-600">
                       Simulation Live Stream
                     </h3>
                   </div>
-                  <span className="text-[9px] text-gray-400 uppercase">Channel: Live_SSE</span>
+                  <span className="text-[9px] text-navy/40 uppercase">Channel: Live_SSE</span>
                 </div>
-                <div className="my-4 h-36 bg-gray-50 border border-gray-100 p-4 rounded-xl text-xs text-gray-600 overflow-y-auto space-y-1.5 flex flex-col justify-end font-mono">
+                <div className="my-4 h-36 bg-white/70 border border-navy/5 p-4 rounded-xl text-xs text-navy/70 overflow-y-auto space-y-1.5 flex flex-col justify-end font-mono">
                   {terminalLogs.map((log, idx) => (
                     <div key={idx} className="flex items-start gap-2">
-                      <span className="text-gray-300">&gt;</span>
-                      <span className={log.includes('SUCCESS') ? 'text-cyan-600 font-semibold' : log.includes('complete') ? 'text-amber-600 font-semibold' : 'text-gray-600'}>
+                      <span className="text-navy/25">&gt;</span>
+                      <span className={log.includes('SUCCESS') ? 'text-teal font-semibold' : log.includes('complete') ? 'text-amber-600 font-semibold' : 'text-navy/70'}>
                         {log}
                       </span>
                     </div>
                   ))}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-gray-300">&gt;</span>
-                    <span className="text-gray-400">Monitoring compiler streams</span>
-                    <span className="w-1.5 h-3 bg-sky-400 animate-pulse inline-block rounded-sm" />
+                    <span className="text-navy/25">&gt;</span>
+                    <span className="text-navy/40">Monitoring compiler streams</span>
+                    <span className="w-1.5 h-3 bg-ocean-500 animate-pulse inline-block rounded-sm" />
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-[10px] text-gray-400 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                <div className="flex items-center justify-between text-[10px] text-navy/40 bg-white/70 p-2.5 rounded-lg border border-navy/5">
                   <span>Morale Score: <strong className="text-green-600">96%</strong></span>
-                  <span>Deploy Queue: <strong className="text-cyan-600">Idle</strong></span>
+                  <span>Deploy Queue: <strong className="text-teal">Idle</strong></span>
                   <span>Active Sprint: <strong className="text-amber-600">Sprint #6</strong></span>
                 </div>
               </div>
 
-              <div className="p-6 bg-white border border-gray-100 rounded-3xl card-shadow flex flex-col justify-between relative overflow-hidden group">
-                <div className="absolute -left-20 -bottom-20 w-44 h-44 bg-sky-100/60 rounded-full blur-[60px]" />
-                <div className="border-b border-gray-100 pb-3">
+              <div className="p-6 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow flex flex-col justify-between relative overflow-hidden group">
+                <div className="absolute -left-20 -bottom-20 w-44 h-44 bg-ocean-100/60 rounded-full blur-[60px]" />
+                <div className="border-b border-navy/5 pb-3">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-cyan-600 flex items-center gap-1.5">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-teal flex items-center gap-1.5">
                       <DollarSign size={12} /> Flexible Scaling
                     </h3>
-                    <span className="px-2 py-0.5 rounded-md bg-cyan-50 border border-cyan-100 text-cyan-600 text-[9px] font-semibold uppercase">
+                    <span className="px-2 py-0.5 rounded-md bg-cyan-50 border border-cyan-100 text-teal text-[9px] font-semibold uppercase">
                       Interactive
                     </span>
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Claim 1 developer completely free</p>
+                  <p className="text-[10px] text-navy/40 mt-0.5">Claim 1 developer completely free</p>
                 </div>
                 <div className="my-4 space-y-4">
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Developer Agents</span>
-                      <span className="text-cyan-600 font-semibold">{devCount} Spawns</span>
+                      <span className="text-navy/55">Developer Agents</span>
+                      <span className="text-teal font-semibold">{devCount} Spawns</span>
                     </div>
                     <input
                       type="range"
@@ -389,29 +396,29 @@ export default function SetupWizard() {
                       max="4"
                       value={devCount}
                       onChange={(e) => setDevCount(parseInt(e.target.value))}
-                      className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                      className="w-full h-1.5 bg-[rgba(23,23,31,0.05)] rounded-lg appearance-none cursor-pointer accent-ocean-600"
                     />
-                    <div className="flex justify-between text-[9px] text-gray-400">
+                    <div className="flex justify-between text-[9px] text-navy/40">
                       <span>1 Dev (Free)</span>
                       <span>4 Devs max</span>
                     </div>
                   </div>
-                  <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center justify-between">
+                  <div className="bg-white/70 p-3 rounded-xl border border-navy/5 flex items-center justify-between">
                     <div>
-                      <span className="text-[9px] text-gray-400 block">SPAWNS TIER</span>
-                      <span className="text-xs font-semibold text-gray-900">{isFree ? 'Free Forever' : 'Enterprise Scale'}</span>
+                      <span className="text-[9px] text-navy/40 block">SPAWNS TIER</span>
+                      <span className="text-xs font-semibold text-navy">{isFree ? 'Free Forever' : 'Enterprise Scale'}</span>
                     </div>
                     <div className="text-right leading-none">
-                      <span className="text-[9px] text-gray-400 block">EST. CHARGE</span>
-                      <span className="text-xl font-bold text-sky-600">
-                        ${totalPrice}<span className="text-[10px] font-normal text-gray-400">/mo</span>
+                      <span className="text-[9px] text-navy/40 block">EST. CHARGE</span>
+                      <span className="text-xl font-bold text-ocean-600">
+                        ${totalPrice}<span className="text-[10px] font-normal text-navy/40">/mo</span>
                       </span>
                     </div>
                   </div>
                 </div>
                 <button
                   onClick={() => setStep(1)}
-                  className="w-full py-2.5 rounded-xl border border-cyan-200 bg-cyan-50 hover:bg-cyan-100 text-cyan-600 font-semibold text-xs tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
+                  className="w-full py-2.5 rounded-xl border border-cyan-200 bg-cyan-50 hover:bg-cyan-100 text-teal font-semibold text-xs tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
                 >
                   {isFree ? 'Claim Free Spawn' : 'Buy Spawns'} <ArrowUpRight size={14} />
                 </button>
@@ -427,22 +434,22 @@ export default function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="w-full max-w-[420px] p-8 bg-white border border-gray-100 rounded-3xl card-shadow relative overflow-hidden"
+              className="w-full max-w-[420px] p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow relative overflow-hidden"
             >
-              <div className="absolute top-[-20%] left-[-20%] w-44 h-44 bg-sky-100/60 rounded-full blur-[50px] pointer-events-none" />
+              <div className="absolute top-[-20%] left-[-20%] w-44 h-44 bg-ocean-100/60 rounded-full blur-[50px] pointer-events-none" />
               <div className="absolute bottom-[-20%] right-[-20%] w-44 h-44 bg-violet-100/60 rounded-full blur-[50px] pointer-events-none" />
 
               <div className="text-center mb-6">
                 <div className="flex justify-center items-center gap-1.5 mb-2">
-                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-sky-400 to-violet-500 flex items-center justify-center shadow-sm">
+                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-ocean to-violet-500 flex items-center justify-center shadow-sm">
                     <ShieldCheck size={14} className="text-white" />
                   </div>
-                  <span className="text-xs font-semibold text-gray-400 uppercase">Clerk Secure Auth</span>
+                  <span className="text-xs font-semibold text-navy/40 uppercase">Clerk Secure Auth</span>
                 </div>
-                <h2 className="text-xl font-extrabold tracking-tight text-gray-900">
+                <h2 className="text-xl font-extrabold tracking-tight text-navy">
                   {authComponent === 'signin' ? 'Sign in to AgentCorp' : 'Create your account'}
                 </h2>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-navy/55 mt-1">
                   Provide secure credentials to establish host synchronization
                 </p>
               </div>
@@ -457,18 +464,18 @@ export default function SetupWizard() {
                       headerTitle: 'hidden',
                       headerSubtitle: 'hidden',
                       footer: 'hidden',
-                      socialButtonsBlockButton: 'w-full py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 flex items-center justify-center gap-2 transition-all',
-                      socialButtonsBlockButtonText: 'text-gray-700 text-xs font-semibold',
-                      dividerLine: 'bg-gray-100',
-                      dividerText: 'text-[10px] text-gray-400 uppercase',
+                      socialButtonsBlockButton: 'w-full py-2.5 rounded-xl border border-navy/10 bg-white hover:bg-white/70 text-xs font-semibold text-navy/80 flex items-center justify-center gap-2 transition-all',
+                      socialButtonsBlockButtonText: 'text-navy/80 text-xs font-semibold',
+                      dividerLine: 'bg-[rgba(23,23,31,0.05)]',
+                      dividerText: 'text-[10px] text-navy/40 uppercase',
                       dividerRow: 'my-5',
-                      formFieldLabel: 'text-[9px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5',
-                      formFieldInput: 'w-full py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-xs outline-none focus:border-sky-400/50 transition-all',
-                      formButtonPrimary: 'w-full py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-500 hover:to-cyan-500 text-white font-semibold text-xs transition-all shadow-sm',
-                      identityPreviewText: 'text-gray-700 text-xs',
-                      identityPreviewEditButton: 'text-sky-600 hover:text-sky-700 text-xs',
-                      alternativeMethodsBlockButton: 'w-full py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 flex items-center justify-center gap-2 transition-all',
-                      alternativeMethodsBlockButtonText: 'text-gray-700 text-xs font-semibold',
+                      formFieldLabel: 'text-[9px] font-semibold text-navy/55 uppercase tracking-wider mb-1.5',
+                      formFieldInput: 'w-full py-2 bg-white/70 border border-navy/10 rounded-xl text-navy text-xs outline-none focus:border-ocean-400/60 transition-all',
+                      formButtonPrimary: 'w-full py-2.5 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-semibold text-xs transition-all shadow-sm',
+                      identityPreviewText: 'text-navy/80 text-xs',
+                      identityPreviewEditButton: 'text-ocean-600 hover:text-ocean-700 text-xs',
+                      alternativeMethodsBlockButton: 'w-full py-2.5 rounded-xl border border-navy/10 bg-white hover:bg-white/70 text-xs font-semibold text-navy/80 flex items-center justify-center gap-2 transition-all',
+                      alternativeMethodsBlockButtonText: 'text-navy/80 text-xs font-semibold',
                     },
                   }}
                 />
@@ -482,31 +489,31 @@ export default function SetupWizard() {
                       headerTitle: 'hidden',
                       headerSubtitle: 'hidden',
                       footer: 'hidden',
-                      socialButtonsBlockButton: 'w-full py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 flex items-center justify-center gap-2 transition-all',
-                      socialButtonsBlockButtonText: 'text-gray-700 text-xs font-semibold',
-                      dividerLine: 'bg-gray-100',
-                      dividerText: 'text-[10px] text-gray-400 uppercase',
+                      socialButtonsBlockButton: 'w-full py-2.5 rounded-xl border border-navy/10 bg-white hover:bg-white/70 text-xs font-semibold text-navy/80 flex items-center justify-center gap-2 transition-all',
+                      socialButtonsBlockButtonText: 'text-navy/80 text-xs font-semibold',
+                      dividerLine: 'bg-[rgba(23,23,31,0.05)]',
+                      dividerText: 'text-[10px] text-navy/40 uppercase',
                       dividerRow: 'my-5',
-                      formFieldLabel: 'text-[9px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5',
-                      formFieldInput: 'w-full py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-xs outline-none focus:border-sky-400/50 transition-all',
-                      formButtonPrimary: 'w-full py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-500 hover:to-cyan-500 text-white font-semibold text-xs transition-all shadow-sm',
-                      identityPreviewText: 'text-gray-700 text-xs',
-                      identityPreviewEditButton: 'text-sky-600 hover:text-sky-700 text-xs',
-                      alternativeMethodsBlockButton: 'w-full py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 flex items-center justify-center gap-2 transition-all',
-                      alternativeMethodsBlockButtonText: 'text-gray-700 text-xs font-semibold',
+                      formFieldLabel: 'text-[9px] font-semibold text-navy/55 uppercase tracking-wider mb-1.5',
+                      formFieldInput: 'w-full py-2 bg-white/70 border border-navy/10 rounded-xl text-navy text-xs outline-none focus:border-ocean-400/60 transition-all',
+                      formButtonPrimary: 'w-full py-2.5 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-semibold text-xs transition-all shadow-sm',
+                      identityPreviewText: 'text-navy/80 text-xs',
+                      identityPreviewEditButton: 'text-ocean-600 hover:text-ocean-700 text-xs',
+                      alternativeMethodsBlockButton: 'w-full py-2.5 rounded-xl border border-navy/10 bg-white hover:bg-white/70 text-xs font-semibold text-navy/80 flex items-center justify-center gap-2 transition-all',
+                      alternativeMethodsBlockButtonText: 'text-navy/80 text-xs font-semibold',
                     },
                   }}
                 />
               )}
 
               <div className="mt-5 text-center">
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-navy/55">
                   {authComponent === 'signin' ? (
                     <>
                       Don&apos;t have an account?{' '}
                       <button
                         onClick={() => setAuthComponent('signup')}
-                        className="text-sky-600 hover:text-sky-700 font-semibold underline underline-offset-2 cursor-pointer"
+                        className="text-ocean-600 hover:text-ocean-700 font-semibold underline underline-offset-2 cursor-pointer"
                       >
                         Sign up
                       </button>
@@ -516,7 +523,7 @@ export default function SetupWizard() {
                       Already have an account?{' '}
                       <button
                         onClick={() => setAuthComponent('signin')}
-                        className="text-sky-600 hover:text-sky-700 font-semibold underline underline-offset-2 cursor-pointer"
+                        className="text-ocean-600 hover:text-ocean-700 font-semibold underline underline-offset-2 cursor-pointer"
                       >
                         Sign in
                       </button>
@@ -525,7 +532,7 @@ export default function SetupWizard() {
                 </span>
               </div>
 
-              <div className="mt-4 text-center flex items-center justify-center gap-1 text-[9px] text-gray-400">
+              <div className="mt-4 text-center flex items-center justify-center gap-1 text-[9px] text-navy/40">
                 <ShieldCheck size={10} /> Securely compiled & authenticated via Clerk
               </div>
             </motion.div>
@@ -539,42 +546,42 @@ export default function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="w-full max-w-lg p-8 bg-white border border-gray-100 rounded-3xl card-shadow space-y-6"
+              className="w-full max-w-lg p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow space-y-6"
             >
               <div>
-                <h2 className="text-lg font-extrabold tracking-tight text-gray-900 flex items-center gap-1.5">
-                  <Sparkles size={18} className="text-sky-500" /> Personal Setup Profile
+                <h2 className="text-lg font-extrabold tracking-tight text-navy flex items-center gap-1.5">
+                  <Sparkles size={18} className="text-ocean-600" /> Personal Setup Profile
                 </h2>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-xs text-navy/55 mt-0.5">
                   Define details of your startup corporation for agent synthesis.
                 </p>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-[9px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Company Name</label>
+                  <label className="block text-[9px] font-semibold text-navy/55 uppercase tracking-wider mb-1.5">Company Name</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. AcmeCorp"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-xs outline-none focus:border-sky-400/50 transition-all"
+                    className="w-full px-3.5 py-2 bg-white/70 border border-navy/10 rounded-xl text-navy text-xs outline-none focus:border-ocean-400/60 transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-[9px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Sector Focus / Core Purpose</label>
+                  <label className="block text-[9px] font-semibold text-navy/55 uppercase tracking-wider mb-1.5">Sector Focus / Core Purpose</label>
                   <textarea
                     required
                     placeholder="e.g. Next-gen billing infrastructure for SaaS startups"
                     value={companyProduct}
                     onChange={(e) => setCompanyProduct(e.target.value)}
-                    className="w-full h-16 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-xs outline-none resize-none focus:border-sky-400/50 transition-all"
+                    className="w-full h-16 px-3.5 py-2 bg-white/70 border border-navy/10 rounded-xl text-navy text-xs outline-none resize-none focus:border-ocean-400/60 transition-all"
                   />
                 </div>
                 <div>
                   <div className="flex justify-between items-center mb-1.5">
-                    <label className="block text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Developer Agents</label>
-                    <span className="text-xs font-semibold text-sky-600">{devCount} Active Devs</span>
+                    <label className="block text-[9px] font-semibold text-navy/55 uppercase tracking-wider">Developer Agents</label>
+                    <span className="text-xs font-semibold text-ocean-600">{devCount} Active Devs</span>
                   </div>
                   <input
                     type="range"
@@ -582,9 +589,9 @@ export default function SetupWizard() {
                     max="4"
                     value={devCount}
                     onChange={(e) => setDevCount(parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-gray-100 border border-gray-200 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                    className="w-full h-1.5 bg-[rgba(23,23,31,0.05)] border border-navy/10 rounded-lg appearance-none cursor-pointer accent-ocean-600"
                   />
-                  <p className="text-[10px] text-gray-400 mt-1">
+                  <p className="text-[10px] text-navy/40 mt-1">
                     Other core roles (CEO, PM, QA, HR) spawn automatically and remain active.
                   </p>
                 </div>
@@ -599,10 +606,10 @@ export default function SetupWizard() {
               </div>
 
               <div className="flex gap-4 pt-2">
-                <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 font-semibold text-xs hover:bg-gray-100 transition-colors cursor-pointer">
+                <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl bg-white/70 border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-[rgba(23,23,31,0.04)] transition-colors cursor-pointer">
                   Back
                 </button>
-                <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-600 font-semibold text-xs transition-all flex items-center justify-center gap-1 cursor-pointer">
+                <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl bg-ocean-50 hover:bg-ocean-100 border border-ocean-200 text-ocean-600 font-semibold text-xs transition-all flex items-center justify-center gap-1 cursor-pointer">
                   Configure Spawns <ChevronRight size={14} />
                 </button>
               </div>
@@ -617,13 +624,13 @@ export default function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="w-full max-w-xl p-8 bg-white border border-gray-100 rounded-3xl card-shadow space-y-6"
+              className="w-full max-w-xl p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow space-y-6"
             >
               <div>
-                <h2 className="text-lg font-extrabold tracking-tight text-gray-900 flex items-center gap-1.5">
-                  <CreditCard size={18} className="text-cyan-500" /> Spawns Authorization
+                <h2 className="text-lg font-extrabold tracking-tight text-navy flex items-center gap-1.5">
+                  <CreditCard size={18} className="text-teal" /> Spawns Authorization
                 </h2>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-xs text-navy/55 mt-0.5">
                   {isFree ? '1 Developer Spawn is included in the Free Tier.' : `Complete secure pre-authorization of Enterprise Spawns ($${totalPrice}/mo).`}
                 </p>
               </div>
@@ -635,11 +642,11 @@ export default function SetupWizard() {
                   </div>
                   <div className="space-y-1">
                     <h4 className="text-sm font-bold text-green-700">Free Tier Active</h4>
-                    <p className="text-xs text-gray-500 max-w-md mx-auto">
+                    <p className="text-xs text-navy/55 max-w-md mx-auto">
                       1 Developer agent is permanently free. CEO, PM, QA, and HR agents are included. No payment required.
                     </p>
                   </div>
-                  <div className="bg-white p-2.5 rounded-lg border border-gray-100 text-[10px] text-gray-400">
+                  <div className="bg-white p-2.5 rounded-lg border border-navy/5 text-[10px] text-navy/40">
                     You can scale to Enterprise spawns anytime inside the workspace.
                   </div>
                 </div>
@@ -648,31 +655,31 @@ export default function SetupWizard() {
                   <div className="md:col-span-6 flex justify-center">
                     <motion.div
                       whileHover={{ scale: 1.03 }}
-                      className="w-full max-w-[260px] h-[160px] bg-gradient-to-br from-sky-100 via-cyan-50 to-blue-100 border border-gray-200 rounded-2xl p-4 flex flex-col justify-between card-shadow relative overflow-hidden"
+                      className="w-full max-w-[260px] h-[160px] bg-gradient-to-br from-ocean-100 via-teal/10 to-ocean-50 border border-navy/10 rounded-2xl p-4 flex flex-col justify-between card-shadow relative overflow-hidden"
                     >
-                      <div className="absolute top-[-30%] right-[-20%] w-32 h-32 bg-sky-200/60 rounded-full blur-[30px]" />
+                      <div className="absolute top-[-30%] right-[-20%] w-32 h-32 bg-ocean-200/60 rounded-full blur-[30px]" />
                       <div className="absolute bottom-[-30%] left-[-20%] w-32 h-32 bg-cyan-200/60 rounded-full blur-[30px]" />
                       <div className="flex justify-between items-start z-10">
-                        <span className="text-[9px] font-semibold text-gray-400 tracking-wider uppercase">Spawns Card</span>
-                        <span className="text-sm font-bold italic text-gray-700">VISA</span>
+                        <span className="text-[9px] font-semibold text-navy/40 tracking-wider uppercase">Spawns Card</span>
+                        <span className="text-sm font-bold italic text-navy/80">VISA</span>
                       </div>
                       <div className="flex justify-between items-center z-10">
                         <div className="w-7 h-5 bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 rounded-sm border border-amber-500/20 shadow-sm" />
                       </div>
                       <div className="space-y-1.5 z-10">
-                        <div className="text-xs text-gray-600 tracking-widest truncate">
+                        <div className="text-xs text-navy/70 tracking-widest truncate">
                           {cardNumber || '••••  ••••  ••••  ••••'}
                         </div>
                         <div className="flex justify-between items-end">
                           <div>
-                            <span className="text-[7px] text-gray-400 uppercase block leading-none mb-0.5">Cardholder</span>
-                            <span className="text-[8px] font-semibold text-gray-800 uppercase tracking-wide block truncate max-w-[120px]">
+                            <span className="text-[7px] text-navy/40 uppercase block leading-none mb-0.5">Cardholder</span>
+                            <span className="text-[8px] font-semibold text-navy uppercase tracking-wide block truncate max-w-[120px]">
                               {cardName || `${companyName} CEO`}
                             </span>
                           </div>
                           <div className="text-right">
-                            <span className="text-[7px] text-gray-400 uppercase block leading-none mb-0.5">Expiry</span>
-                            <span className="text-[8px] font-bold text-gray-700 block">{cardExpiry || '12/28'}</span>
+                            <span className="text-[7px] text-navy/40 uppercase block leading-none mb-0.5">Expiry</span>
+                            <span className="text-[8px] font-bold text-navy/80 block">{cardExpiry || '12/28'}</span>
                           </div>
                         </div>
                       </div>
@@ -681,18 +688,18 @@ export default function SetupWizard() {
 
                   <div className="md:col-span-6 space-y-3">
                     <div>
-                      <label className="block text-[8px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Cardholder Name</label>
+                      <label className="block text-[8px] font-semibold text-navy/55 uppercase tracking-wider mb-1">Cardholder Name</label>
                       <input
                         type="text"
                         required
                         placeholder="e.g. John Doe"
                         value={cardName}
                         onChange={(e) => setCardName(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-[10px] outline-none focus:border-sky-400/50"
+                        className="w-full px-2.5 py-1.5 bg-white/70 border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-ocean-400/60"
                       />
                     </div>
                     <div>
-                      <label className="block text-[8px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Card Number</label>
+                      <label className="block text-[8px] font-semibold text-navy/55 uppercase tracking-wider mb-1">Card Number</label>
                       <input
                         type="text"
                         required
@@ -700,12 +707,12 @@ export default function SetupWizard() {
                         placeholder="4111 2222 3333 4444"
                         value={cardNumber}
                         onChange={(e) => setCardNumber(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-[10px] outline-none focus:border-sky-400/50"
+                        className="w-full px-2.5 py-1.5 bg-white/70 border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-ocean-400/60"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[8px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Expiry</label>
+                        <label className="block text-[8px] font-semibold text-navy/55 uppercase tracking-wider mb-1">Expiry</label>
                         <input
                           type="text"
                           required
@@ -713,11 +720,11 @@ export default function SetupWizard() {
                           placeholder="MM/YY"
                           value={cardExpiry}
                           onChange={(e) => setCardExpiry(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-[10px] outline-none focus:border-sky-400/50"
+                          className="w-full px-2.5 py-1.5 bg-white/70 border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-ocean-400/60"
                         />
                       </div>
                       <div>
-                        <label className="block text-[8px] font-semibold text-gray-500 uppercase tracking-wider mb-1">CVV</label>
+                        <label className="block text-[8px] font-semibold text-navy/55 uppercase tracking-wider mb-1">CVV</label>
                         <input
                           type="password"
                           required
@@ -725,7 +732,7 @@ export default function SetupWizard() {
                           placeholder="•••"
                           value={cardCvv}
                           onChange={(e) => setCardCvv(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-[10px] outline-none focus:border-sky-400/50"
+                          className="w-full px-2.5 py-1.5 bg-white/70 border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-ocean-400/60"
                         />
                       </div>
                     </div>
@@ -735,7 +742,7 @@ export default function SetupWizard() {
 
               {isFree ? (
                 <div className="flex gap-4 pt-2">
-                  <button onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 font-semibold text-xs hover:bg-gray-100 transition-colors cursor-pointer">
+                  <button onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-white/70 border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-[rgba(23,23,31,0.04)] transition-colors cursor-pointer">
                     Back
                   </button>
                   <button onClick={handleLaunchSequence} className="flex-1 py-2.5 rounded-xl bg-green-50 hover:bg-green-100 border border-green-200 text-green-600 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
@@ -745,13 +752,13 @@ export default function SetupWizard() {
               ) : (
                 <form onSubmit={handlePaymentSubmit} className="space-y-4">
                   <div className="flex gap-4 pt-2">
-                    <button type="button" onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 font-semibold text-xs hover:bg-gray-100 transition-colors cursor-pointer">
+                    <button type="button" onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-white/70 border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-[rgba(23,23,31,0.04)] transition-colors cursor-pointer">
                       Back
                     </button>
                     <button
                       type="submit"
                       disabled={isPaying || paymentSuccess}
-                      className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-500 hover:to-cyan-500 text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                      className="flex-1 py-2.5 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
                     >
                       {isPaying ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -775,86 +782,86 @@ export default function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="w-full max-w-xl p-8 bg-white border border-gray-100 rounded-3xl card-shadow space-y-6"
+              className="w-full max-w-xl p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow space-y-6"
             >
               <div>
-                <h2 className="text-lg font-extrabold tracking-tight text-gray-900 flex items-center gap-1.5">
+                <h2 className="text-lg font-extrabold tracking-tight text-navy flex items-center gap-1.5">
                   Platform Integrations
                 </h2>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-xs text-navy/55 mt-0.5">
                   Grant credentials to let your agents push changes to active platforms.
                 </p>
               </div>
 
               <div className="space-y-3.5 max-h-[280px] overflow-y-auto pr-1">
-                <div className="p-3.5 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+                <div className="p-3.5 bg-white/70 border border-navy/5 rounded-2xl space-y-2">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                      <GitBranch size={14} className="text-gray-600" />
-                      <h3 className="text-xs font-semibold text-gray-900">GitHub Integration</h3>
+                      <GitBranch size={14} className="text-navy/70" />
+                      <h3 className="text-xs font-semibold text-navy">GitHub Integration</h3>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" checked={ghConnected} onChange={(e) => setGhConnected(e.target.checked)} className="sr-only peer" />
-                      <div className="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-sky-400"></div>
+                      <div className="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-navy/15 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-ocean-500"></div>
                     </label>
                   </div>
                   {ghConnected && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 pt-2 border-t border-gray-100">
-                      <input type="text" placeholder="Repository URL (e.g. https://github.com/user/repo)" value={ghRepo} onChange={(e) => setGhRepo(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-900 text-xs outline-none focus:border-sky-400/50" />
-                      <input type="password" placeholder="Personal Access Token (ghp_...)" value={ghToken} onChange={(e) => setGhToken(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-900 text-xs outline-none focus:border-sky-400/50" />
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 pt-2 border-t border-navy/5">
+                      <input type="text" placeholder="Repository URL (e.g. https://github.com/user/repo)" value={ghRepo} onChange={(e) => setGhRepo(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none focus:border-ocean-400/60" />
+                      <input type="password" placeholder="Personal Access Token (ghp_...)" value={ghToken} onChange={(e) => setGhToken(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none focus:border-ocean-400/60" />
                     </motion.div>
                   )}
                 </div>
 
-                <div className="p-3.5 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+                <div className="p-3.5 bg-white/70 border border-navy/5 rounded-2xl space-y-2">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                      <Play size={12} className="rotate-90 fill-gray-600 text-gray-600" />
-                      <h3 className="text-xs font-semibold text-gray-900">Vercel Deployments</h3>
+                      <Play size={12} className="rotate-90 fill-gray-600 text-navy/70" />
+                      <h3 className="text-xs font-semibold text-navy">Vercel Deployments</h3>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" checked={vConnected} onChange={(e) => setVConnected(e.target.checked)} className="sr-only peer" />
-                      <div className="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-violet-400"></div>
+                      <div className="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-navy/15 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-ocean-500"></div>
                     </label>
                   </div>
                   {vConnected && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 pt-2 border-t border-gray-100">
-                      <input type="password" placeholder="Vercel API Access Token (ver_...)" value={vToken} onChange={(e) => setVToken(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-900 text-xs outline-none focus:border-violet-400/50" />
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 pt-2 border-t border-navy/5">
+                      <input type="password" placeholder="Vercel API Access Token (ver_...)" value={vToken} onChange={(e) => setVToken(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none focus:border-ocean-400/60" />
                     </motion.div>
                   )}
                 </div>
 
-                <div className="p-3.5 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+                <div className="p-3.5 bg-white/70 border border-navy/5 rounded-2xl space-y-2">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
                       <Sparkles size={14} className="text-amber-500" />
-                      <h3 className="text-xs font-semibold text-gray-900">Slack Notifications</h3>
+                      <h3 className="text-xs font-semibold text-navy">Slack Notifications</h3>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" checked={sConnected} onChange={(e) => setSConnected(e.target.checked)} className="sr-only peer" />
-                      <div className="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-400"></div>
+                      <div className="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-navy/15 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-400"></div>
                     </label>
                   </div>
                   {sConnected && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 pt-2 border-t border-gray-100">
-                      <input type="text" placeholder="Incoming Webhook URL (https://hooks.slack.com/...)" value={sUrl} onChange={(e) => setSUrl(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-900 text-xs outline-none focus:border-amber-400/50" />
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 pt-2 border-t border-navy/5">
+                      <input type="text" placeholder="Incoming Webhook URL (https://hooks.slack.com/...)" value={sUrl} onChange={(e) => setSUrl(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none focus:border-amber-400/50" />
                     </motion.div>
                   )}
                 </div>
 
-                <div className="p-3.5 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+                <div className="p-3.5 bg-white/70 border border-navy/5 rounded-2xl space-y-2">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                      <Key size={14} className="text-cyan-500" />
-                      <h3 className="text-xs font-semibold text-gray-900">Custom AI API Provider</h3>
+                      <Key size={14} className="text-teal" />
+                      <h3 className="text-xs font-semibold text-navy">Custom AI API Provider</h3>
                     </div>
-                    <span className="text-[10px] text-gray-400 uppercase">OPTIONAL</span>
+                    <span className="text-[10px] text-navy/40 uppercase">OPTIONAL</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <select
                       value={aiProvider}
                       onChange={(e) => setAiProvider(e.target.value as 'gemini' | 'openrouter')}
-                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-900 text-xs outline-none col-span-1"
+                      className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none col-span-1"
                     >
                       <option value="gemini">Gemini API</option>
                       <option value="openrouter">OpenRouter</option>
@@ -864,17 +871,17 @@ export default function SetupWizard() {
                       placeholder="Enter API Key to override default"
                       value={aiKey}
                       onChange={(e) => setAiKey(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-900 text-xs outline-none focus:border-sky-400/50 col-span-2"
+                      className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none focus:border-ocean-400/60 col-span-2"
                     />
                   </div>
                 </div>
               </div>
 
               <div className="flex gap-4 pt-2">
-                <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 font-semibold text-xs hover:bg-gray-100 transition-colors cursor-pointer">
+                <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl bg-white/70 border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-[rgba(23,23,31,0.04)] transition-colors cursor-pointer">
                   Back
                 </button>
-                <button onClick={handleLaunchSequence} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-500 hover:to-cyan-500 text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer">
+                <button onClick={handleLaunchSequence} className="flex-1 py-2.5 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer">
                   Launch Simulation <ArrowRight size={14} />
                 </button>
               </div>
@@ -889,32 +896,32 @@ export default function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="w-full max-w-xl p-8 bg-white border border-gray-100 rounded-3xl card-shadow space-y-6"
+              className="w-full max-w-xl p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow space-y-6"
             >
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-400 to-cyan-400 flex items-center justify-center shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-ocean to-teal flex items-center justify-center shadow-sm">
                   <Server size={22} className="text-white animate-pulse" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-900">
+                  <h3 className="text-base font-bold text-navy">
                     Synthesizing Office Instance
                   </h3>
-                  <p className="text-xs text-sky-500 animate-pulse font-semibold">
+                  <p className="text-xs text-ocean-600 animate-pulse font-semibold">
                     Running compiler scripts...
                   </p>
                 </div>
               </div>
 
-              <div className="relative w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="relative w-full h-2 bg-[rgba(23,23,31,0.05)] rounded-full overflow-hidden">
                 <motion.div
-                  className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-sky-400 via-cyan-400 to-sky-400 rounded-full"
+                  className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-ocean-600 via-ocean-400 to-ocean-600 rounded-full"
                   initial={{ width: '0%' }}
                   animate={{ width: `${(currentDeployStep + 1) * 12.5}%` }}
                   transition={{ duration: 0.5 }}
                 />
               </div>
 
-              <div className="h-[180px] p-4 rounded-xl bg-gray-50 border border-gray-100 text-xs text-gray-600 overflow-y-auto space-y-1.5 flex flex-col justify-start font-mono">
+              <div className="h-[180px] p-4 rounded-xl bg-white/70 border border-navy/5 text-xs text-navy/70 overflow-y-auto space-y-1.5 flex flex-col justify-start font-mono">
                 <AnimatePresence>
                   {deployStatus.map((log, idx) => (
                     <motion.div
@@ -926,7 +933,7 @@ export default function SetupWizard() {
                       <span className="text-violet-500 font-bold">&gt;</span>
                       <span>{log}</span>
                       {idx === currentDeployStep && (
-                        <span className="w-1.5 h-3.5 bg-sky-400 inline-block animate-pulse ml-0.5 rounded-sm" />
+                        <span className="w-1.5 h-3.5 bg-ocean-500 inline-block animate-pulse ml-0.5 rounded-sm" />
                       )}
                     </motion.div>
                   ))}
@@ -934,7 +941,7 @@ export default function SetupWizard() {
               </div>
 
               <div className="flex justify-center pt-2">
-                <Loader2 className="w-5 h-5 text-sky-400 animate-spin" />
+                <Loader2 className="w-5 h-5 text-ocean-400 animate-spin" />
               </div>
             </motion.div>
           )}

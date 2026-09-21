@@ -40,3 +40,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .agent/
+
+# electron
+desktop/node_modules/
+desktop/dist/
+desktop/.env*
+
+# build artifacts / large binaries
+public/downloads/

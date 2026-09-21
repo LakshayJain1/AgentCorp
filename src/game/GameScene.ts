@@ -6,6 +6,7 @@ import { centralOrchestrator } from '@/orchestrator/CentralOrchestrator';
 import { preloadAllConfigs } from '@/config/preload';
 import { maybeStartConversation, updateAgentMoods } from '@/systems/ConversationSystem';
 import { generateAmbientChatter } from '@/systems/EventSystem';
+import { CANVAS, ZONES, DESK_POSITIONS, MEETING_AREA } from './officeLayout';
 
 const AGENT_SPEED = 1.2;
 
@@ -24,6 +25,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // Load agent sprites for each role
+    const roles = ['ceo', 'hr', 'pm', 'researcher', 'engineer', 'qa'] as const;
+    for (const role of roles) {
+      this.load.image(`agent_desk_${role}`, `/sprites/agents/${role}.png`);
+      this.load.image(`agent_walk_${role}`, `/sprites/agents/walk/${role}.png`);
+    }
+    // Fallback
     this.load.image('agent', '/sprites/agent.png');
   }
 
@@ -35,7 +43,6 @@ export class GameScene extends Phaser.Scene {
 
     const store = useGameStore.getState();
     preloadAllConfigs().then(() => {
-      // Configs loaded; future agent creations will use config data
       console.log('[GameScene] Configs preloaded');
     });
     store.initAgents();
@@ -53,10 +60,14 @@ export class GameScene extends Phaser.Scene {
       }).setDepth(50);
       this.agentLabels.set(agent.id, label);
 
-      const sprite = this.add.image(agent.x, agent.y, 'agent');
-      sprite.setDepth(5);
-      sprite.setScale(0.05);
-      sprite.setTint(agent.color);
+      // Determine sprite based on role
+      const roleKey = agent.role === 'engineer' ? 'engineer' : agent.role;
+      const textureKey = this.textures.exists(`agent_desk_${roleKey}`)
+        ? `agent_desk_${roleKey}`
+        : 'agent';
+      const sprite = this.add.image(agent.x, agent.y, textureKey);
+      sprite.setDepth(10);
+      sprite.setScale(0.005);
       this.agentSprites.set(agent.id, sprite);
 
       const bubbleBg = this.add.graphics();
@@ -100,7 +111,6 @@ export class GameScene extends Phaser.Scene {
     const dt = delta * speed;
     this.frameCount++;
 
-    // === ORCHESTRATOR TICK — processes user-created tasks only ===
     if (this.frameCount % Math.max(1, Math.floor(30 / speed)) === 0) {
       if (!this.processing) {
         this.processing = true;
@@ -110,7 +120,6 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Legacy ambient systems
     if (this.frameCount % Math.max(1, Math.floor(20 / speed)) === 0) {
       maybeStartConversation();
       updateAgentMoods();
@@ -128,7 +137,6 @@ export class GameScene extends Phaser.Scene {
       this.updateBubble(agent);
     });
 
-    // Sync to store at reduced rate (every 6 frames ≈ 10fps) to avoid React thrashing
     if (this.frameCount % 6 === 0) {
       const storeSync = useGameStore.getState();
       const updates = agents.map((agent) => {
@@ -184,18 +192,13 @@ export class GameScene extends Phaser.Scene {
     const speed = store.simulation.speed;
     const rate = 0.008 * (dt / 16);
 
-    // ─── COOLDOWN MANAGEMENT ───
     if (agent.cooldownRemainingSeconds !== undefined && agent.cooldownRemainingSeconds > 0) {
-      // Decrement cooldown timer in real-world seconds, scaled by speed
       const elapsedSec = (dt / 1000) * speed;
       agent.cooldownRemainingSeconds = Math.max(0, agent.cooldownRemainingSeconds - elapsedSec);
-
-      // Visual state during cooldown
       agent.workStatus = 'waiting';
 
       if (agent.cooldownType === 'onboarding') {
         agent.mood = 'neutral';
-        // Stand/idle at the Gaming Zone or Coffee Machine
         const gaming = OFFICE_LOCATIONS().find((l) => l.role === 'gaming');
         const coffee = OFFICE_LOCATIONS().find((l) => l.role === 'coffee');
         const target = gaming || coffee;
@@ -230,10 +233,8 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Check if cooldown just finished
       if (agent.cooldownRemainingSeconds === 0) {
         if (agent.cooldownType === 'onboarding') {
-          // Onboarding completed!
           const finalName = agent.name.replace('Onboarding: ', '');
           agent.name = finalName;
           agent.online = true;
@@ -267,7 +268,6 @@ export class GameScene extends Phaser.Scene {
             taskId: null,
           });
         } else if (agent.cooldownType === 'burnout') {
-          // Burnout break completed!
           agent.energy = 100;
           agent.efficiency = 100;
           agent.mood = 'focused';
@@ -288,7 +288,6 @@ export class GameScene extends Phaser.Scene {
         agent.cooldownTargetLocId = undefined;
         agent.cooldownRemainingSeconds = undefined;
 
-        // Reset target destination to desk
         const location = OFFICE_LOCATIONS().find((l) => l.role === agent.role);
         if (location) {
           agent.targetX = location.x;
@@ -296,24 +295,20 @@ export class GameScene extends Phaser.Scene {
           agent.state = 'walking';
         }
       }
-      return; // Skip normal energy/efficiency logic while cooling down
+      return;
     }
 
-    // ─── NORMAL ENERGY & EFFICIENCY DRAIN ───
     if (agent.state === 'working' || agent.state === 'walking') {
       agent.energy -= rate * (agent.state === 'walking' ? 1.5 : 2.5);
     }
 
     if (agent.state === 'working' && agent.online) {
-      // Slowly drain efficiency while working
       agent.efficiency = Math.max(10, agent.efficiency - rate * 0.4);
     }
 
-    // Burnout Check: fatigue triggers if efficiency drops below 50
     const isWorker = agent.role === 'engineer' || agent.role === 'qa' || agent.role === 'researcher';
     if (agent.efficiency < 50 && isWorker && !agent.currentSubTaskId && agent.online) {
-      // Trigger burnout cooldown
-      agent.cooldownRemainingSeconds = 180 + Math.random() * 60; // 3-4 minutes
+      agent.cooldownRemainingSeconds = 180 + Math.random() * 60;
       agent.cooldownType = 'burnout';
       agent.workStatus = 'waiting';
       agent.mood = 'tired';
@@ -360,21 +355,17 @@ export class GameScene extends Phaser.Scene {
     );
 
     if (distToTarget < 8 && agent.state !== 'walking') {
-      // At destination - decide what to do next
       this.pickNextGoal(agent);
     }
   }
 
   private pickNextGoal(agent: Agent): void {
-    const store = useGameStore.getState();
     const location = OFFICE_LOCATIONS().find((l) => l.role === agent.role);
     const meeting = OFFICE_LOCATIONS().find((l) => l.role === 'meeting');
     const coffee = OFFICE_LOCATIONS().find((l) => l.role === 'coffee');
 
-    // Pick a random action based on conditions
     const r = Math.random();
 
-    // Low energy → go to coffee
     if (agent.energy < 40 && coffee && r < 0.5) {
       agent.targetX = coffee.x + (Math.random() - 0.5) * 10;
       agent.targetY = coffee.y + (Math.random() - 0.5) * 10;
@@ -382,7 +373,6 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Go to meeting room sometimes
     if (meeting && r < 0.15 + (agent.role === 'pm' || agent.role === 'ceo' ? 0.1 : 0)) {
       agent.targetX = meeting.x + (Math.random() - 0.5) * 20;
       agent.targetY = meeting.y + (Math.random() - 0.5) * 10;
@@ -390,7 +380,6 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Visit a random location
     if (r < 0.25) {
       const others = OFFICE_LOCATIONS().filter(
         (l) => l.id !== location?.id && l.role !== 'coffee' && Math.random() < 0.4,
@@ -404,7 +393,6 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Wander near current workstation
     if (location) {
       agent.targetX = location.x + (Math.random() - 0.5) * 30;
       agent.targetY = location.y + (Math.random() - 0.5) * 15;
@@ -427,26 +415,33 @@ export class GameScene extends Phaser.Scene {
     const drawY = Math.round(agent.y + bobY);
     const x = Math.round(agent.x);
 
-    const labelY = agent.y - 40;
+    const labelY = agent.y - 45;
 
-    // Update label
     if (label) {
       label.setPosition(x - label.width / 2, labelY);
       label.setDepth(50);
     }
 
-    // Update sprite
+    // Dual-state sprite switching
+    const roleKey = agent.role === 'engineer' ? 'engineer' : agent.role;
+    const deskKey = `agent_desk_${roleKey}`;
+    const walkKey = `agent_walk_${roleKey}`;
+    const targetTexture = isWalking && this.textures.exists(walkKey) ? walkKey
+      : this.textures.exists(deskKey) ? deskKey
+      : 'agent';
+
+    if (sprite.texture.key !== targetTexture) {
+      sprite.setTexture(targetTexture);
+    }
+
     sprite.setPosition(x, drawY);
     sprite.setDepth(10);
-    sprite.setTint(agent.color);
+    sprite.setScale(isWalking ? 0.015 : 0.005);
     sprite.setFlipX(isWalking ? Math.cos(t * 2) < 0 : false);
 
-    // Draw overlay: shadow, selection, energy bar
     g.setPosition(0, 0);
     g.setScale(1, 1);
     g.clear();
-
-    const US = 2;
 
     // Shadow
     g.fillStyle(0x000000, 0.3);
@@ -462,7 +457,7 @@ export class GameScene extends Phaser.Scene {
       g.fillRect(x - 18, drawY - 24, 36, 56);
     }
 
-    // Health bar — below name tag, above character
+    // Energy bar
     const energyPercent = agent.energy / 100;
     g.fillStyle(0x000000, 0.6);
     g.fillRect(x - 12, labelY - 6, 24, 4);
@@ -470,8 +465,6 @@ export class GameScene extends Phaser.Scene {
       energyPercent > 0.3 ? 0xf59e0b : 0xef4444;
     g.fillStyle(energyColor, 1);
     g.fillRect(x - 11, labelY - 5, 22 * energyPercent, 2);
-
-
   }
 
   private updateBubble(agent: Agent): void {
@@ -513,178 +506,354 @@ export class GameScene extends Phaser.Scene {
   private drawOffice(): void {
     const g = this.officeGraphics;
     g.clear();
+    const W = CANVAS.width;
+    const H = CANVAS.height;
 
-    const W = 560, H = 400;
-
-    // Floor
-    g.fillStyle(0x1a1a2e, 1);
+    // Background
+    g.fillStyle(0x0a0a1e, 1);
     g.fillRect(0, 0, W, H);
 
-    for (let x = 0; x < 140; x += 2) {
-      for (let y = 0; y < 100; y += 2) {
-        g.fillStyle((x + y) % 4 === 0 ? 0x16162e : 0x1a1a2e, 0.5);
+    // Tile grid
+    for (let x = 0; x < W; x += 2) {
+      for (let y = 0; y < H; y += 2) {
+        g.fillStyle((x + y) % 4 === 0 ? 0x0c0c20 : 0x0a0a1e, 0.5);
         g.fillRect(x * 4, y * 4, 8, 8);
       }
     }
 
-    // Outer walls
-    g.lineStyle(2, 0x2d2d5e, 1);
-    g.strokeRect(2, 2, W - 4, H - 4);
+    // Draw all zone floors
+    for (const zone of ZONES) {
+      g.fillStyle(zone.floorColor, 1);
+      g.fillRect(zone.x, zone.y, zone.width, zone.height);
 
-    // Inner walls
-    g.lineStyle(2, 0x2a2a5e, 1);
-    g.lineBetween(0, 170, W, 170);
-    g.lineBetween(140, 0, 140, 170);
-    g.lineBetween(225, 0, 225, 170);
-
-    // CEO Office
-    g.fillStyle(0x1e1e36, 1);
-    g.fillRect(8, 8, 130, 160);
-    g.fillStyle(0x2a1a3e, 1);
-    g.fillRect(40, 50, 50, 30);
-    g.fillStyle(0x3a2a4e, 1);
-    g.fillRect(44, 54, 42, 22);
-    g.fillStyle(0x0a0a1a, 1);
-    g.fillRect(46, 30, 34, 22);
-    g.fillStyle(0xffd700, 1);
-    g.fillRect(110, 14, 8, 16);
-
-    // PM Desk
-    this.drawDesk(g, 240, 85);
-    this.drawMonitor(g, 248, 70, 0x4ecdc4);
-
-    // Meeting Room
-    g.fillStyle(0x1a1a2e, 1);
-    g.fillRect(230, 185, 170, 60);
-    g.lineStyle(2, 0x4ecdc4, 0.5);
-    g.strokeRect(230, 185, 170, 60);
-    g.fillStyle(0x22223a, 1);
-    g.fillRect(270, 200, 90, 30);
-    g.fillStyle(0x2a2a4a, 1);
-    g.fillRect(274, 204, 82, 22);
-    g.fillStyle(0x3a2a3e, 1);
-    g.fillRect(245, 200, 14, 8);
-    g.fillRect(370, 200, 14, 8);
-    g.fillRect(245, 222, 14, 8);
-    g.fillRect(370, 222, 14, 8);
-
-    // Server Rack
-    g.fillStyle(0x12122a, 1);
-    g.fillRect(10, 210, 120, 135);
-    g.lineStyle(1, 0x45b7d1, 0.4);
-    g.strokeRect(10, 210, 120, 135);
-    for (let i = 0; i < 5; i++) {
-      const sy = 218 + i * 24;
-      g.fillStyle(0x0a0a1a, 1);
-      g.fillRect(18, sy, 104, 18);
-      g.fillStyle(0x1a1a2e, 1);
-      g.fillRect(22, sy + 2, 96, 14);
-      g.fillStyle(Math.random() > 0.3 ? 0x00ff88 : 0x003322, 1);
-      g.fillRect(104, sy + 5, 4, 4);
-      g.fillStyle(Math.random() > 0.3 ? 0xff4444 : 0x332222, 1);
-      g.fillRect(112, sy + 5, 4, 4);
+      // Subtle tile pattern
+      for (let tx = zone.x; tx < zone.x + zone.width; tx += 16) {
+        for (let ty = zone.y; ty < zone.y + zone.height; ty += 16) {
+          g.fillStyle(zone.floorColor + 0x040404, 0.3);
+          g.fillRect(tx, ty, 15, 15);
+        }
+      }
     }
 
-    // Engineer Desk
-    this.drawDesk(g, 240, 270);
-    this.drawMonitor(g, 248, 255, 0xf9ca24);
+    // Walls
+    g.lineStyle(3, 0x2d2d5e, 1);
+    // Outer border
+    g.strokeRect(1, 1, W - 2, H - 2);
+    // Zone dividers
+    g.lineStyle(2, 0x2a2a5e, 1);
+    // Left column dividers
+    g.lineBetween(0, 155, 170, 155);
+    g.lineBetween(0, 290, 170, 290);
+    g.lineBetween(170, 0, 170, H);
+    // Right column dividers
+    g.lineBetween(480, 0, 480, H);
+    g.lineBetween(480, 135, W, 135);
+    g.lineBetween(480, 305, W, 305);
+    // Center horizontal
+    g.lineBetween(175, 340, 475, 340);
 
-    // QA Desk
-    this.drawDesk(g, 400, 270);
-    this.drawMonitor(g, 408, 255, 0xa29bfe);
+    // === CEO OFFICE (top-left) ===
+    this.drawCEOFurniture(g);
 
-    // HR Desk
-    this.drawDesk(g, 400, 60);
-    g.fillStyle(0xf472b6, 0.6);
-    g.fillRect(405, 55, 12, 5);
-    this.drawMonitor(g, 408, 45, 0xf472b6);
+    // === HR DESK (middle-left) ===
+    this.drawHRFurniture(g);
 
-    // Coffee Machine
+    // === KITCHEN / COFFEE ZONE (bottom-left) ===
+    this.drawKitchenFurniture(g);
+
+    // === DEVELOPMENT & PM AREA (center) ===
+    this.drawDevHubFurniture(g);
+
+    // === PM DESK (bottom-center) ===
+    this.drawPMFurniture(g);
+
+    // === DATABASE ZONE (top-right) ===
+    this.drawDatabaseFurniture(g);
+
+    // === RESEARCHER AREA (middle-right) ===
+    this.drawResearcherFurniture(g);
+
+    // === GAMING ZONE (bottom-right) ===
+    this.drawGamingFurniture(g);
+
+    // === ENTRANCE (bottom-center) ===
+    this.drawEntrance(g);
+
+    // === LEGEND (bottom-left corner) ===
+    this.drawLegend(g);
+  }
+
+  private drawCEOFurniture(g: Phaser.GameObjects.Graphics): void {
+    // Executive desk
+    g.fillStyle(0x3a2a1a, 1);
+    g.fillRect(50, 60, 70, 45);
+    g.fillStyle(0x4a3a2a, 1);
+    g.fillRect(54, 64, 62, 37);
+    // Monitor
+    g.fillStyle(0x0a0a1a, 1);
+    g.fillRect(65, 45, 40, 28);
+    g.fillStyle(0x00f5ff, 0.08);
+    g.fillRect(67, 47, 36, 24);
+    // Chair
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillRect(70, 110, 30, 20);
+    // Bookshelf (left wall)
+    g.fillStyle(0x2a1a10, 1);
+    g.fillRect(8, 10, 20, 130);
+    g.fillStyle(0x3a2a1a, 1);
+    for (let i = 0; i < 5; i++) {
+      g.fillRect(10, 15 + i * 25, 16, 20);
+    }
+    // Guest chairs
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillRect(30, 70, 14, 14);
+    g.fillRect(30, 100, 14, 14);
+    // Plant
+    this.drawPlant(g, 150, 15);
+    // Label
+    g.fillStyle(0x00f5ff, 0.3);
+    g.fillRect(55, 135, 60, 1);
+  }
+
+  private drawHRFurniture(g: Phaser.GameObjects.Graphics): void {
+    // HR desk
+    g.fillStyle(0x3a2a1a, 1);
+    g.fillRect(50, 195, 70, 40);
+    g.fillStyle(0x4a3a2a, 1);
+    g.fillRect(54, 199, 62, 32);
+    // Monitor
+    g.fillStyle(0x0a0a1a, 1);
+    g.fillRect(65, 180, 35, 25);
+    g.fillStyle(0xf472b6, 0.1);
+    g.fillRect(67, 182, 31, 21);
+    // Chair
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillRect(70, 240, 25, 16);
+    // Plant
+    this.drawPlant(g, 150, 175);
+  }
+
+  private drawKitchenFurniture(g: Phaser.GameObjects.Graphics): void {
+    // Coffee machine
     g.fillStyle(0x2a1a1a, 1);
-    g.fillRect(430, 70, 45, 55);
+    g.fillRect(20, 310, 50, 40);
     g.fillStyle(0x3a2a2a, 1);
-    g.fillRect(434, 74, 37, 47);
-    g.fillStyle(0x4a3a3a, 1);
-    g.fillRect(438, 84, 6, 8);
-    g.fillRect(450, 84, 6, 8);
-    g.fillRect(444, 96, 6, 8);
+    g.fillRect(24, 314, 42, 32);
+    g.fillStyle(0x6a4a2a, 1);
+    g.fillRect(30, 320, 8, 10);
+    g.fillRect(45, 320, 8, 10);
+    // Round table
+    g.fillStyle(0x3a2a1a, 1);
+    g.fillCircle(100, 400, 30);
+    g.fillStyle(0x4a3a2a, 1);
+    g.fillCircle(100, 400, 25);
+    // Chairs around table
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillCircle(65, 400, 8);
+    g.fillCircle(135, 400, 8);
+    g.fillCircle(100, 365, 8);
+    g.fillCircle(100, 435, 8);
+    // Fridge
+    g.fillStyle(0x2a2a3a, 1);
+    g.fillRect(140, 300, 25, 45);
+    g.fillStyle(0x3a3a4a, 1);
+    g.fillRect(142, 302, 21, 20);
+    g.fillRect(142, 324, 21, 19);
+  }
+
+  private drawDevHubFurniture(g: Phaser.GameObjects.Graphics): void {
+    // Top dev cluster (2x2 desks)
+    const clusterPositions = [
+      { x: 210, y: 50 }, { x: 310, y: 50 },
+      { x: 210, y: 140 }, { x: 310, y: 140 },
+    ];
+    for (const pos of clusterPositions) {
+      this.drawDeskCluster(g, pos.x, pos.y);
+    }
+
+    // Bottom dev cluster (2x2 desks)
+    const cluster2Positions = [
+      { x: 210, y: 220 }, { x: 310, y: 220 },
+      { x: 210, y: 290 }, { x: 310, y: 290 },
+    ];
+    for (const pos of cluster2Positions) {
+      this.drawDeskCluster(g, pos.x, pos.y);
+    }
+
+    // "FOCUS > PLAN > EXECUTE" poster
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillRect(340, 10, 60, 50);
+    g.lineStyle(1, 0x00f5ff, 0.3);
+    g.strokeRect(340, 10, 60, 50);
+    g.fillStyle(0x00f5ff, 0.5);
+    g.fillRect(348, 18, 44, 1);
+    g.fillRect(348, 30, 44, 1);
+    g.fillRect(348, 42, 44, 1);
 
     // Plants
-    g.fillStyle(0x1a3a1a, 1);
-    g.fillRect(195, 190, 14, 22);
-    g.fillStyle(0x2a5a2a, 1);
-    g.fillRect(198, 184, 8, 12);
-    g.fillStyle(0x1a3a1a, 1);
-    g.fillRect(420, 190, 14, 22);
-    g.fillStyle(0x2a5a2a, 1);
-    g.fillRect(423, 184, 8, 12);
-
-    // Gaming Zone Arcades and Sofa
-    // Arcade Cabinet
-    g.fillStyle(0x0f172a, 1);
-    g.fillRect(150, 310, 22, 34);
-    g.fillStyle(0x1e293b, 1);
-    g.fillRect(152, 312, 18, 30);
-    g.fillStyle(0x00f5ff, 0.45); // screen
-    g.fillRect(154, 315, 14, 11);
-    g.fillStyle(0xff0055, 1); // controls
-    g.fillRect(157, 328, 2, 2);
-    g.fillStyle(0x00ff88, 1);
-    g.fillRect(163, 328, 2, 2);
-
-    // Gaming Sofa
-    g.fillStyle(0x312e81, 1); // Sofa frame
-    g.fillRect(185, 325, 36, 20);
-    g.fillStyle(0x4338ca, 1); // Sofa cushions
-    g.fillRect(188, 328, 30, 14);
-
-    // Window
-    g.fillStyle(0x0a0a2e, 1);
-    g.fillRect(440, 8, 65, 55);
-    g.lineStyle(1, 0x00f5ff, 0.35);
-    g.strokeRect(440, 8, 65, 55);
-    g.fillStyle(0x1a1a3e, 1);
-    for (let i = 0; i < 5; i++) {
-      const wx = 448 + i * 12;
-      const wh = 12 + Math.random() * 20;
-      g.fillRect(wx, 63 - wh + 8, 8, wh);
-    }
-    g.fillStyle(0xffffff, 0.7);
-    for (let i = 0; i < 8; i++) {
-      const px = 448 + Math.random() * 48;
-      const py = 12 + Math.random() * 32;
-      g.fillRect(px, py, 1, 1);
-    }
-
-    // Path markings
-    g.lineStyle(1, 0x00f5ff, 0.04);
-    g.lineBetween(140, 170, 230, 170);
-    g.lineBetween(140, 170, 140, 210);
-    g.lineBetween(225, 0, 225, 170);
-    g.lineBetween(320, 185, 430, 125);
+    this.drawPlant(g, 190, 55);
+    this.drawPlant(g, 460, 55);
+    this.drawPlant(g, 190, 225);
+    this.drawPlant(g, 460, 225);
   }
 
-  private drawDesk(g: Phaser.GameObjects.Graphics, x: number, y: number): void {
-    g.fillStyle(0x2a2a4a, 1);
-    g.fillRect(x, y, 55, 42);
-    g.fillStyle(0x3a3a5a, 1);
-    g.fillRect(x + 3, y + 3, 49, 36);
-    g.lineStyle(1, 0x00f5ff, 0.08);
-    g.strokeRect(x, y, 55, 42);
-  }
-
-  private drawMonitor(
-    g: Phaser.GameObjects.Graphics,
-    x: number,
-    y: number,
-    glowColor: number,
-  ): void {
-    g.fillStyle(0x1a1a2e, 1);
-    g.fillRect(x + 2, y + 28, 8, 8);
-    g.fillRect(x + 2, y + 36, 38, 4);
+  private drawDeskCluster(g: Phaser.GameObjects.Graphics, x: number, y: number): void {
+    // Desk
+    g.fillStyle(0x3a2a1a, 1);
+    g.fillRect(x, y, 75, 55);
+    g.fillStyle(0x4a3a2a, 1);
+    g.fillRect(x + 3, y + 3, 69, 49);
+    // Monitor
     g.fillStyle(0x0a0a1a, 1);
-    g.fillRect(x, y, 38, 28);
-    g.fillStyle(glowColor, 0.05);
-    g.fillRect(x + 2, y + 2, 34, 24);
+    g.fillRect(x + 20, y - 12, 35, 22);
+    g.fillStyle(0x00f5ff, 0.06);
+    g.fillRect(x + 22, y - 10, 31, 18);
+    // Chair
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillRect(x + 25, y + 58, 25, 14);
+  }
+
+  private drawPMFurniture(g: Phaser.GameObjects.Graphics): void {
+    // PM desk
+    g.fillStyle(0x3a2a1a, 1);
+    g.fillRect(290, 385, 80, 45);
+    g.fillStyle(0x4a3a2a, 1);
+    g.fillRect(294, 389, 72, 37);
+    // Monitor
+    g.fillStyle(0x0a0a1a, 1);
+    g.fillRect(310, 370, 40, 28);
+    g.fillStyle(0x4ecdc4, 0.1);
+    g.fillRect(312, 372, 36, 24);
+    // Chair
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillRect(315, 433, 28, 16);
+  }
+
+  private drawDatabaseFurniture(g: Phaser.GameObjects.Graphics): void {
+    // Server racks
+    for (let i = 0; i < 4; i++) {
+      const rx = 500 + i * 55;
+      g.fillStyle(0x0a0a1a, 1);
+      g.fillRect(rx, 15, 45, 100);
+      g.fillStyle(0x1a1a2e, 1);
+      g.fillRect(rx + 3, 18, 39, 94);
+      // LEDs
+      for (let j = 0; j < 6; j++) {
+        g.fillStyle(Math.random() > 0.3 ? 0x00ff88 : 0x003322, 1);
+        g.fillRect(rx + 35, 22 + j * 14, 4, 4);
+        g.fillStyle(Math.random() > 0.3 ? 0xff4444 : 0x332222, 1);
+        g.fillRect(rx + 8, 22 + j * 14, 4, 4);
+      }
+    }
+    // Whiteboard
+    g.fillStyle(0x2a2a3a, 1);
+    g.fillRect(500, 100, 80, 25);
+    g.lineStyle(1, 0x00f5ff, 0.3);
+    g.strokeRect(500, 100, 80, 25);
+  }
+
+  private drawResearcherFurniture(g: Phaser.GameObjects.Graphics): void {
+    // Long desk with 4 workstations
+    g.fillStyle(0x3a2a1a, 1);
+    g.fillRect(500, 180, 200, 50);
+    g.fillStyle(0x4a3a2a, 1);
+    g.fillRect(504, 184, 192, 42);
+    // Monitors
+    for (let i = 0; i < 4; i++) {
+      const mx = 515 + i * 48;
+      g.fillStyle(0x0a0a1a, 1);
+      g.fillRect(mx, 165, 30, 20);
+      g.fillStyle(0x45b7d1, 0.1);
+      g.fillRect(mx + 2, 167, 26, 16);
+    }
+    // Bookshelf
+    g.fillStyle(0x2a1a10, 1);
+    g.fillRect(700, 150, 18, 100);
+    g.fillStyle(0x3a2a1a, 1);
+    for (let i = 0; i < 4; i++) {
+      g.fillRect(702, 155 + i * 24, 14, 18);
+    }
+    // Plant
+    this.drawPlant(g, 490, 195);
+  }
+
+  private drawGamingFurniture(g: Phaser.GameObjects.Graphics): void {
+    // Large TV
+    g.fillStyle(0x0a0a1a, 1);
+    g.fillRect(530, 330, 120, 70);
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillRect(534, 334, 112, 62);
+    // TV screen glow
+    g.fillStyle(0x00f5ff, 0.08);
+    g.fillRect(538, 338, 104, 54);
+    // "GAME ON" neon sign
+    g.fillStyle(0xff0055, 0.6);
+    g.fillRect(510, 335, 15, 20);
+    g.fillStyle(0x00f5ff, 0.6);
+    g.fillRect(655, 335, 15, 20);
+    // Beanbags
+    g.fillStyle(0x4a2040, 1);
+    g.fillCircle(540, 430, 18);
+    g.fillStyle(0x2a4060, 1);
+    g.fillCircle(600, 440, 18);
+    g.fillStyle(0x6a2030, 1);
+    g.fillCircle(660, 430, 18);
+    // Console table
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillRect(560, 410, 60, 15);
+  }
+
+  private drawEntrance(g: Phaser.GameObjects.Graphics): void {
+    // Welcome mat
+    g.fillStyle(0x3a2a1a, 1);
+    g.fillRect(320, 455, 80, 20);
+    g.fillStyle(0x4a3a2a, 1);
+    g.fillRect(324, 459, 72, 12);
+    // Glass doors
+    g.lineStyle(2, 0x00f5ff, 0.3);
+    g.strokeRect(315, 445, 90, 30);
+    g.lineBetween(360, 445, 360, 475);
+    // Plants flanking
+    this.drawPlant(g, 300, 450);
+    this.drawPlant(g, 410, 450);
+  }
+
+  private drawLegend(g: Phaser.GameObjects.Graphics): void {
+    const W = CANVAS.width;
+    const H = CANVAS.height;
+    const lx = 10;
+    const ly = H - 80;
+
+    g.fillStyle(0x0a0a1e, 0.85);
+    g.fillRect(lx, ly, 160, 75);
+    g.lineStyle(1, 0x2d2d5e, 0.5);
+    g.strokeRect(lx, ly, 160, 75);
+
+    const items = [
+      { color: 0x1e1828, label: 'CEO Office' },
+      { color: 0x1e1a14, label: 'HR Desk' },
+      { color: 0x141a28, label: 'Database' },
+      { color: 0x141a18, label: 'Researcher' },
+      { color: 0x1a1a22, label: 'Dev & PM' },
+      { color: 0x1a1428, label: 'Gaming' },
+      { color: 0x1a1410, label: 'Kitchen' },
+    ];
+
+    items.forEach((item, i) => {
+      const iy = ly + 8 + i * 10;
+      g.fillStyle(item.color, 1);
+      g.fillRect(lx + 6, iy, 8, 8);
+      g.lineStyle(1, 0x2d2d5e, 0.3);
+      g.strokeRect(lx + 6, iy, 8, 8);
+    });
+  }
+
+  private drawPlant(g: Phaser.GameObjects.Graphics, x: number, y: number): void {
+    g.fillStyle(0x1a3a1a, 1);
+    g.fillRect(x, y + 8, 12, 14);
+    g.fillStyle(0x2a5a2a, 1);
+    g.fillRect(x + 2, y, 8, 12);
+    g.fillStyle(0x3a7a3a, 1);
+    g.fillRect(x + 4, y - 2, 4, 6);
   }
 }

@@ -13,8 +13,8 @@ export default function GameCanvas() {
 
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
-      width: 560,
-      height: 400,
+      width: 720,
+      height: 480,
       parent: containerRef.current,
       backgroundColor: '#0a0a1e',
       scene: [GameScene],
@@ -57,7 +57,7 @@ export default function GameCanvas() {
     <div
       ref={containerRef}
       className="relative w-full h-full overflow-hidden rounded-xl border border-border/60 shadow-lg"
-      style={{ imageRendering: 'pixelated', minHeight: 400 }}
+      style={{ imageRendering: 'pixelated', minHeight: 480 }}
     />
   );
 }

@@ -6,35 +6,35 @@ import { Agent } from '@/agents/AgentTypes';
 import { X } from 'lucide-react';
 
 const MOOD_COLORS: Record<string, string> = {
-  happy: '#6CC04A',
-  neutral: '#59C7FF',
-  tired: '#F59E0B',
-  frustrated: '#EF4444',
-  focused: '#8B7CF6',
+  happy: '#34C759',
+  neutral: '#0A84FF',
+  tired: '#FF9F0A',
+  frustrated: '#FF453A',
+  focused: '#BF5AF2',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  idle: '#9CA3AF',
-  thinking: '#F59E0B',
-  researching: '#8B7CF6',
-  coding: '#F59E0B',
-  debugging: '#EF4444',
-  reviewing: '#8B7CF6',
-  waiting: '#7C3AED',
-  blocked: '#EF4444',
-  completed: '#6CC04A',
+  idle: '#86868B',
+  thinking: '#FF9F0A',
+  researching: '#BF5AF2',
+  coding: '#FF9F0A',
+  debugging: '#FF453A',
+  reviewing: '#BF5AF2',
+  waiting: '#5E5CE6',
+  blocked: '#FF453A',
+  completed: '#34C759',
 };
 
 const STATUS_DOTS: Record<string, string> = {
-  idle: '#D1D5DB',
-  thinking: '#F59E0B',
-  researching: '#8B7CF6',
-  coding: '#F59E0B',
-  debugging: '#EF4444',
-  reviewing: '#8B7CF6',
-  waiting: '#7C3AED',
-  blocked: '#EF4444',
-  completed: '#6CC04A',
+  idle: '#C7C7CC',
+  thinking: '#FF9F0A',
+  researching: '#BF5AF2',
+  coding: '#FF9F0A',
+  debugging: '#FF453A',
+  reviewing: '#BF5AF2',
+  waiting: '#5E5CE6',
+  blocked: '#FF453A',
+  completed: '#34C759',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -50,10 +50,10 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const SENIORITY_COLORS: Record<string, string> = {
-  junior: '#9CA3AF',
-  mid: '#59C7FF',
-  senior: '#F59E0B',
-  lead: '#8B7CF6',
+  junior: '#86868B',
+  mid: '#0A84FF',
+  senior: '#FF9F0A',
+  lead: '#BF5AF2',
 };
 
 function AgentCard({ agent }: { agent: Agent }) {
@@ -72,7 +72,7 @@ function AgentCard({ agent }: { agent: Agent }) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="bg-white border border-gray-100 rounded-xl p-3 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer"
+      className="bg-white border border-navy/5 rounded-xl p-3 hover:border-navy/10 hover:shadow-sm transition-all cursor-pointer"
       onClick={() => setSelectedAgent(agent.id)}
     >
       <div className="flex items-start justify-between mb-2">
@@ -84,7 +84,7 @@ function AgentCard({ agent }: { agent: Agent }) {
             )}
           </div>
           <div className="min-w-0">
-            <div className="text-gray-900 font-semibold text-xs flex items-center gap-1.5 truncate">
+            <div className="text-navy font-semibold text-xs flex items-center gap-1.5 truncate">
               {agent.name}
               {agent.performance.seniority !== 'junior' && (
                 <span
@@ -109,18 +109,18 @@ function AgentCard({ agent }: { agent: Agent }) {
         </div>
         <div
           className="w-1.5 h-1.5 rounded-full shrink-0"
-          style={{ backgroundColor: MOOD_COLORS[agent.mood] || '#9CA3AF' }}
+          style={{ backgroundColor: MOOD_COLORS[agent.mood] || '#86868B' }}
         />
       </div>
 
       <div className="flex items-center gap-1.5 mb-2">
         <span
           className="w-1.5 h-1.5 rounded-full"
-          style={{ backgroundColor: STATUS_DOTS[agent.workStatus] || '#D1D5DB' }}
+          style={{ backgroundColor: STATUS_DOTS[agent.workStatus] || '#C7C7CC' }}
         />
         <div
           className="text-[9px] font-semibold uppercase tracking-wider"
-          style={{ color: STATUS_COLORS[agent.workStatus] || '#9CA3AF' }}
+          style={{ color: STATUS_COLORS[agent.workStatus] || '#86868B' }}
         >
           {STATUS_LABELS[agent.workStatus] || agent.workStatus}
         </div>
@@ -133,11 +133,11 @@ function AgentCard({ agent }: { agent: Agent }) {
       )}
 
       <div className="mb-2">
-        <div className="flex justify-between text-[8px] text-gray-400 font-semibold uppercase tracking-wide mb-0.5">
+        <div className="flex justify-between text-[8px] text-navy/40 font-semibold uppercase tracking-wide mb-0.5">
           <span>Performance</span>
-          <span className="font-bold" style={{ color: score > 70 ? '#6CC04A' : score > 45 ? '#F59E0B' : '#EF4444' }}>{score}/100</span>
+          <span className="font-bold" style={{ color: score > 70 ? '#34C759' : score > 45 ? '#FF9F0A' : '#FF453A' }}>{score}/100</span>
         </div>
-        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className="w-full h-1.5 bg-[rgba(23,23,31,0.05)] rounded-full overflow-hidden">
           <motion.div
             animate={{ width: `${score}%` }}
             className={`h-full rounded-full ${
@@ -147,7 +147,7 @@ function AgentCard({ agent }: { agent: Agent }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2.5 text-[8px] text-gray-400 font-semibold">
+      <div className="flex items-center gap-2.5 text-[8px] text-navy/40 font-semibold">
         <span>✅ {agent.performance.tasksCompleted}</span>
         <span>❌ {agent.performance.tasksFailed}</span>
         <span>🔧 {agent.performance.toolUsageCount}</span>
@@ -166,11 +166,11 @@ export default function AgentInspector() {
   const selectedAgent = getAgentById(selectedAgentId);
 
   return (
-    <div className="text-sm text-gray-900 flex flex-col h-full">
-      <div className="flex items-center gap-2 mb-3 px-1 border-b border-gray-100 pb-2 shrink-0">
-        <div className="w-2 h-2 rounded-full bg-sky-400" />
-        <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Personnel</h2>
-        <span className="text-[10px] text-gray-400 ml-auto">{agents.length} agents</span>
+    <div className="text-sm text-navy flex flex-col h-full">
+      <div className="flex items-center gap-2 mb-3 px-1 border-b border-navy/5 pb-2 shrink-0">
+        <div className="w-2 h-2 rounded-full bg-ocean-500" />
+        <h2 className="text-xs font-semibold text-navy/70 uppercase tracking-wider">Personnel</h2>
+        <span className="text-[10px] text-navy/40 ml-auto">{agents.length} agents</span>
       </div>
 
       <div className="grid grid-cols-1 gap-2 max-h-[440px] overflow-y-auto pr-1 fade-out-bottom shrink-0">
@@ -187,15 +187,15 @@ export default function AgentInspector() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="mt-3 p-3.5 bg-white border border-gray-200 rounded-xl card-shadow relative overflow-hidden shrink-0"
+            className="mt-3 p-3.5 bg-white border border-navy/10 rounded-xl card-shadow relative overflow-hidden shrink-0"
           >
-            <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
-              <h4 className="text-gray-900 font-semibold text-xs">
+            <div className="flex items-center justify-between mb-3 border-b border-navy/5 pb-2">
+              <h4 className="text-navy font-semibold text-xs">
                 {selectedAgent.emoji} {selectedAgent.name}
               </h4>
               <button
                 onClick={() => setSelectedAgent(null)}
-                className="text-gray-400 hover:text-rose-500 transition-colors cursor-pointer"
+                className="text-navy/40 hover:text-rose-500 transition-colors cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -203,45 +203,45 @@ export default function AgentInspector() {
 
             <div className="space-y-2 text-xs">
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                  <div className="text-gray-400 text-[9px] font-semibold uppercase">Role</div>
-                  <div className="text-gray-900 font-semibold capitalize">{selectedAgent.role}</div>
+                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                  <div className="text-navy/40 text-[9px] font-semibold uppercase">Role</div>
+                  <div className="text-navy font-semibold capitalize">{selectedAgent.role}</div>
                 </div>
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                  <div className="text-gray-400 text-[9px] font-semibold uppercase">Seniority</div>
-                  <div className="text-gray-900 font-semibold capitalize">{selectedAgent.performance.seniority}</div>
+                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                  <div className="text-navy/40 text-[9px] font-semibold uppercase">Seniority</div>
+                  <div className="text-navy font-semibold capitalize">{selectedAgent.performance.seniority}</div>
                 </div>
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                  <div className="text-gray-400 text-[9px] font-semibold uppercase">Status</div>
-                  <div className="font-semibold uppercase" style={{ color: STATUS_COLORS[selectedAgent.workStatus] || '#9CA3AF' }}>
+                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                  <div className="text-navy/40 text-[9px] font-semibold uppercase">Status</div>
+                  <div className="font-semibold uppercase" style={{ color: STATUS_COLORS[selectedAgent.workStatus] || '#86868B' }}>
                     {selectedAgent.cooldownRemainingSeconds && selectedAgent.cooldownRemainingSeconds > 0
                       ? `⏳ Cooldown (${Math.ceil(selectedAgent.cooldownRemainingSeconds)}s)`
                       : selectedAgent.workStatus}
                   </div>
                 </div>
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                  <div className="text-gray-400 text-[9px] font-semibold uppercase">Mood</div>
-                  <div className="font-semibold uppercase" style={{ color: MOOD_COLORS[selectedAgent.mood] || '#9CA3AF' }}>
+                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                  <div className="text-navy/40 text-[9px] font-semibold uppercase">Mood</div>
+                  <div className="font-semibold uppercase" style={{ color: MOOD_COLORS[selectedAgent.mood] || '#86868B' }}>
                     {selectedAgent.mood}
                   </div>
                 </div>
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                  <div className="text-gray-400 text-[9px] font-semibold uppercase">Efficiency</div>
-                  <div className="font-bold text-gray-900">{Math.round(selectedAgent.efficiency)}%</div>
+                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                  <div className="text-navy/40 text-[9px] font-semibold uppercase">Efficiency</div>
+                  <div className="font-bold text-navy">{Math.round(selectedAgent.efficiency)}%</div>
                 </div>
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                  <div className="text-gray-400 text-[9px] font-semibold uppercase">Success Rate</div>
-                  <div className="font-bold text-gray-900">{(selectedAgent.performance.successRate * 100).toFixed(0)}%</div>
+                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                  <div className="text-navy/40 text-[9px] font-semibold uppercase">Success Rate</div>
+                  <div className="font-bold text-navy">{(selectedAgent.performance.successRate * 100).toFixed(0)}%</div>
                 </div>
               </div>
 
               {selectedAgent.activity.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-gray-100">
-                  <span className="text-gray-400 block mb-1 text-[9px] font-semibold uppercase tracking-wider">Recent Activity</span>
+                <div className="mt-2 pt-2 border-t border-navy/5">
+                  <span className="text-navy/40 block mb-1 text-[9px] font-semibold uppercase tracking-wider">Recent Activity</span>
                   <div className="space-y-1.5 max-h-[100px] overflow-y-auto pr-0.5">
                     {selectedAgent.activity.slice(0, 5).map((act) => (
-                      <div key={act.id} className="text-xs text-gray-500 flex gap-1">
-                        <span className="text-gray-400 shrink-0">
+                      <div key={act.id} className="text-xs text-navy/55 flex gap-1">
+                        <span className="text-navy/40 shrink-0">
                           {new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                         <span className="truncate leading-none">{act.message}</span>
@@ -252,11 +252,11 @@ export default function AgentInspector() {
               )}
 
               {selectedAgent.memory.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-gray-100">
-                  <span className="text-gray-400 block mb-1 text-[9px] font-semibold uppercase tracking-wider">Memory Buffer</span>
+                <div className="mt-2 pt-2 border-t border-navy/5">
+                  <span className="text-navy/40 block mb-1 text-[9px] font-semibold uppercase tracking-wider">Memory Buffer</span>
                   <div className="space-y-1 max-h-[80px] overflow-y-auto pr-0.5">
                     {selectedAgent.memory.slice(-4).map((mem) => (
-                      <div key={mem.id} className="text-xs text-gray-500 truncate">
+                      <div key={mem.id} className="text-xs text-navy/55 truncate">
                         🧠 {mem.content}
                       </div>
                     ))}
