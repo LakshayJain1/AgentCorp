@@ -1,7 +1,8 @@
 # AgentCorp Revamp — From Simulation to Real Autonomous Software Engineer
 
-## 1. Goal
-Keep the company-architecture simulation (Phaser office, roles, FSM, HR, chatter) as a **read-only view**, and replace the mock work core with a **real tool + verify loop** so agents actually read, edit, test, and ship code.
+## 1. Goal (user-centric SaaS, not a personal project)
+AgentCorp is a **multi-user product**: each end user signs in (Clerk), connects **their own** repos and cloud, brings **their own** AI keys (BYOK), and gets an autonomous engineering team (the office sim) working on **their** codebase.
+Keep the company-architecture simulation (Phaser office, roles, FSM, HR, chatter) as a **read-only view per user/workspace**, and replace the mock work core with a **real tool + verify loop** scoped to that user's connected repo.
 
 ## 2. Where we are (evidence)
 - `src/runtime/ToolRegistry.ts`: 1 tool (`ask_agent` → `fetch('/api/ai')`). No fs/search/exec tools.
@@ -13,35 +14,48 @@ Keep the company-architecture simulation (Phaser office, roles, FSM, HR, chatter
 ## 3. Target architecture
 
 ```
-Phaser office (view only) ──reads──▶ Zustand snapshots (10fps, unchanged)
-Headless LoopOrchestrator ──drives──▶ Planner → TaskQueue → Workers → Validator → HR
-Workers ──call──▶ ToolRegistry ──routes──▶ ToolExecutor adapter
-                                            ├─ DesktopExecutor (Electron, full Node): fs read/write/patch, rg search, child_process (tsc/eslint/vitest/git/docker)
-                                            └─ VercelExecutor (web, safe): GitHub-API file ops OR patch-proposal mode (no direct fs)
-Validator ──runs──▶ real checks: tsc --noEmit, eslint, vitest → fills ValidationResult → pass/fail (AI review advisory only)
-Memory ──moves──▶ persistent store (SQLite/Postgres + pgvector) with real embeddings; localStorage stays as cache
+Per-user workspace: Clerk identity → Connectors (GitHub repo + Vercel project + BYOK keys)
+Phaser office (view only, per workspace) ──reads──▶ Zustand snapshots (10fps, unchanged)
+Headless LoopOrchestrator (per workspace) ──drives──▶ Planner → TaskQueue → Workers → Validator → HR
+Workers ──call──▶ ToolRegistry ──routes──▶ ToolExecutor adapter (scoped to the USER's connected repo)
+                                            ├─ DesktopExecutor (Electron, full Node): user's local clone — fs read/write/patch, rg, child_process (tsc/eslint/vitest/git/docker)
+                                            └─ VercelExecutor (web, safe): user's GitHub repo via GitHub App API (read/blob, create branch, commit, open PR) + per-user job runner for checks; never touches our own repo fs
+Validator ──runs──▶ real checks against the USER's repo: tsc --noEmit, eslint, vitest → fills ValidationResult → pass/fail (AI review advisory only)
+Connectors ──per user──▶ GitHub App (repo-scoped), Vercel integration (their project), key vault (per-user encrypted BYOK)
+Memory ──per user/workspace──▶ persistent store (Postgres + pgvector, row-scoped by userId/workspaceId) with real embeddings; localStorage stays as cache
 ```
 
-### Why the adapter (Vercel vs Desktop)
-- **Vercel serverless: direct fs tools CANNOT work.** Functions have a read-only filesystem except ephemeral `/tmp` (512 MB, wiped after invocation), 10–60 s timeouts, no `child_process`/shell/docker, no persistence across invocations. A `write_file`/`run_command` tool hitting the deployed site would fail or vanish on next request.
-- **Electron desktop (Mac/Win/Linux): full tools CAN work.** Full Node.js runtime: `fs`, `child_process.spawn`, git worktrees, local model sidecars, Docker. This is where real autonomous engineering runs.
-- **Design rule:** `ToolRegistry` exposes capability names (`read_file`, `patch_file`, `run_tests`, …). Each capability resolves through a `ToolExecutor` interface with two backends. Web builds ship `VercelExecutor` (safe/degraded); desktop builds ship `DesktopExecutor` (full). Same agent code, different capabilities. UI shows per-environment capability matrix so users see why "Run tests" is disabled on web.
+### Why the adapter (Vercel vs Desktop) — in user-centric terms
+- **Web app (our Vercel deployment) never edits its own filesystem.** When user U asks "fix auth bug in my repo R", file/exec tools act on **U's connected GitHub repo R** via the GitHub API (OAuth App, repo-scoped token), and checks run in a **per-user job runner** (their linked repo's CI or our job worker cloning R to ephemeral `/tmp`), not on our deployment's disk. Vercel's read-only fs / no-shell limits therefore don't block web users — they just force the GitHub-API path.
+- **Desktop app (user's Mac/Win/Linux): full local tools.** Operates on the user's local clone of R with full Node (`fs`, `child_process`, git worktrees, Docker). Fastest path for large repos.
+- **Design rule:** `ToolRegistry` exposes capability names (`read_file`, `patch_file`, `run_tests`, …). Each resolves through a `ToolExecutor` scoped to `(userId, workspaceId, repo)`. Same agent code either way; UI shows per-connector capability matrix ("GitHub connected ✓ / Vercel project linked ✓ / keys present ✓") so users see what's enabled.
+
+### Multi-tenant rules (new)
+- Every tool call carries `(userId, workspaceId)`; allowlist = user's connected repo(s) only; cross-user access impossible by construction.
+- Secrets are per-user (encrypted vault / Clerk metadata), never shared, never logged; audit log is per workspace.
+- Quotas per user (AI calls, exec minutes, PRs/day) to prevent one workspace starving others.
 
 ## 4. Phased plan (L4)
-- **P0 — Seams (no behavior change):** `ToolExecutor` interface + `VercelExecutor` (returns `disabled: vercel-readonly` errors) + registry capability advertisement + capability matrix in UI. `tsc` + `build` green.
-- **P1 — Desktop full executor:** Electron IPC (`desktop/main.js` + `preload.js`) exposing `fs/read, fs/write, fs/patch, exec/run` with allowlist (`<workspace>/**`, deny `..`, `.env*`, `node_modules`), timeouts, audit log to `ExecutionLogStream`. Wire `ToolRegistry` → desktop channel when `window.agentcorpDesktop` present.
-- **P2 — Real validator:** run `tsc --noEmit`, `eslint`, `vitest run` inside task worktree; fill `ValidationResult` fields; pass = exits 0 + tests green. Keep AI review as non-blocking note.
-- **P3 — Worktrees + sandbox:** per-task `git worktree` (desktop) or GitHub-branch proposal (web); diff artifact as deliverable; rollback path recorded.
-- **P4 — Planner/dispatch/memory:** subtask schema gains `acceptanceCriteria` + `verifyCommand`; PM assigns by skill/load not random; persistent memory + real embeddings.
-- **P5 — Model router + hardening:** strong model for plan/review, cheap for workers; prompt cache; secret redaction; audit.
+- **P0 — Seams (done):** `ToolExecutor` interface + `VercelExecutor` + capability matrix helper. `tsc` + `build` green.
+- **P1 — Per-user connectors:** Clerk-gated `ConnectorsTab` → GitHub App OAuth (repo-scoped) + Vercel project link + BYOK key vault (per-user encrypted). Tool calls scoped to `(userId, workspaceId, repo)`.
+- **P2 — executors:** Desktop full executor (Electron IPC, allowlist `<user-workspace>/**`, audit); web GitHub-API executor (read/blob, branch, commit, PR) + per-user job runner for checks.
+- **P3 — Real validator:** `tsc --noEmit`, `eslint`, `vitest` against the user's repo/worktree; fill `ValidationResult`; pass = green checks.
+- **P4 — Isolation + dispatch + memory:** per-task branch/worktree per user; subtask `acceptanceCriteria` + `verifyCommand`; skill-based assignment; Postgres+pgvector memory row-scoped by user.
+- **P5 — Router + hardening:** model router, prompt cache, secret redaction, per-user quotas + audit.
 
-## 5. Credentials / access needed from you
-1. **AI keys (required for anything real; else all mock):** `OPENROUTER_API_KEY` and/or `GEMINI_API_KEY` → set in `.env.local` (local) + Vercel env dashboard (deployed). Without these, P1–P5 still run but on template responses.
-2. **GitHub token (needed at P3):** repo-scoped PAT with `contents:write, pull-requests:write` for branch/PR proposals from web executor. Not needed for P0–P2 local.
-3. **Database (needed at P4):** Postgres URL (e.g. Neon/Supabase) + extension `pgvector`, or confirm SQLite-local acceptable for desktop-only memory.
-4. **Vercel project access (needed to verify web behavior):** ability to set env vars + view function logs. Desktop builds need no credentials.
-5. **Nothing else for P0:** no new tools, keys, or installs. Starting there now.
+## 5. Credentials / access needed (two tiers: platform vs end user)
+**A. From you as platform owner (to build/ship the product):**
+1. **AI keys for dev (until BYOK vault lands):** `OPENROUTER_API_KEY` and/or `GEMINI_API_KEY` in `.env.local` + Vercel env dashboard. Without these, dev runs on mock templates.
+2. **GitHub App credentials (needed at P1):** App ID + private key + OAuth client ID/secret so *end users* can connect their own repos (we never ask for your PAT — users authorize their own repos).
+3. **Database (needed at P4):** Postgres URL (Neon/Supabase) + `pgvector` for per-user memory; confirm provider or accept SQLite-local for desktop-only dev.
+4. **Vercel project access:** env vars + function logs for the web deployment.
+5. **Nothing blocking P0–P1 scaffolding:** proceeding without new secrets.
+
+**B. From each end user at runtime (self-serve, not from you):**
+1. Sign in (Clerk) → connect GitHub repo(s) via OAuth (repo-scoped) → link Vercel project (optional, for preview deploys of *their* app) → paste their own AI key (BYOK, stored encrypted per user).
+2. Until they connect, agents run in degraded/demo mode on their workspace with clear "connect GitHub to enable writes" messaging.
 
 ## 6. Success criteria
-- P0: `ToolExecutor` seam merged, capability matrix visible, `tsc` + `build` green, web shows `disabled: vercel-readonly`, desktop shows `ready`.
-- Full: agent fixes a real seeded bug (failing test → green) end-to-end on desktop with diff + test log as evidence.
+- P0: `ToolExecutor` seam merged, `tsc` + `build` green. ✅ (done, `37a4ef6`)
+- P1: user can connect a repo + key vault entry; tool calls scoped to `(userId, workspaceId, repo)` with cross-user denial test.
+- Full: agent fixes a real seeded bug in a *user-connected test repo* (failing test → green PR + test log) on both web (GitHub-API path) and desktop (local path).
