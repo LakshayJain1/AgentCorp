@@ -1,6 +1,6 @@
 import { ToolDefinition, ToolResult } from '@/agents/AgentTypes';
 import { WorkspaceScope } from '@/connectors/ConnectorTypes';
-import { ToolCapability, getToolExecutor } from '@/execution/ToolExecutor';
+import { ToolCapability } from '@/execution/ToolExecutor';
 
 const FILE_EXEC_CAPABILITIES: ToolCapability[] = [
   'read_file',
@@ -65,6 +65,52 @@ class ToolRegistry {
     return Array.from(this.tools.values()).map((t) => t.definition);
   }
 
+  // P2-dev: repo-backed capabilities via server API routes (token stays server-side).
+  private async executeRepoCapability(
+    capability: ToolCapability,
+    params: Record<string, string>,
+    scope: WorkspaceScope,
+  ): Promise<ToolResult> {
+    const start = performance.now();
+    const done = (r: Omit<ToolResult, 'duration'>): ToolResult => ({ ...r, duration: performance.now() - start });
+    try {
+      if (capability === 'read_file') {
+        if (!params.path) return done({ success: false, output: '', error: 'read_file needs path' });
+        const url = `/api/github/file?repo=${encodeURIComponent(scope.repo)}&path=${encodeURIComponent(params.path)}${params.ref ? `&ref=${encodeURIComponent(params.ref)}` : ''}`;
+        const res = await fetch(url);
+        const data = (await res.json().catch(() => null)) as { success?: boolean; content?: string; error?: string } | null;
+        if (!res.ok || !data?.success) return done({ success: false, output: '', error: data?.error ?? `read failed (${res.status})` });
+        return done({ success: true, output: data.content ?? '' });
+      }
+      if (capability === 'write_file' || capability === 'patch_file') {
+        if (!params.path || params.content === undefined) {
+          return done({ success: false, output: '', error: `${capability} needs path + content` });
+        }
+        const res = await fetch('/api/github/propose', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            repo: scope.repo,
+            path: params.path,
+            content: params.content,
+            message: params.message || `AgentCorp: ${capability} ${params.path}`,
+            base: params.base || 'main',
+          }),
+        });
+        const data = (await res.json().catch(() => null)) as { success?: boolean; branch?: string; prUrl?: string | null; error?: string } | null;
+        if (!res.ok || !data?.success) return done({ success: false, output: '', error: data?.error ?? `propose failed (${res.status})` });
+        return done({ success: true, output: `branch=${data.branch} pr=${data.prUrl ?? 'pending'}` });
+      }
+      return done({
+        success: false,
+        output: '',
+        error: `disabled: '${capability}' needs a job runner (P3) — reads/writes go via GitHub API; exec/tests run on desktop or CI.`,
+      });
+    } catch (e) {
+      return done({ success: false, output: '', error: String(e) });
+    }
+  }
+
   async executeTool(
     name: string,
     params: Record<string, string>,
@@ -72,8 +118,9 @@ class ToolRegistry {
     scope?: WorkspaceScope,
   ): Promise<ToolResult> {
     console.log('[AgentCorp] executeTool called:', name, Object.keys(params));
-    // File/exec capabilities route through the scoped executor, never direct fs.
-    // Without a connected repo scope they are denied by construction (per-user isolation).
+    // File/exec capabilities route through server APIs scoped to the USER's repo —
+    // never direct fs, token never leaves the server. Without a connected repo
+    // scope they are denied by construction (per-user isolation).
     if ((FILE_EXEC_CAPABILITIES as string[]).includes(name)) {
       const capability = name as ToolCapability;
       if (!scope || !scope.repo) {
@@ -84,9 +131,7 @@ class ToolRegistry {
           duration: 0,
         };
       }
-      const executor = getToolExecutor();
-      // Never log secret values: params pass through, executor redacts in errors.
-      return executor.execute(capability, params);
+      return this.executeRepoCapability(capability, params, scope);
     }
     const tool = this.tools.get(name);
     if (!tool) {
