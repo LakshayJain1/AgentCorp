@@ -2,7 +2,7 @@
 
 import { useGameStore } from '@/store/gameStore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   GitBranch, Bell, Key, ChevronDown, Check, AlertTriangle,
   Zap, Database, MessageSquare, Cloud, Code2, Bot, Globe,
@@ -154,6 +154,7 @@ const CONNECTORS: ConnectorDef[] = [
 
 export default function ConnectorsTab() {
   const { updateConnectors } = useGameStore();
+  const [platformStatus, setPlatformStatus] = useState<{ githubAppConfigured: boolean; aiConfigured: boolean; needed: string[] } | null>(null);
   const [activeAccordion, setActiveAccordion] = useState<ConnectorId | null>(null);
   const [savedStates, setSavedStates] = useState<Record<string, boolean>>({});
   const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>({});
@@ -161,6 +162,13 @@ export default function ConnectorsTab() {
   const toggleAccordion = (id: ConnectorId) => {
     setActiveAccordion(activeAccordion === id ? null : id);
   };
+
+  useEffect(() => {
+    fetch('/api/connectors/status')
+      .then((r) => r.json())
+      .then(setPlatformStatus)
+      .catch(() => setPlatformStatus(null));
+  }, []);
 
   const getFieldValue = (connectorId: string, fieldKey: string) =>
     fieldValues[connectorId]?.[fieldKey] ?? '';
@@ -235,6 +243,22 @@ export default function ConnectorsTab() {
             <span className="text-[9px] font-semibold text-emerald-600 uppercase">Live</span>
           </div>
         </div>
+
+        {/* Platform credential gate: per-user OAuth/BYOK needs these platform secrets first */}
+        {platformStatus && (platformStatus.needed.length > 0) && (
+          <div className="mt-3 p-2.5 rounded-lg bg-sky-50 border border-sky-200 flex items-start gap-2">
+            <AlertTriangle size={12} className="text-sky-500 shrink-0 mt-0.5" />
+            <div className="text-[10px] text-sky-700 leading-relaxed">
+              <strong>Setup needed (platform owner):</strong>
+              <ul className="list-disc ml-3 mt-1 space-y-0.5">
+                {platformStatus.needed.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+              <p className="mt-1">GitHub OAuth for your own repos unlocks once these are configured.</p>
+            </div>
+          </div>
+        )}
 
         {/* Beta disclaimer */}
         <div className="mt-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">

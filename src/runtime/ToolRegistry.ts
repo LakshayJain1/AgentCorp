@@ -1,4 +1,15 @@
 import { ToolDefinition, ToolResult } from '@/agents/AgentTypes';
+import { WorkspaceScope } from '@/connectors/ConnectorTypes';
+import { ToolCapability, getToolExecutor } from '@/execution/ToolExecutor';
+
+const FILE_EXEC_CAPABILITIES: ToolCapability[] = [
+  'read_file',
+  'write_file',
+  'patch_file',
+  'search_code',
+  'run_command',
+  'run_tests',
+];
 
 interface ToolHandler {
   definition: ToolDefinition;
@@ -58,8 +69,25 @@ class ToolRegistry {
     name: string,
     params: Record<string, string>,
     onLog?: (log: { action: string; tool: string; input: string; output: string; status: 'running' | 'success' | 'error' }) => void,
+    scope?: WorkspaceScope,
   ): Promise<ToolResult> {
     console.log('[AgentCorp] executeTool called:', name, Object.keys(params));
+    // File/exec capabilities route through the scoped executor, never direct fs.
+    // Without a connected repo scope they are denied by construction (per-user isolation).
+    if ((FILE_EXEC_CAPABILITIES as string[]).includes(name)) {
+      const capability = name as ToolCapability;
+      if (!scope || !scope.repo) {
+        return {
+          success: false,
+          output: '',
+          error: `denied: no-connected-repo — '${capability}' requires the user to connect their own repo first (scope userId/workspaceId/repo).`,
+          duration: 0,
+        };
+      }
+      const executor = getToolExecutor();
+      // Never log secret values: params pass through, executor redacts in errors.
+      return executor.execute(capability, params);
+    }
     const tool = this.tools.get(name);
     if (!tool) {
       console.error('[AgentCorp] unknown tool:', name);
