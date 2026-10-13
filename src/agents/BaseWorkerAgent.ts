@@ -30,6 +30,10 @@ export abstract class BaseWorkerAgent {
     return this.currentSubtask !== null;
   }
 
+  getCurrentSubtask(): SubTask | null {
+    return this.currentSubtask;
+  }
+
   assignSubtask(subtask: SubTask): void {
     this.currentSubtask = subtask;
   }

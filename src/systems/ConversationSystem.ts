@@ -1,97 +1,51 @@
 import { useGameStore, createGameEvent } from '@/store/gameStore';
-import { Agent } from '@/agents/AgentTypes';
-import { aiService } from '@/ai/AIService';
 
-const CONVERSATION_PAIRS = [
-  { from: 'ceo', to: 'pm' },
-  { from: 'pm', to: 'engineer' },
-  { from: 'pm', to: 'researcher' },
-  { from: 'engineer', to: 'qa' },
-  { from: 'qa', to: 'engineer' },
-  { from: 'researcher', to: 'pm' },
-  { from: 'ceo', to: 'engineer' },
-  { from: 'pm', to: 'qa' },
-];
-
-const MOCK_MESSAGES: Record<string, Record<string, string[]>> = {
-  ceo: {
-    pm: ["What's the sprint status?", "We need to ship this quarter.", 'Prioritize the critical tasks.', "Good work on the roadmap."],
-    engineer: ['How is the new feature coming along?', 'Any technical debt we should address?'],
-  },
-  pm: {
-    engineer: ['Can you estimate this task?', "The client needs an update.", "Let's scope this properly.", 'Any blockers I can help with?'],
-    researcher: ['Research those competitors.', 'Found any new patterns?', 'Share your findings in the doc.', 'We need data on this.'],
-    qa: ['What does the test coverage look like?', 'Can you run a regression suite?'],
-  },
-  engineer: {
-    qa: ['PR is ready for review.', 'Fixed that edge case.', 'Can you test this branch?', 'Deployment should be clean now.'],
-  },
-  qa: {
-    engineer: ['Found a regression here.', 'This test is flaky.', 'Edge case not handled.', 'Looks good to me!'],
-  },
-  researcher: {
-    pm: ['Found interesting patterns.', 'The data supports our approach.', 'New framework discovered.', "Here's the analysis report."],
-  },
-};
-
+// Random ambient conversations are disabled by design: agents only speak
+// when grounded in a real task lifecycle event (assignment, subtask handoff,
+// validation retry, completion). See announceTaskHandoff below. This function
+// is kept as a no-op so existing tick-loop call sites don't break.
 export async function maybeStartConversation(): Promise<void> {
+  return;
+}
+
+// Track agents currently in conversations to prevent overlaps
+const agentsInConversation = new Set<string>();
+
+export function isAgentInConversation(agentId: string): boolean {
+  return agentsInConversation.has(agentId);
+}
+
+/**
+ * Task-grounded handoff message between two agents about a specific task.
+ * Only call this from real lifecycle points (assignment, subtask dispatch,
+ * validation retry, completion) — never on a timer.
+ */
+export function announceTaskHandoff(
+  fromAgentId: string,
+  toAgentId: string,
+  taskTitle: string,
+  kind: 'assigned' | 'subtask_complete' | 'validation_retry' | 'deliverable_ready',
+): void {
+  if (!fromAgentId || !toAgentId || fromAgentId === toAgentId) return;
   const store = useGameStore.getState();
-  if (store.simulation.paused) return;
-  if (Math.random() > 0.02 * store.simulation.speed) return;
-
-  const pair = CONVERSATION_PAIRS[Math.floor(Math.random() * CONVERSATION_PAIRS.length)];
-  const fromAgent = store.agents.find((a) => a.role === pair.from);
-  const toAgent = store.agents.find((a) => a.role === pair.to);
-
+  const fromAgent = store.agents.find((a) => a.id === fromAgentId);
+  const toAgent = store.agents.find((a) => a.id === toAgentId);
   if (!fromAgent || !toAgent) return;
 
-  // Try AI first, fall back to mock
-  const aiResponse = await aiService.askAgent(
-    fromAgent.role, fromAgent.name, fromAgent.traits,
-    `Start a brief conversation with ${toAgent.name} (${toAgent.role.toUpperCase()}). Keep it professional and work-related.`,
-    { conversationPartner: toAgent.name, partnerRole: toAgent.role },
-  );
-
-  let message: string;
-  if (aiResponse.content && !aiResponse.error) {
-    message = aiResponse.content;
-  } else {
-    // Fallback to mock
-    const fromMsgs = MOCK_MESSAGES[pair.from]?.[pair.to];
-    message = fromMsgs?.[Math.floor(Math.random() * fromMsgs.length)] || `Hey ${toAgent.name}, how's it going?`;
-  }
-
-  store.addEvent(
-    createGameEvent(
-      'conversation',
-      `${fromAgent.emoji} ${fromAgent.name} → ${toAgent.name}: "${message}"`,
-      fromAgent.id,
-    ),
-  );
+  const short = taskTitle.length > 60 ? `${taskTitle.slice(0, 60)}…` : taskTitle;
+  const message =
+    kind === 'assigned'
+      ? `You've been assigned: "${short}". Starting work now.`
+      : kind === 'subtask_complete'
+        ? `Subtask for "${short}" done — handing off for validation.`
+        : kind === 'validation_retry'
+          ? `Validation flagged "${short}" — reworking now.`
+          : `All work on "${short}" is done — deliverable ready for review.`;
 
   store.sendMessage(fromAgent.id, toAgent.id, message);
-
-  store.updateAgent(fromAgent.id, {
-    state: 'communicating',
-  });
-
-  // The toAgent responds after a short delay
-  setTimeout(async () => {
-    const currentStore = useGameStore.getState();
-    const updatedToAgent = currentStore.agents.find((a) => a.id === toAgent.id);
-    if (updatedToAgent) {
-      const replyResponse = await aiService.askAgent(
-        toAgent.role, toAgent.name, toAgent.traits,
-        `Reply briefly to this message from ${fromAgent.name} (${fromAgent.role.toUpperCase()}): "${message}". Keep your reply professional and work-related, 1 sentence.`,
-        { conversationPartner: fromAgent.name, partnerRole: fromAgent.role },
-      );
-      const reply = (replyResponse.content && !replyResponse.error)
-        ? replyResponse.content
-        : 'Got it, thanks!';
-      currentStore.sendMessage(toAgent.id, fromAgent.id, reply);
-      currentStore.updateAgent(toAgent.id, { state: 'communicating' });
-    }
-  }, 2000);
+  store.addEvent(
+    createGameEvent('conversation', `${fromAgent.emoji} ${fromAgent.name} → ${toAgent.name}: "${message}"`, fromAgent.id),
+  );
 }
 
 export function updateAgentMoods(): void {

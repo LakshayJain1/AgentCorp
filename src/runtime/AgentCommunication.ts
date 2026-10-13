@@ -1,8 +1,26 @@
 import { useGameStore } from '@/store/gameStore';
-import { Agent } from '@/agents/AgentTypes';
+import { Agent, AgentActivity } from '@/agents/AgentTypes';
 import { aiService } from '@/ai/AIService';
 import { agentMemory } from './AgentMemory';
-import { ActivityBuilder } from './AgentRuntime';
+
+class ActivityBuilder {
+  private activityFn: (agentId: string, activity: AgentActivity) => void;
+
+  constructor(activityFn: (agentId: string, activity: AgentActivity) => void) {
+    this.activityFn = activityFn;
+  }
+
+  push(agentId: string, type: AgentActivity['type'], message: string, details?: string): void {
+    this.activityFn(agentId, {
+      id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      agentId,
+      type,
+      message,
+      details,
+      timestamp: Date.now(),
+    });
+  }
+}
 
 export class AgentMessaging {
   async sendAndWaitReply(

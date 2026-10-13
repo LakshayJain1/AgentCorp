@@ -48,3 +48,5 @@ desktop/.env*
 
 # build artifacts / large binaries
 public/downloads/
+# clerk configuration (can include secrets)
+/.clerk/

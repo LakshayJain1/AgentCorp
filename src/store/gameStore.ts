@@ -5,8 +5,7 @@ import { persist } from 'zustand/middleware';
 import { Agent, Task, SubTask, ValidationResult, GameEvent, SimulationState, AgentRole, OfficeLocation, DeliverableType, AgentActivity, AgentPerformance, AgentWorkStatus, ConversationMessage, TaskExecutionLog, DeliverableProject } from '@/agents/AgentTypes';
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
 import { configLoader } from '@/config/ConfigLoader';
-import { agentRuntime } from '@/runtime/AgentRuntime';
-import { toOfficeLocations } from '@/game/officeLayout';
+import { toOfficeLocations } from '@/game/pixi/PixiOfficeLayout';
 
 const DEFAULT_TASK_TITLES = [
   'Analyze customer feedback', 'Fix API issue', 'Review compliance report', 'Prepare deployment',
@@ -173,6 +172,7 @@ function createAgent(role: AgentRole): Agent {
     memory: [],
     online: true,
     lastActiveAt: Date.now(),
+    lastGoalTime: 0,
   };
 }
 
@@ -335,11 +335,21 @@ interface GameStore {
 
   // Center Panel
   addUserMessage: (message: string) => void;
+  clearUserMessages: () => void;
   setCenterView: (view: CenterView) => void;
+  toggleAgentRoster: () => void;
+  showAgentRoster: boolean;
+  
+  // Audio
+  isMuted: boolean;
+  toggleMute: () => void;
+  
+  // Library
+  showLibrary: boolean;
+  toggleLibrary: () => void;
 
   // Deliverable Projects
   addDeliverableProject: (project: DeliverableProject) => void;
-  generateDeliverableForTask: (taskId: string) => Promise<void>;
 
   // User Personalization & Connectors Tab
   isInitialized: boolean;
@@ -375,6 +385,8 @@ export const useGameStore = create<GameStore>()(
     tick: 0,
     efficiency: 85,
     morale: 75,
+    cpuUsage: 23,
+    memoryUsage: 2.4,
     totalTasksCompleted: 0,
     totalTasksFailed: 0,
   },
@@ -394,122 +406,16 @@ export const useGameStore = create<GameStore>()(
   deliverableProjects: [],
   userMessages: [],
   centerView: 'chat',
+  showAgentRoster: true,
+  isMuted: false,
+  showLibrary: false,
 
   initAgents: () => {
     const roles: AgentRole[] = ['ceo', 'pm', 'researcher', 'engineer', 'qa', 'hr'];
     const agents = roles.map(createAgent);
     const initialEvent = createGameEvent('system', 'AgentCorp systems initialized. All agents ready.');
 
-    // Seed some mock projects so the folder isn't empty
-    const mockProjects: DeliverableProject[] = [
-      {
-        id: `project_seed_1`,
-        taskId: 'seed_1',
-        title: 'Customer Dashboard',
-        type: 'code',
-        lang: 'html',
-        content: `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><title>Customer Dashboard</title>
-<style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:system-ui,sans-serif; background:#0f0f1e; color:#ddd; }
-.layout { display:grid; grid-template-columns:240px 1fr; min-height:100vh; }
-.sidebar { background:#1a1a2e; padding:1.5rem; border-right:1px solid #2a2a4e; }
-.sidebar h2 { color:#6c63ff; font-size:1rem; margin-bottom:1.5rem; }
-.sidebar a { display:block; color:#888; padding:0.5rem; text-decoration:none; }
-.sidebar a:hover { color:#fff; background:#2a2a4e; border-radius:4px; }
-.main { padding:2rem; }
-.stats { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:2rem; }
-.card { background:#1a1a2e; border:1px solid #2a2a4e; border-radius:8px; padding:1.2rem; }
-.card h3 { color:#888; font-size:0.8rem; text-transform:uppercase; }
-.card .value { font-size:2rem; font-weight:bold; color:#6c63ff; margin-top:0.25rem; }
-</style></head>
-<body>
-<div class="layout">
-<nav class="sidebar"><h2>AgentCorp</h2><a href="#">Overview</a><a href="#">Analytics</a><a href="#">Users</a><a href="#">Settings</a></nav>
-<div class="main"><h1>Customer Dashboard</h1>
-<div class="stats">
-<div class="card"><h3>Users</h3><div class="value">12,847</div></div>
-<div class="card"><h3>Revenue</h3><div class="value">$48,290</div></div>
-<div class="card"><h3>Active</h3><div class="value">3,421</div></div>
-</div></div></div></body></html>`,
-        createdAt: Date.now() - 86400000 * 3,
-        completedBy: null,
-      },
-      {
-        id: `project_seed_2`,
-        taskId: 'seed_2',
-        title: 'API Rate Limiter Spec',
-        type: 'spec',
-        lang: 'markdown',
-        content: `# API Rate Limiter Specification
-
-## Overview
-Rate limiting middleware for public API endpoints to prevent abuse.
-
-## Requirements
-- 100 requests/minute per API key
-- 1000 requests/minute per IP
-- Configurable limits per endpoint
-- Redis-backed sliding window
-
-## Implementation
-\`\`\`typescript
-interface RateLimitConfig {
-  windowMs: number;
-  maxRequests: number;
-  keyGenerator: (req: Request) => string;
-}
-\`\`\`
-
-## Endpoints
-| Endpoint | Limit | Window |
-|----------|-------|--------|
-| GET /api/v1/* | 100 | 1 min |
-| POST /api/v1/* | 50 | 1 min |
-| DELETE /api/v1/* | 20 | 1 min |`,
-        createdAt: Date.now() - 86400000 * 2,
-        completedBy: null,
-      },
-      {
-        id: `project_seed_3`,
-        taskId: 'seed_3',
-        title: 'Security Audit Report',
-        type: 'report',
-        lang: 'markdown',
-        content: `# Security Audit Report
-
-**Date:** ${new Date().toISOString().split('T')[0]}
-**Status:** Complete
-
-## Summary
-Comprehensive security audit of AgentCorp infrastructure.
-
-## Findings
-
-### Critical
-- None found
-
-### High
-- JWT secret key rotation not enforced
-- No rate limiting on auth endpoints
-
-### Medium
-- Missing CSRF protection on mutation endpoints
-- Debug mode enabled in production config
-
-## Recommendations
-1. Implement automated key rotation
-2. Add rate limiting middleware
-3. Enable CSRF tokens
-4. Disable debug mode in production`,
-        createdAt: Date.now() - 86400000,
-        completedBy: null,
-      },
-    ];
-
-    set({ agents, events: [initialEvent], deliverableProjects: mockProjects, tasks: [] });
+    set({ agents, events: [initialEvent], deliverableProjects: [], tasks: [] });
   },
 
   addTask: () => {
@@ -530,10 +436,8 @@ Comprehensive security audit of AgentCorp infrastructure.
       tasks: [...state.tasks, task],
       events: [event, ...state.events.slice(0, 49)],
     }));
-
-    // Agents will process this task through the deliverable pipeline
-    console.log('[AgentCorp] calling generateDeliverableForTask for:', task.id);
-    get().generateDeliverableForTask(task.id);
+    // Task will be picked up by CentralOrchestrator.tick() via TaskSystem
+    console.log('[AgentCorp] task added to queue, CentralOrchestrator will process it');
   },
 
   updateAgent: (id, updates) => {
@@ -689,8 +593,7 @@ Comprehensive security audit of AgentCorp infrastructure.
           t.id === req.taskId ? { ...t, status: 'in_progress' as const, aiContext: { ...t.aiContext, [credentialKey]: value } } : t,
         ),
       }));
-
-      get().generateDeliverableForTask(req.taskId);
+      // Task will be picked up by CentralOrchestrator.tick() via normal pipeline
     }
 
     const ev = createGameEvent('system', `Credentials provided for "${req.taskTitle}". Task resumed.`);
@@ -728,8 +631,7 @@ Comprehensive security audit of AgentCorp infrastructure.
         t.id === taskId ? { ...t, status: 'in_progress' as const } : t,
       ),
     }));
-
-    get().generateDeliverableForTask(taskId);
+    // Task will be picked up by CentralOrchestrator.tick() via normal pipeline
   },
 
   // === NEW RUNTIME API ===
@@ -884,22 +786,6 @@ Comprehensive security audit of AgentCorp infrastructure.
     }));
   },
 
-  generateDeliverableForTask: async (taskId) => {
-    console.log('[AgentCorp] generateDeliverableForTask called:', taskId);
-    const state = get();
-    const task = state.tasks.find((t) => t.id === taskId);
-    if (!task) {
-      console.warn('[AgentCorp] generateDeliverableForTask — task not found:', taskId);
-      return;
-    }
-    console.log('[AgentCorp] generateDeliverableForTask — task found:', { id: task.id, status: task.status, assignedTo: task.assignedTo });
-
-    // agentRuntime.processTask already creates the deliverable project and completes/fails the task
-    console.log('[AgentCorp] calling agentRuntime.processTask');
-    await agentRuntime.processTask(task);
-    console.log('[AgentCorp] agentRuntime.processTask returned');
-  },
-
   initializePersonalizedOffice: (companyName, companyProduct, developersCount, connectors) => {
     set({
       isInitialized: true,
@@ -977,8 +863,24 @@ Comprehensive security audit of AgentCorp infrastructure.
     }));
   },
 
+  clearUserMessages: () => {
+    set({ userMessages: [] });
+  },
+
   setCenterView: (view) => {
     set({ centerView: view });
+  },
+
+  toggleAgentRoster: () => {
+    set((state) => ({ showAgentRoster: !state.showAgentRoster }));
+  },
+
+  toggleMute: () => {
+    set((state) => ({ isMuted: !state.isMuted }));
+  },
+
+  toggleLibrary: () => {
+    set((state) => ({ showLibrary: !state.showLibrary }));
   },
 
   updateConnectors: (updates) => {

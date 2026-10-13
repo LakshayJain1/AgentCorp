@@ -84,6 +84,7 @@ class AIService {
   ): Promise<string> {
     const langHint = deliverableLang ? ` in ${deliverableLang}` : '';
 
+    await this.checkApiKey();
     if (!this.hasApiKey) {
       return await this.getMockDeliverable(taskTitle, deliverableType, deliverableLang);
     }
@@ -181,6 +182,7 @@ Include: goals, user stories, wireframe description, component tree, data flow. 
   }
 
   async generateTaskIdea(customPrompt?: string): Promise<string> {
+    await this.checkApiKey();
     if (!this.hasApiKey && !customPrompt) {
       const ideas = [
         // AgentCorp product tasks — limited scope, agents can do these

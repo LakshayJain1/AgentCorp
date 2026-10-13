@@ -13,6 +13,7 @@ import { useGameStore } from '@/store/gameStore';
 export default function WorkspacePage() {
   const router = useRouter();
   const isInitialized = useGameStore((s) => s.isInitialized);
+  const showAgentRoster = useGameStore((s) => s.showAgentRoster);
 
   useEffect(() => {
     if (!isInitialized) {
@@ -28,8 +29,8 @@ export default function WorkspacePage() {
     <div className="h-screen w-screen flex flex-col ws-bg overflow-hidden">
       <TopBar />
 
-      <div className="flex-1 flex overflow-hidden">
-        <LeftSidebar />
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {showAgentRoster && <LeftSidebar />}
         <CenterPanel />
         <RightPanel />
       </div>

@@ -176,6 +176,7 @@ export interface Agent {
   cooldownRemainingSeconds?: number;
   cooldownType?: 'onboarding' | 'burnout';
   cooldownTargetLocId?: string;
+  lastGoalTime?: number;
 }
 
 export type DeliverableType = 'code' | 'doc' | 'report' | 'spec' | 'config' | 'analysis' | 'design' | 'research';
@@ -295,6 +296,8 @@ export interface SimulationState {
   tick: number;
   efficiency: number;
   morale: number;
+  cpuUsage: number;
+  memoryUsage: number;
   totalTasksCompleted: number;
   totalTasksFailed: number;
 }

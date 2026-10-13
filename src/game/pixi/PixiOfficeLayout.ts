@@ -63,6 +63,18 @@ export const DESK_POSITIONS: Record<string, { x: number; y: number }[]> = {
 // Meeting area (open space in dev hub)
 export const MEETING_AREA = { x: 250, y: 260, width: 120, height: 60 };
 
+// Wall definitions for collision detection
+export const WALLS: Array<{ x1: number; y1: number; x2: number; y2: number }> = [
+  // Zone dividers
+  { x1: 0, y1: 155, x2: 170, y2: 155 },
+  { x1: 0, y1: 290, x2: 170, y2: 290 },
+  { x1: 170, y1: 0, x2: 170, y2: 480 },
+  { x1: 480, y1: 0, x2: 480, y2: 480 },
+  { x1: 480, y1: 135, x2: 720, y2: 135 },
+  { x1: 480, y1: 305, x2: 720, y2: 305 },
+  { x1: 175, y1: 340, x2: 475, y2: 340 },
+];
+
 // Convert zones + desks to OfficeLocation[] for gameStore compatibility
 export function toOfficeLocations(): OfficeLocation[] {
   const locations: OfficeLocation[] = [];
@@ -117,4 +129,37 @@ export function toOfficeLocations(): OfficeLocation[] {
   });
 
   return locations;
+}
+
+// Collision detection helpers
+export function doLinesIntersect(
+  x1: number, y1: number, x2: number, y2: number,
+  x3: number, y3: number, x4: number, y4: number
+): boolean {
+  const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  if (Math.abs(denom) < 0.001) return false;
+
+  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+  const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+
+export function isWallBetween(x1: number, y1: number, x2: number, y2: number): boolean {
+  for (const wall of WALLS) {
+    if (doLinesIntersect(x1, y1, x2, y2, wall.x1, wall.y1, wall.x2, wall.y2)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function findLocationByRole(role: OfficeLocation['role']): OfficeLocation | undefined {
+  const locations = toOfficeLocations();
+  return locations.find(l => l.role === role);
+}
+
+export function findLocationById(id: string): OfficeLocation | undefined {
+  const locations = toOfficeLocations();
+  return locations.find(l => l.id === id);
 }

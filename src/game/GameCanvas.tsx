@@ -1,63 +1,55 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import Phaser from 'phaser';
-import { GameScene } from './GameScene';
+import { useEffect, useRef, useState } from 'react';
+import { pixiGame } from './pixi/PixiGameConfig';
 
 export default function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const gameRef = useRef<Phaser.Game | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current || gameRef.current) return;
+    if (!containerRef.current) return;
 
-    const config: Phaser.Types.Core.GameConfig = {
-      type: Phaser.AUTO,
-      width: 720,
-      height: 480,
-      parent: containerRef.current,
-      backgroundColor: '#0a0a1e',
-      scene: [GameScene],
-      pixelArt: true,
-      antialias: false,
-      roundPixels: true,
-      autoFocus: false,
-      scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-      },
-      input: {
-        mouse: {
-          preventDefaultDown: true,
-          preventDefaultUp: true,
-        },
-      },
-      fps: {
-        target: 60,
-        forceSetTimeOut: false,
-      },
-    };
+    let mounted = true;
 
-    try {
-      gameRef.current = new Phaser.Game(config);
-      console.log('[GameCanvas] Phaser game created');
-    } catch (err) {
-      console.error('[GameCanvas] Phaser init failed:', err);
-    }
-
-    return () => {
-      if (gameRef.current) {
-        gameRef.current.destroy(true);
-        gameRef.current = null;
+    const init = async () => {
+      try {
+        await pixiGame.initialize(containerRef.current!);
+        console.log('[GameCanvas] PixiJS game created');
+      } catch (err) {
+        console.error('[GameCanvas] PixiJS init failed:', err);
+        if (mounted) setError(String(err));
       }
     };
+
+    init();
+
+    return () => {
+      mounted = false;
+      pixiGame.destroy();
+    };
   }, []);
+
+  if (error) {
+    return (
+      <div
+        ref={containerRef}
+        className="relative w-full h-full overflow-hidden rounded-xl border border-red-500/60 shadow-lg flex items-center justify-center bg-red-900/20 p-4"
+        style={{ minHeight: 480 }}
+      >
+        <div className="text-center text-red-400">
+          <p className="font-mono text-sm">Failed to initialize PixiJS</p>
+          <pre className="mt-2 text-xs overflow-auto max-h-64">{error}</pre>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       ref={containerRef}
       className="relative w-full h-full overflow-hidden rounded-xl border border-border/60 shadow-lg"
-      style={{ imageRendering: 'pixelated', minHeight: 480 }}
+      style={{ minHeight: 480 }}
     />
   );
 }

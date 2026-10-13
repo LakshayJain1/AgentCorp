@@ -1,5 +1,5 @@
 import { useGameStore } from '@/store/gameStore';
-import { Agent, SubTask, StreamEvent } from '@/agents/AgentTypes';
+import { Agent, SubTask, StreamEvent, Task } from '@/agents/AgentTypes';
 import { PlannerAgent } from './PlannerAgent';
 import { TaskQueue } from './TaskQueue';
 import { BaseWorkerAgent } from '@/agents/BaseWorkerAgent';
@@ -12,8 +12,10 @@ import { DeveloperAgent } from '@/agents/DeveloperAgent';
 import { QAAgent } from '@/agents/QAAgent';
 import { ResearchAgent } from '@/agents/ResearchAgent';
 import { classifyIntent } from '@/ai/IntentClassifier';
-import { agentRuntime } from '@/runtime/AgentRuntime';
 import { LoopOrchestrator } from './LoopOrchestrator';
+import { aiService } from '@/ai/AIService';
+import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
+import { announceTaskHandoff } from '@/systems/ConversationSystem';
 
 export class CentralOrchestrator {
   private planner: PlannerAgent;
@@ -89,9 +91,15 @@ export class CentralOrchestrator {
     console.log('[AgentCorp] classified intent:', intent.type, intent.requiredKeys);
 
     if (intent.type === 'needs_credentials') {
+      // Add the task first so it exists in the store before requesting credentials
+      console.log('[AgentCorp] adding task first:', request);
+      store.addTaskWithTitle(request);
+      const newTask = useGameStore.getState().tasks[useGameStore.getState().tasks.length - 1];
+      const taskId = newTask?.id;
+
       for (const key of intent.requiredKeys) {
         store.requestCredential(
-          `intent_${Date.now()}`,
+          taskId || `intent_${Date.now()}`,
           key.reason,
           key.key,
           key.label,
@@ -112,6 +120,13 @@ export class CentralOrchestrator {
         timestamp: Date.now(),
         streamId: `intent_${Date.now()}`,
       });
+      // Process internal tasks directly (bypass CEO/PM/Planner for simple requests)
+      const newTask = useGameStore.getState().tasks[useGameStore.getState().tasks.length - 1];
+      if (newTask) {
+        this.executeDirectTask(newTask).catch(err => {
+          console.error('[AgentCorp] direct task execution failed:', err);
+        });
+      }
     }
   }
 
@@ -126,24 +141,48 @@ export class CentralOrchestrator {
     // Run TaskSystem CEO/PM actions (pending → prioritized → assigned)
     await processTasks();
 
-    // After TaskSystem actions, pick up tasks that are now "assigned" and process them
-    const currentState = useGameStore.getState();
-    for (const task of currentState.tasks) {
-      if (task.status === 'assigned' && task.assignedTo && !task.deliverable) {
-        console.log('[AgentCorp] detected assigned task without deliverable — starting agentRuntime.processTask:', task.id, task.title);
-        // Don't await — let it run in background so tick loop continues
-        agentRuntime.processTask(task).catch(err => {
-          console.error('[AgentCorp] agentRuntime.processTask failed:', err);
-        });
+    await this.planner.processPendingTasks();
+
+    // Enqueue any store subtasks that are still pending (planner creates them
+    // in the store; the queue is the dispatch mechanism — without this step
+    // workers never receive work).
+    {
+      const s = useGameStore.getState();
+      for (const t of s.tasks) {
+        for (const sub of t.subtasks) {
+          if (sub.status === 'pending') {
+            this.taskQueue.enqueue(sub, sub.estimatedEffort ?? 0);
+          }
+        }
       }
     }
-
-    await this.planner.processPendingTasks();
 
     await this.taskQueue.dispatchReadyJobs(this.workers);
 
     for (const worker of this.workers) {
       await worker.tick();
+    }
+
+    // Reconcile finished workers: BaseWorkerAgent marks the subtask
+    // completed/failed in the store but never frees itself, so without this
+    // each worker wedges after exactly one subtask and validation never runs.
+    for (const worker of this.workers) {
+      const cur = worker.getCurrentSubtask();
+      if (!cur) continue;
+      const fresh = useGameStore.getState().tasks
+        .flatMap((t) => t.subtasks)
+        .find((st) => st.id === cur.id);
+      if (!fresh || (fresh.status !== 'completed' && fresh.status !== 'failed')) continue;
+      worker.cancelCurrentTask();
+      this.taskQueue.markComplete(fresh.id);
+      const st2 = useGameStore.getState();
+      const agent = st2.agents.find((a) => a.id === worker.id);
+      if (!agent) continue;
+      if (fresh.status === 'completed') {
+        await this.onSubtaskComplete(fresh, agent);
+      } else {
+        st2.updateAgent(agent.id, { currentSubTaskId: null });
+      }
     }
 
     await this.validator.processQueuedValidations();
@@ -194,11 +233,20 @@ export class CentralOrchestrator {
 
     const parentTask = store.tasks.find((t) => t.id === subtask.parentTaskId);
     if (parentTask) {
+      // Task-grounded handoff: worker → PM about this subtask (never random chatter)
+      const pm = store.agents.find((a) => a.role === 'pm');
+      if (pm && pm.id !== agent.id) {
+        announceTaskHandoff(agent.id, pm.id, parentTask.title, 'subtask_complete');
+      }
       const allDone = parentTask.subtasks.every((s) => s.status === 'completed' || s.status === 'failed');
       if (allDone) {
         const hasFailures = parentTask.subtasks.some((s) => s.status === 'failed');
         performanceTracker.recordTaskComplete(agent.id, Date.now() - subtask.createdAt);
         store.updateAgent(agent.id, {});
+        // Deliverable-ready handoff to the user-facing channel via PM
+        if (pm && pm.id !== agent.id) {
+          announceTaskHandoff(agent.id, pm.id, parentTask.title, 'deliverable_ready');
+        }
         this.emit({
           type: 'status',
           data: { taskId: parentTask.id, status: hasFailures ? 'partial' : 'completed' },
@@ -242,6 +290,11 @@ export class CentralOrchestrator {
             currentSubTaskId: subtask.id,
           });
           this.taskQueue.reEnqueue(subtask, validation.result.details);
+          const parent = storeNow.tasks.find((t) => t.id === subtask.parentTaskId);
+          const pm = storeNow.agents.find((a) => a.role === 'pm');
+          if (parent && pm && pm.id !== agent.id) {
+            announceTaskHandoff(agent.id, pm.id, parent.title, 'validation_retry');
+          }
           this.emit({
             type: 'log',
             data: { message: `Subtask "${subtask.description.slice(0, 40)}..." re-queued for retry #${validation.result.retryCount}` },
@@ -263,6 +316,104 @@ export class CentralOrchestrator {
 
   getMemoryStore(): MemoryStore {
     return this.memStore;
+  }
+
+  /**
+   * Execute a task directly using AI, bypassing the full CEO/PM/Planner pipeline.
+   * Used for user-created tasks that should be handled immediately.
+   */
+  private async executeDirectTask(task: Task): Promise<void> {
+    console.log('[AgentCorp] executeDirectTask called for:', task.id, task.title);
+    const store = useGameStore.getState();
+
+    // Find the best available worker agent for this task
+    const workerAgent = store.agents.find((a) =>
+      a.online &&
+      (a.workerRole === 'developer' || a.workerRole === 'research_worker' || a.workerRole === 'qa_worker')
+    );
+
+    if (!workerAgent) {
+      console.warn('[AgentCorp] No available worker agent for direct task');
+      this.emit({
+        type: 'log',
+        data: { message: `No available worker for task "${task.title}"` },
+        timestamp: Date.now(),
+        streamId: `direct_${task.id}`,
+      });
+      store.failTask(task.id);
+      return;
+    }
+
+    this.emit({
+      type: 'log',
+      data: { message: `Direct execution: ${workerAgent.name} (${workerAgent.role}) working on "${task.title}"` },
+      timestamp: Date.now(),
+      streamId: `direct_${task.id}`,
+    });
+
+    // Update agent status
+    store.updateAgent(workerAgent.id, {
+      currentTaskId: task.id,
+      workStatus: 'thinking',
+      mood: 'focused',
+    });
+    store.updateTask(task.id, { status: 'in_progress', assignedTo: workerAgent.id });
+
+    try {
+      // Use AIService to generate deliverable directly
+      const personalities = AGENT_PERSONALITIES();
+      const personality = personalities[workerAgent.role];
+      const deliverableType = task.deliverableType || 'code';
+      const deliverableLang = task.deliverableLang || 'typescript';
+
+      const content = await aiService.generateDeliverable(task.title, deliverableType, deliverableLang);
+
+      if (content && content.length > 50) {
+        // Success - store deliverable and complete task
+        store.updateTask(task.id, { deliverable: content });
+        store.addDeliverableProject({
+          id: `project_${Date.now()}`,
+          taskId: task.id,
+          title: task.title,
+          type: deliverableType,
+          lang: deliverableLang,
+          content,
+          createdAt: Date.now(),
+          completedBy: workerAgent.id,
+        });
+        store.completeTask(task.id);
+        store.updateAgent(workerAgent.id, { currentTaskId: null, workStatus: 'idle', mood: 'happy' });
+
+        this.emit({
+          type: 'log',
+          data: { message: `Task "${task.title}" completed by ${workerAgent.name}` },
+          timestamp: Date.now(),
+          streamId: `direct_${task.id}`,
+        });
+
+        this.logStream.push({
+          taskId: task.id,
+          subtaskId: `direct_${task.id}`,
+          agentId: workerAgent.id,
+          type: 'complete',
+          message: `Direct task completed (${content.length} chars)`,
+          timestamp: Date.now(),
+        });
+      } else {
+        throw new Error('Empty or too short deliverable');
+      }
+    } catch (err) {
+      console.error('[AgentCorp] executeDirectTask failed:', err);
+      store.failTask(task.id);
+      store.updateAgent(workerAgent.id, { currentTaskId: null, workStatus: 'idle', mood: 'frustrated' });
+
+      this.emit({
+        type: 'log',
+        data: { message: `Task "${task.title}" failed: ${err}` },
+        timestamp: Date.now(),
+        streamId: `direct_${task.id}`,
+      });
+    }
   }
 }
 
