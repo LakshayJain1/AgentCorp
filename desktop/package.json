@@ -24,6 +24,7 @@
       "main.js",
       "preload.js",
       "index.html",
+      "signin.html",
       "assets/**/*"
     ],
     "mac": {

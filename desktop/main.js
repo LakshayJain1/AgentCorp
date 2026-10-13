@@ -10,7 +10,15 @@ const WEB_URL = (process.env.AGENTCORP_WEB_URL || '').replace(/\/+$/, '')
 const DEEP_LINK_SCHEME = 'agentcorp';
 
 let mainWindow = null;
-let authWindow = null;
+
+// ─── Browser-based sign-in ──────────────────────────────────────────
+// Auth never happens inside the app: we open the system browser on the web
+// sign-in page, Clerk authenticates there, and the web app redirects back to
+// us via the agentcorp:// deep link with a verified session token.
+function startBrowserSignin() {
+  const signInUrl = `${WEB_URL}/sign-in?redirect_url=${encodeURIComponent('/desktop-redirect')}`;
+  shell.openExternal(signInUrl);
+}
 
 // ─── Persistent auth storage ────────────────────────────────────────
 const authPath = path.join(app.getPath('userData'), 'auth.json');
@@ -43,7 +51,8 @@ function handleDeepLink(url) {
   if (token) {
     saveAuth({ token, userId, authenticatedAt: Date.now() });
 
-    // Inject session cookie into the webview so the web app stays logged in
+    // Inject the verified Clerk session JWT as the __session cookie so the
+    // embedded web app arrives genuinely authenticated.
     if (mainWindow && !mainWindow.isDestroyed()) {
       const cookieUrl = WEB_URL;
       session.defaultSession.cookies.set({
@@ -56,20 +65,14 @@ function handleDeepLink(url) {
         sameSite: 'lax',
       }).then(() => {
         mainWindow.loadURL(`${WEB_URL}${redirect}`);
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
       });
-    }
-
-    // Close the auth browser if it's still open
-    if (authWindow && !authWindow.isDestroyed()) {
-      authWindow.close();
-      authWindow = null;
     }
   }
 }
 
-// Register protocol before app is ready
-app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
-
+// Protocol registration happens in whenReady (required on Windows).
 // Handle deep link on Windows/Linux (macOS handled via open-url event)
 if (process.platform === 'win32' || process.platform === 'linux') {
   const gotLock = app.requestSingleInstanceLock();
@@ -170,37 +173,12 @@ function createMainWindow() {
       mainWindow.loadURL(`${WEB_URL}/workspace`);
     });
   } else {
-    // Not authenticated — show onboarding page
-    mainWindow.loadURL(`${WEB_URL}/onboard`);
+    // Not authenticated — show the local launcher screen. Auth happens in
+    // the system browser; the app receives the session via deep link.
+    mainWindow.loadFile(path.join(__dirname, 'signin.html'));
   }
 
   return mainWindow;
-}
-
-function createAuthWindow(authUrl) {
-  authWindow = new BrowserWindow({
-    width: 600,
-    height: 750,
-    parent: mainWindow,
-    modal: true,
-    title: 'Sign In to AgentCorp',
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-    show: false,
-  });
-
-  authWindow.once('ready-to-show', () => {
-    authWindow.show();
-  });
-
-  authWindow.on('closed', () => {
-    authWindow = null;
-  });
-
-  authWindow.loadURL(authUrl);
-  return authWindow;
 }
 
 // ─── IPC handlers ───────────────────────────────────────────────────
@@ -218,8 +196,12 @@ ipcMain.handle('auth:logout', () => {
   clearAuth();
   session.defaultSession.cookies.remove(WEB_URL, '__session');
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.loadURL(`${WEB_URL}/onboard`);
+    mainWindow.loadFile(path.join(__dirname, 'signin.html'));
   }
+});
+
+ipcMain.handle('auth:start-browser-signin', () => {
+  startBrowserSignin();
 });
 
 ipcMain.handle('auth:open-browser', (_event, url) => {
@@ -268,7 +250,13 @@ ipcMain.handle('checks:run', async (_event, { workspaceId, check }) => {
 ipcMain.handle('checks:list', () => Object.keys(ALLOWED_CHECKS));
 
 // ─── App lifecycle ──────────────────────────────────────────────────
+// Register protocol once the app is ready (required on Windows)
 app.whenReady().then(() => {
+  try {
+    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+  } catch (err) {
+    console.error('[AgentCorp] protocol registration failed:', err);
+  }
   createMainWindow();
 
   // macOS: handle deep link when app is already running

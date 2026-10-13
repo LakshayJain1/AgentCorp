@@ -8,8 +8,12 @@ export async function getDesktopRedirectUrl(): Promise<string> {
     return '/onboard'
   }
 
-  // Generate a session token for the desktop app
-  const token = authResult.userId
+  // Use the real Clerk session JWT (not the userId) so the desktop app can
+  // inject it as the __session cookie and arrive genuinely authenticated.
+  const token = await authResult.getToken()
+  if (!token) {
+    return '/onboard'
+  }
   const deepLinkUrl = `agentcorp://auth-callback?token=${encodeURIComponent(token)}&userId=${encodeURIComponent(authResult.userId)}&redirect=/workspace`
 
   return deepLinkUrl
