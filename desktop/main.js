@@ -1,11 +1,12 @@
-const { app, BrowserWindow, ipcMain, shell, session } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, session, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 const isDev = process.env.NODE_ENV === 'development';
-const WEB_URL = isDev
-  ? 'http://localhost:3000'
-  : 'https://agentcorp.vercel.app';
+// Allow override via env at runtime: AGENTCORP_WEB_URL="https://<your-app>.vercel.app"
+// Default is the live deployment (update here when the production URL changes).
+const WEB_URL = (process.env.AGENTCORP_WEB_URL || '').replace(/\/+$/, '')
+  || (isDev ? 'http://localhost:3000' : 'https://agent-corp.vercel.app');
 const DEEP_LINK_SCHEME = 'agentcorp';
 
 let mainWindow = null;
@@ -86,8 +87,29 @@ if (process.platform === 'win32' || process.platform === 'linux') {
   }
 }
 
+function loadErrorPage(targetUrl, errorDescription) {
+  const safeUrl = String(targetUrl || WEB_URL).replace(/</g, '&lt;');
+  const safeErr = String(errorDescription || 'The page could not be loaded.').replace(/</g, '&lt;');
+  return `data:text/html;charset=utf-8,${encodeURIComponent(`
+    <!DOCTYPE html>
+    <html><head><meta charset="utf-8"><title>AgentCorp — Connection Error</title></head>
+    <body style="font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#FAFBFD;color:#1c1c1e;">
+      <div style="text-align:center;max-width:420px;padding:24px;">
+        <div style="font-size:40px;margin-bottom:12px;">🔌</div>
+        <h2 style="margin:0 0 8px;">Could not reach the AgentCorp web app</h2>
+        <p style="font-size:13px;color:#666;margin:0 0 6px;">Tried to load:<br><code>${safeUrl}</code></p>
+        <p style="font-size:13px;color:#666;">${safeErr}</p>
+        <p style="font-size:12px;color:#999;">If you just deployed, wait a minute and retry. In development, make sure <code>next dev</code> is running on port 3000.</p>
+        <button onclick="location.reload()" style="margin-top:12px;padding:10px 24px;border-radius:999px;border:none;background:#0A84FF;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Retry</button>
+      </div>
+    </body></html>`)}`;
+}
+
 // ─── Window creation ────────────────────────────────────────────────
 function createMainWindow() {
+  // Hide the default Electron menu (File/Edit/View/…) for a native app feel
+  Menu.setApplicationMenu(null);
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -103,7 +125,7 @@ function createMainWindow() {
       sandbox: false,
     },
     show: false,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FAFBFD',
   });
 
   mainWindow.once('ready-to-show', () => {
@@ -112,6 +134,14 @@ function createMainWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // Never leave the user staring at a blank white window: surface load
+  // failures with a retry screen instead.
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    console.error('[AgentCorp] did-fail-load:', errorCode, errorDescription, validatedURL);
+    mainWindow.loadURL(loadErrorPage(validatedURL, errorDescription));
   });
 
   // Open external links in default browser
