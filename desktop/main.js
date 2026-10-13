@@ -11,6 +11,37 @@ const DEEP_LINK_SCHEME = 'agentcorp';
 
 let mainWindow = null;
 
+// A deep link can arrive before the window exists (cold start via protocol on
+// Windows/Linux passes the URL in process.argv; on macOS via open-url). Stash
+// it and process once the window is ready — handleDeepLink already persists
+// the token via saveAuth, and createMainWindow picks it up via loadAuth.
+let pendingDeepLink = null;
+
+function handleDeepLinkArgv(argv) {
+  if (!Array.isArray(argv)) return;
+  const url = argv.find((arg) => typeof arg === 'string' && arg.startsWith(`${DEEP_LINK_SCHEME}://`));
+  if (url) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      handleDeepLink(url);
+    } else {
+      pendingDeepLink = url;
+      // Persist immediately so even a later window creation picks it up.
+      try { handleDeepLink(url); } catch { pendingDeepLink = url; }
+    }
+  }
+}
+
+// Cold-start check: protocol launch passes the URL as a CLI arg.
+// Only stash it here (app.getPath isn't usable before ready) — it is
+// processed in whenReady after the window exists.
+handleDeepLinkArgv(process.argv);
+
+function handleDeepLinkArgv(argv) {
+  if (!Array.isArray(argv)) return;
+  const url = argv.find((arg) => typeof arg === 'string' && arg.startsWith(`${DEEP_LINK_SCHEME}://`));
+  if (url) pendingDeepLink = url;
+}
+
 // ─── Browser-based sign-in ──────────────────────────────────────────
 // Auth never happens inside the app: we open the system browser on the web
 // sign-in page, Clerk authenticates there, and the web app redirects back to
@@ -40,16 +71,30 @@ function clearAuth() {
 }
 
 // ─── Deep link handling ─────────────────────────────────────────────
+// Safe to call at any time: persists the token immediately when possible,
+// loads the workspace when the window exists, otherwise stashes for whenReady.
 function handleDeepLink(url) {
   if (!url || !url.startsWith(`${DEEP_LINK_SCHEME}://`)) return;
 
-  const parsed = new URL(url);
-  const token = parsed.searchParams.get('token');
-  const userId = parsed.searchParams.get('userId');
-  const redirect = parsed.searchParams.get('redirect') || '/workspace';
+  let token = null;
+  let userId = null;
+  let redirect = '/workspace';
+  try {
+    const parsed = new URL(url);
+    token = parsed.searchParams.get('token');
+    userId = parsed.searchParams.get('userId');
+    redirect = parsed.searchParams.get('redirect') || '/workspace';
+  } catch {
+    return;
+  }
 
   if (token) {
-    saveAuth({ token, userId, authenticatedAt: Date.now() });
+    if (app.isReady()) {
+      saveAuth({ token, userId, authenticatedAt: Date.now() });
+    } else {
+      pendingDeepLink = url;
+      return;
+    }
 
     // Inject the verified Clerk session JWT as the __session cookie so the
     // embedded web app arrives genuinely authenticated.
@@ -67,21 +112,29 @@ function handleDeepLink(url) {
         mainWindow.loadURL(`${WEB_URL}${redirect}`);
         if (mainWindow.isMinimized()) mainWindow.restore();
         mainWindow.focus();
+      }).catch((err) => {
+        console.error('[AgentCorp] cookie inject failed:', err);
+        mainWindow.loadURL(`${WEB_URL}${redirect}`);
       });
     }
   }
 }
 
 // Protocol registration happens in whenReady (required on Windows).
-// Handle deep link on Windows/Linux (macOS handled via open-url event)
+// Single-instance + deep-link wiring is registered here at module level so no
+// protocol launch is ever missed, even before ready.
 if (process.platform === 'win32' || process.platform === 'linux') {
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
     app.quit();
   } else {
     app.on('second-instance', (_event, commandLine) => {
-      const url = commandLine.find((arg) => arg.startsWith(`${DEEP_LINK_SCHEME}://`));
-      if (url) handleDeepLink(url);
+      handleDeepLinkArgv(commandLine);
+      if (pendingDeepLink && mainWindow && !mainWindow.isDestroyed()) {
+        const url = pendingDeepLink;
+        pendingDeepLink = null;
+        handleDeepLink(url);
+      }
       if (mainWindow) {
         if (mainWindow.isMinimized()) mainWindow.restore();
         mainWindow.focus();
@@ -89,6 +142,12 @@ if (process.platform === 'win32' || process.platform === 'linux') {
     });
   }
 }
+
+// macOS (and early Windows launches): stash protocol URLs until ready.
+app.on('open-url', (event, url) => {
+  if (event && typeof event.preventDefault === 'function') event.preventDefault();
+  pendingDeepLink = url;
+});
 
 function loadErrorPage(targetUrl, errorDescription) {
   const safeUrl = String(targetUrl || WEB_URL).replace(/</g, '&lt;');
@@ -204,6 +263,21 @@ ipcMain.handle('auth:start-browser-signin', () => {
   startBrowserSignin();
 });
 
+// Manual fallback: user pastes the agentcorp:// link (e.g. copied from the
+// "Open in Desktop App" page) when the OS handoff doesn't reach the app.
+ipcMain.handle('auth:handle-link', (_event, url) => {
+  if (typeof url !== 'string' || !url.startsWith(`${DEEP_LINK_SCHEME}://`)) {
+    return { success: false, error: 'That does not look like an AgentCorp link (agentcorp://…)' };
+  }
+  try {
+    handleDeepLink(url);
+    const auth = loadAuth();
+    return { success: !!(auth && auth.token) };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
 ipcMain.handle('auth:open-browser', (_event, url) => {
   shell.openExternal(url);
 });
@@ -259,10 +333,12 @@ app.whenReady().then(() => {
   }
   createMainWindow();
 
-  // macOS: handle deep link when app is already running
-  app.on('open-url', (_event, url) => {
+  // Process any deep link that arrived before the window existed.
+  if (pendingDeepLink) {
+    const url = pendingDeepLink;
+    pendingDeepLink = null;
     handleDeepLink(url);
-  });
+  }
 });
 
 app.on('window-all-closed', () => {
@@ -275,9 +351,4 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createMainWindow();
   }
-});
-
-// Handle deep link from protocol handler (Windows/Linux)
-app.on('open-url', (_event, url) => {
-  handleDeepLink(url);
 });
