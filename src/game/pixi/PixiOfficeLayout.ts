@@ -1,6 +1,7 @@
 import { OfficeLocation } from '@/agents/AgentTypes';
 
 export const CANVAS = { width: 720, height: 480 };
+export const WALL_H = 18; // cabinet projection front-face height in px
 
 export interface ZoneDef {
   id: string;

@@ -109,10 +109,10 @@ export class AgentEntity {
     this.container.eventMode = 'static';
     this.container.cursor = 'pointer';
 
-    // Shadow — sits just below feet (anchor = bottom-center, y=0)
+    // Shadow — dynamic: shrinks when agent bobs up, grows when grounded
     this.shadow = new Graphics();
-    this.shadow.ellipse(0, 3, 14, 4);
-    this.shadow.fill(0x000000, 0.3);
+    this.shadow.ellipse(0, 5, 16, 5);
+    this.shadow.fill({ color: 0x000000, alpha: 0.38 });
     this.container.addChild(this.shadow);
 
     // Label
@@ -450,6 +450,9 @@ export class AgentEntity {
     const bobY = isWalking ? Math.sin(t) * 2.5 : (this.mood === 'happy' ? Math.sin(t * 0.3) * 0.8 : 0);
     const drawY = Math.round(this.y + bobY);
     const x = Math.round(this.x);
+    // Shadow scale shrinks as agent rises (creates depth illusion)
+    const shadowScale = 1 - Math.abs(bobY) / 10;
+    this.shadow.scale.set(shadowScale, shadowScale * 0.85);
 
     // Position container
     this.container.position.x = x;
