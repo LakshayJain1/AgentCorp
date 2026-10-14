@@ -213,21 +213,12 @@ function createMainWindow() {
     const url = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getURL() : '(gone)';
     log('did-finish-load:', url);
 
-    // Detect blank-page state: page loaded the workspace URL but rendered nothing.
-    // Inject a quick check — if the body is completely empty, fall back to signin.
-    if (mainWindow && !mainWindow.isDestroyed() && url.includes(WEB_URL)) {
-      mainWindow.webContents.executeJavaScript(`
-        (function() {
-          var txt = (document.body || {}).innerText || '';
-          return txt.replace(/\\s/g,'').length;
-        })()
-      `).then((charCount) => {
-        if (charCount < 5 && mainWindow && !mainWindow.isDestroyed()) {
-          log('did-finish-load: page appears blank (charCount=' + charCount + '), falling back to signin');
-          clearAuth();
-          mainWindow.loadFile(path.join(__dirname, 'signin.html'));
-        }
-      }).catch(() => {});
+    // Clerk redirected to /sign-in — the saved JWT is expired. Clear it and
+    // show the local signin screen so the user can start a fresh auth flow.
+    if (mainWindow && !mainWindow.isDestroyed() && url.startsWith(WEB_URL) && url.includes('/sign-in')) {
+      log('did-finish-load: redirected to sign-in — JWT expired, clearing auth');
+      clearAuth();
+      mainWindow.loadFile(path.join(__dirname, 'signin.html'));
     }
   });
 
@@ -282,15 +273,28 @@ function createMainWindow() {
     return { action: 'allow' };
   });
 
-  // Check if user is already authenticated (and token isn't stale — Clerk JWTs expire)
-  const raw = loadAuth();
-  const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-  const isTokenFresh = raw && raw.token && (Date.now() - (raw.authenticatedAt || 0)) < TOKEN_MAX_AGE_MS;
-  if (raw && !isTokenFresh) {
-    log('startup: stale token (age > 7d), clearing');
-    clearAuth();
+  // Decode a JWT and check its exp claim without verifying the signature.
+  // We only need to know if it's worth sending — Clerk's server validates it fully.
+  function isJwtExpired(token) {
+    try {
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+      // Add a 30s buffer so we don't send a token that'll expire mid-request
+      return !payload.exp || (payload.exp * 1000) < (Date.now() + 30000);
+    } catch {
+      return true;
+    }
   }
-  const auth = isTokenFresh ? raw : null;
+
+  const raw = loadAuth();
+  let auth = null;
+  if (raw && raw.token) {
+    if (isJwtExpired(raw.token)) {
+      log('startup: JWT expired, clearing auth');
+      clearAuth();
+    } else {
+      auth = raw;
+    }
+  }
   log('startup auth present=', !!(auth && auth.token));
   if (auth && auth.token) {
     // Set session cookie and load workspace.
