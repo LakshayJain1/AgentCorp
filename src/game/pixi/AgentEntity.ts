@@ -1,5 +1,5 @@
 import { Agent, AgentWorkStatus, AgentFSMState, AgentMood } from '@/agents/AgentTypes';
-import { Sprite, Container, Graphics, Text, TextStyle, Texture } from 'pixi.js';
+import { Sprite, Container, Graphics, Text, TextStyle, Texture, ColorSource } from 'pixi.js';
 import { Application } from 'pixi.js';
 import { CANVAS, findLocationByRole, findLocationById, isWallBetween, toOfficeLocations } from './PixiOfficeLayout';
 import { useGameStore } from '@/store/gameStore';
@@ -35,17 +35,13 @@ export class AgentEntity {
   public readonly color: number;
   public readonly container: Container;
   
-  // Walk sprite sheet (64x16 with 4 frames 16x16 each) + manual frame cycling
-  private walkTexture: Texture | null = null;
+  // Sliced frame textures (each element is one 16×16 frame)
+  private walkFrames: Texture[] = [];
+  private idleFrames: Texture[] = [];
   private walkFrame = 0;
-  private lastWalkUpdate = 0;
-  
-  // Idle sprite sheets (4 directions as separate textures)
-  private idleTextures: Texture[] = [];
   private idleFrame = 0;
-  
-  // For backward compatibility with single images
-  private deskSprite: Sprite | null = null;
+  private lastFrameUpdate = 0;
+
   private currentSprite: Sprite | null = null;
   
   private label: Text;
@@ -113,9 +109,9 @@ export class AgentEntity {
     this.container.eventMode = 'static';
     this.container.cursor = 'pointer';
 
-    // Shadow
+    // Shadow — sits just below feet (anchor = bottom-center, y=0)
     this.shadow = new Graphics();
-    this.shadow.ellipse(0, 24, 30, 6);
+    this.shadow.ellipse(0, 3, 14, 4);
     this.shadow.fill(0x000000, 0.3);
     this.container.addChild(this.shadow);
 
@@ -132,9 +128,9 @@ export class AgentEntity {
     this.label.zIndex = 50;
     this.container.addChild(this.label);
 
-    // Energy bar
+    // Energy bar — sits just above head (head at y=-32 for scale-2 sprite)
     this.energyBarBg = new Graphics();
-    this.energyBarBg.rect(-12, -6, 24, 4);
+    this.energyBarBg.rect(-12, -36, 24, 3);
     this.energyBarBg.fill(0x000000, 0.6);
     this.container.addChild(this.energyBarBg);
 
@@ -169,11 +165,12 @@ export class AgentEntity {
     });
   }
 
-  setSpriteCache(cache: { walkTexture: Texture; idleTextures: Texture[] }): void {
-    this.walkTexture = cache.walkTexture;
-    this.idleTextures = cache.idleTextures;
+  setSpriteCache(cache: { walkFrames: Texture[]; idleFrames: Texture[] }): void {
+    this.walkFrames = cache.walkFrames;
+    this.idleFrames = cache.idleFrames;
     this.walkFrame = 0;
     this.idleFrame = 0;
+    this.lastFrameUpdate = 0;
   }
 
   update(dt: number, speed: number): void {
@@ -443,7 +440,7 @@ export class AgentEntity {
     const energyPercent = this.energy / 100;
     this.energyBarFill.clear();
     const energyColor = energyPercent > 0.6 ? 0x22c55e : energyPercent > 0.3 ? 0xf59e0b : 0xef4444;
-    this.energyBarFill.rect(-11, -5, 22 * energyPercent, 2);
+    this.energyBarFill.rect(-11, -35, 22 * energyPercent, 2);
     this.energyBarFill.fill(energyColor);
   }
 
@@ -462,92 +459,60 @@ export class AgentEntity {
     this.label.position.x = 0;
     this.label.position.y = -45;
 
-    // --- Walk animation: cycle through 4 frames of the 64x16 sprite sheet ---
-    if (isWalking && this.walkTexture) {
-      // Advance frame every ~3 dt ticks at 60fps = ~2 FPS walking animation
-      this.lastWalkUpdate = (this.lastWalkUpdate || 0) + dt;
-      if ((this.lastWalkUpdate || 0) >= 3) {
-        this.lastWalkUpdate = 0;
-        this.walkFrame = (this.walkFrame + 1) % 4; // cycle 0,1,2,3
-      }
-      
-      // Update the sprite with the correct frame from the walk texture
-      if (this.currentSprite) {
-        this.currentSprite.texture = this.walkTexture;
-        // Note: PIXI Sprite doesn't easily support sub-rectangles from a larger texture.
-        // The 64x16 texture has 4 frames side-by-side. We'll just show the walk texture
-        // and the frame cycling will be visible if we switch textures properly.
-        // For now, just ensure the walk texture is applied.
-      }
-    }
+    // Advance animation frame
+    this.lastFrameUpdate += dt;
+    const walkInterval = 120;  // ms per walk frame  (~8 fps)
+    const idleInterval = 300;  // ms per idle frame  (~3 fps)
 
-    // --- Idle animation: cycle through idle textures ---
-    if (!isWalking && this.idleTextures.length > 0) {
-      // Advance idle frame every ~15 frames = ~4 FPS idle breathing
-      // Use a simple counter based on the lastWalkUpdate we have
-      this.lastWalkUpdate = (this.lastWalkUpdate || 0) + dt;
-      if ((this.lastWalkUpdate || 0) >= 15) {
-        this.lastWalkUpdate = 0;
-        this.idleFrame = (this.idleFrame + 1) % this.idleTextures.length;
+    if (isWalking && this.walkFrames.length > 0) {
+      if (this.lastFrameUpdate >= walkInterval) {
+        this.lastFrameUpdate = 0;
+        this.walkFrame = (this.walkFrame + 1) % this.walkFrames.length;
       }
-    }
-
-    // --- Render the sprites ---
-    // Determine which sprite to show based on state
-    if (isWalking && this.walkTexture) {
-      // Show walk texture - create/reuse sprite
+      const tex = this.walkFrames[this.walkFrame];
       if (!this.currentSprite) {
-        this.currentSprite = new Sprite(this.walkTexture);
-        this.currentSprite.anchor.x = 0.5;
-        this.currentSprite.anchor.y = 1;
+        this.currentSprite = new Sprite(tex);
+        this.currentSprite.anchor.set(0.5, 1);
+        this.currentSprite.tint = this.color as ColorSource;
+        this.currentSprite.scale.set(2, 2);
         this.container.addChildAt(this.currentSprite, 1);
       } else {
-        this.currentSprite.texture = this.walkTexture;
+        this.currentSprite.texture = tex;
       }
-      // Scale based on state
-      this.currentSprite.scale.x = 8; // 16px * 8 = 128px
-      this.currentSprite.scale.y = 8; // 16px * 8 = 128px
-      // Flip based on movement direction
       const moveX = this.targetX - this.x;
-      if (moveX < 0) {
-        this.currentSprite.scale.x = -8; // Use negative scale for flipping
-      } else {
-        this.currentSprite.scale.x = 8;
+      this.currentSprite.scale.set(moveX < -0.5 ? -2 : 2, 2);
+    } else if (!isWalking && this.idleFrames.length > 0) {
+      if (this.lastFrameUpdate >= idleInterval) {
+        this.lastFrameUpdate = 0;
+        this.idleFrame = (this.idleFrame + 1) % this.idleFrames.length;
       }
-    } else if (!isWalking && this.idleTextures.length > 0) {
-      // Show the current idle texture
-      const idleTex = this.idleTextures[this.idleFrame % this.idleTextures.length];
-      if (idleTex && !this.currentSprite) {
-        this.currentSprite = new Sprite(idleTex);
-        this.currentSprite.anchor.x = 0.5;
-        this.currentSprite.anchor.y = 1;
+      const tex = this.idleFrames[this.idleFrame];
+      if (!this.currentSprite) {
+        this.currentSprite = new Sprite(tex);
+        this.currentSprite.anchor.set(0.5, 1);
+        this.currentSprite.tint = this.color as ColorSource;
         this.container.addChildAt(this.currentSprite, 1);
-        this.currentSprite.scale.x = 8; // 16px * 8 = 128px
-        this.currentSprite.scale.y = 8; // 16px * 8 = 128px
-      } else if (idleTex && this.currentSprite) {
-        this.currentSprite.texture = idleTex;
-        // Keep scale at idle size
-        this.currentSprite.scale.x = 8; // 16px * 8 = 128px
-        this.currentSprite.scale.y = 8; // 16px * 8 = 128px
+      } else {
+        this.currentSprite.texture = tex;
+        this.currentSprite.scale.set(2, 2);
       }
     } else {
-      // Fallback: use desk sprite if available
-      if (this.deskSprite && !this.currentSprite) {
-        this.currentSprite = this.deskSprite;
-        this.container.addChild(this.currentSprite);
-        if (this.currentSprite) {
-          this.currentSprite.scale.x = 8; // 16px * 8 = 128px
-          this.currentSprite.scale.y = 8; // 16px * 8 = 128px
-        }
+      // Fallback colored circle when no sprites are loaded
+      if (!this.currentSprite) {
+        const g = new Graphics();
+        g.circle(0, -8, 8);
+        g.fill(this.color);
+        // Cast Graphics to Container child; store a dummy sprite sentinel
+        this.container.addChildAt(g, 1);
       }
     }
 
-    // Selection highlight
+    // Selection highlight — wraps the 32px (scale-2) sprite from y=-32 to y=+4
     this.selectionGraphics.clear();
     if (this.isSelected) {
-      this.selectionGraphics.rect(-18, -24, 36, 56);
+      this.selectionGraphics.rect(-16, -32, 32, 36);
       this.selectionGraphics.stroke({ width: 1, color: 0x6366f1, alpha: 0.6 });
-      this.selectionGraphics.rect(-18, -24, 36, 56);
+      this.selectionGraphics.rect(-16, -32, 32, 36);
       this.selectionGraphics.fill(this.color, 0.08);
     }
   }

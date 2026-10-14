@@ -1,10 +1,9 @@
-import { Application, Container, Sprite, Graphics, Texture, Rectangle, Assets } from 'pixi.js';
+import { Application, Container, Texture, Rectangle, Assets } from 'pixi.js';
 import { useGameStore } from '@/store/gameStore';
 import { Agent } from '@/agents/AgentTypes';
 import { AgentEntity, AgentEntityData } from './AgentEntity';
 import { CANVAS, toOfficeLocations, findLocationByRole } from './PixiOfficeLayout';
 
-const ROLES = ['ceo', 'hr', 'pm', 'researcher', 'engineer', 'qa'] as const;
 const ROLE_COLORS: Record<string, number> = {
   ceo: 0xff6b6b,
   pm: 0x4ecdc4,
@@ -17,29 +16,16 @@ const ROLE_COLORS: Record<string, number> = {
 // All roles share the same sprite sheets from the CEO folder
 // These are 64x16 PNGs with 4 frames horizontally (16x16 each)
 const SHARED_SPRITE_PATH = '/sprites/agents/ceo';
-
-// Walk animation: 4 directions, each is a 64x16 sprite sheet with 4 frames
-const WALK_SPRITES: Record<string, string> = {
-  right: 'ceo-walk-right.png',
-  left: 'ceo-walk-left.png',
-  down: 'ceo-walk-down.png',
-  up: 'ceo-walk-up.png',
-};
-
-// Idle animation: 4 directions (the idle-point files also have 4 frames)
-const IDLE_SPRITES: Record<string, string> = {
-  right: 'ceo-idle-point-right.png',
-  left: 'ceo-idle-point-left.png',
-  down: 'ceo-idle-point-left.png',
-  up: 'ceo-idle-point-right.png',
-};
+const WALK_SHEET = 'ceo-walk-right.png';
+const IDLE_SHEET = 'ceo-idle-point-right.png';
+const FRAME_W = 16;
 
 export class AgentManager {
   private app: Application;
   private agentsContainer: Container;
   private agents: Map<string, AgentEntity> = new Map();
-  // Cache: direction -> { walkTexture: Texture, idleTextures: Texture[] }
-  private spriteCache: Map<string, { walkTexture: Texture; idleTextures: Texture[] }> = new Map();
+  private walkFrames: Texture[] = [];
+  private idleFrames: Texture[] = [];
   private spritesLoaded = false;
 
   constructor(app: Application) {
@@ -52,43 +38,27 @@ export class AgentManager {
   async loadSprites(): Promise<void> {
     if (this.spritesLoaded) return;
 
-    // Load walk sprite sheets from CEO folder
-    const walkPromises = Object.values(WALK_SPRITES).map((filename) => {
-      const path = `${SHARED_SPRITE_PATH}/${filename}`;
-      return Assets.load(path).then((texture: Texture) => {
-        // Store the full 64x16 texture; we'll manually cycle frames in the update loop
-        const dirKey = filename.replace('.png', '');
-        return { dirKey, texture };
-      });
-    });
-
-    // Load idle sprite sheets from CEO folder
-    const idlePromises = Object.values(IDLE_SPRITES).map((filename) => {
-      const path = `${SHARED_SPRITE_PATH}/${filename}`;
-      return Assets.load(path).then((texture: Texture) => {
-        const dirKey = filename.replace('.png', '');
-        return { dirKey, texture };
-      });
-    });
-
-    const [walkResults, idleResults] = await Promise.all([
-      Promise.all(walkPromises),
-      Promise.all(idlePromises),
+    const [walkTex, idleTex] = await Promise.all([
+      Assets.load(`${SHARED_SPRITE_PATH}/${WALK_SHEET}`),
+      Assets.load(`${SHARED_SPRITE_PATH}/${IDLE_SHEET}`),
     ]);
 
-    // Cache textures per direction
-    for (const result of walkResults) {
-      this.spriteCache.set(result.dirKey, { walkTexture: result.texture, idleTextures: [] });
-    }
-
-    for (const result of idleResults) {
-      if (this.spriteCache.has(result.dirKey)) {
-        this.spriteCache.get(result.dirKey)!.idleTextures.push(result.texture);
+    const sliceSheet = (tex: Texture): Texture[] => {
+      const frameCount = Math.floor(tex.width / FRAME_W);
+      const frames: Texture[] = [];
+      for (let i = 0; i < frameCount; i++) {
+        frames.push(new Texture({
+          source: tex.source,
+          frame: new Rectangle(i * FRAME_W, 0, FRAME_W, tex.height),
+        }));
       }
-    }
+      return frames;
+    };
 
+    this.walkFrames = sliceSheet(walkTex);
+    this.idleFrames = sliceSheet(idleTex);
     this.spritesLoaded = true;
-    console.log('[AgentManager] Sprites loaded from CEO folder,', this.spriteCache.size, 'directions cached');
+    console.log('[AgentManager] Sprites loaded —', this.walkFrames.length, 'walk frames,', this.idleFrames.length, 'idle frames');
   }
 
   createAgents(agentData: Agent[]): void {
@@ -127,20 +97,8 @@ export class AgentManager {
       };
 
       const entity = new AgentEntity(entityData, this.app);
-      
-      // Get cached sprites - try agent's role first, then fall back to any role with sprites
-      let cached = this.spriteCache.get(agent.role);
-      if (!cached) {
-        for (const r of ROLES) {
-          cached = this.spriteCache.get(r);
-          if (cached && (cached.idleTextures.length > 0 || cached.walkTexture)) {
-            break;
-          }
-        }
-      }
-      
-      if (cached && (cached.idleTextures.length > 0 || cached.walkTexture)) {
-        entity.setSpriteCache(cached);
+      if (this.spritesLoaded) {
+        entity.setSpriteCache({ walkFrames: this.walkFrames, idleFrames: this.idleFrames });
       }
 
       this.agents.set(agent.id, entity);
@@ -164,23 +122,13 @@ export class AgentManager {
     for (const storeAgent of storeAgents) {
       const entity = this.agents.get(storeAgent.id);
       if (entity) {
+        // Position (x/y/targetX/targetY) and simulation values (energy/efficiency/mood)
+        // are owned by the entity and written TO the store — never read back from it.
         entity.updateFromStore({
           name: storeAgent.name,
-          x: storeAgent.x,
-          y: storeAgent.y,
-          targetX: storeAgent.targetX,
-          targetY: storeAgent.targetY,
-          state: storeAgent.state as AgentEntityData['state'],
-          energy: storeAgent.energy,
-          mood: storeAgent.mood,
+          online: storeAgent.online,
           workStatus: storeAgent.workStatus,
           fsmState: storeAgent.fsmState,
-          efficiency: storeAgent.efficiency,
-          online: storeAgent.online,
-          cooldownRemainingSeconds: storeAgent.cooldownRemainingSeconds,
-          cooldownType: storeAgent.cooldownType,
-          cooldownTargetLocId: storeAgent.cooldownTargetLocId,
-          lastGoalTime: storeAgent.lastGoalTime,
           conversations: storeAgent.conversations,
         });
       }
@@ -232,9 +180,8 @@ export class AgentManager {
     };
 
     const entity = new AgentEntity(entityData, this.app);
-    const cached = this.spriteCache.get(agent.role);
-    if (cached) {
-      entity.setSpriteCache(cached);
+    if (this.spritesLoaded) {
+      entity.setSpriteCache({ walkFrames: this.walkFrames, idleFrames: this.idleFrames });
     }
 
     this.agents.set(agent.id, entity);
@@ -259,6 +206,7 @@ export class AgentManager {
     this.agents.forEach(a => a.destroy());
     this.agents.clear();
     this.agentsContainer.destroy({ children: true });
-    this.spriteCache.clear();
+    this.walkFrames = [];
+    this.idleFrames = [];
   }
 }

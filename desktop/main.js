@@ -51,12 +51,15 @@ function handleDeepLinkArgv(argv) {
 // processed in whenReady after the window exists.
 handleDeepLinkArgv(process.argv);
 
-// ─── Browser-based sign-in ──────────────────────────────────────────
-// Auth never happens inside the app: we open the system browser on the web
-// sign-in page, Clerk authenticates there, and the web app redirects back to
-// us via the agentcorp:// deep link with a verified session token.
+// ─── System-browser sign-in ─────────────────────────────────────────
+// OAuth (Google etc.) must run in the system browser so the OS shows the
+// real "Choose an account" picker using the user's saved Google cookies.
+// After Clerk authenticates, /desktop-redirect reads the actual __session
+// cookie (long-lived) and sends it back via agentcorp:// deep link.
+// Electron injects it into its own session; Clerk's SDK then refreshes it.
 function startBrowserSignin() {
   const signInUrl = `${WEB_URL}/sign-in?redirect_url=${encodeURIComponent('/desktop-redirect')}`;
+  log('opening system browser for sign-in:', signInUrl);
   shell.openExternal(signInUrl);
 }
 
@@ -209,6 +212,13 @@ function createMainWindow() {
     backgroundColor: '#FAFBFD',
   });
 
+  // Spoof a standard Chrome UA — removes the Electron/node identifier that
+  // Google uses to detect embedded WebViews and block OAuth flows.
+  const chromeVersion = process.versions.chrome || '120.0.0.0';
+  mainWindow.webContents.setUserAgent(
+    `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`
+  );
+
   mainWindow.webContents.on('did-finish-load', () => {
     const url = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getURL() : '(gone)';
     log('did-finish-load:', url);
@@ -267,23 +277,24 @@ function createMainWindow() {
     return { action: 'allow' };
   });
 
-  // Auth lives in Electron's own cookie store (userData/Default/Cookies).
-  // We check for an existing __session cookie — if present, Clerk already
-  // has a valid session from a previous sign-in inside this BrowserWindow.
-  // No JWT passing, no deep links, no expiry juggling.
+  const signinHtml = path.join(__dirname, 'signin.html');
+
+  // On startup: if we have a persisted Clerk session cookie go straight to the
+  // workspace; otherwise show the local sign-in launcher that opens the system
+  // browser (real Google account picker, no in-app email/password form).
   session.defaultSession.cookies.get({ url: WEB_URL, name: '__session' }).then((cookies) => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     if (cookies.length > 0) {
       log('startup: found existing __session cookie, loading workspace');
       mainWindow.loadURL(`${WEB_URL}/workspace`);
     } else {
-      log('startup: no session cookie, loading sign-in');
-      mainWindow.loadURL(`${WEB_URL}/sign-in?redirect_url=${encodeURIComponent('/workspace')}`);
+      log('startup: no session cookie, showing local sign-in launcher');
+      mainWindow.loadFile(signinHtml);
     }
   }).catch(() => {
-    log('startup: cookie check failed, loading sign-in');
+    log('startup: cookie check failed, showing local sign-in launcher');
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.loadURL(`${WEB_URL}/sign-in?redirect_url=${encodeURIComponent('/workspace')}`);
+      mainWindow.loadFile(signinHtml);
     }
   });
 
@@ -303,22 +314,19 @@ ipcMain.handle('auth:is-authenticated', async () => {
 
 ipcMain.handle('auth:logout', async () => {
   clearAuth();
-  // Remove all Clerk cookies for this domain so the next load goes to sign-in
+  // Remove all Clerk cookies for this domain so the next startup goes through sign-in
   const allCookies = await session.defaultSession.cookies.get({ url: WEB_URL }).catch(() => []);
   for (const c of allCookies) {
     await session.defaultSession.cookies.remove(WEB_URL, c.name).catch(() => {});
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.loadURL(`${WEB_URL}/sign-in?redirect_url=${encodeURIComponent('/workspace')}`);
+    mainWindow.loadFile(path.join(__dirname, 'signin.html'));
   }
 });
 
 ipcMain.handle('auth:start-browser-signin', () => {
-  // No longer used — sign-in now happens inside the BrowserWindow.
-  // Kept for backwards compatibility with preload callers.
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.loadURL(`${WEB_URL}/sign-in?redirect_url=${encodeURIComponent('/workspace')}`);
-  }
+  // Opens the system browser so Google OAuth shows the real account picker.
+  startBrowserSignin();
 });
 
 ipcMain.handle('auth:handle-link', (_event, url) => {

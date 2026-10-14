@@ -1,6 +1,7 @@
 'use server'
 
 import { auth } from '@clerk/nextjs/server'
+import { cookies } from 'next/headers'
 
 export async function getDesktopRedirectUrl(): Promise<string> {
   const authResult = await auth()
@@ -8,13 +9,17 @@ export async function getDesktopRedirectUrl(): Promise<string> {
     return '/onboard'
   }
 
-  // Use the real Clerk session JWT (not the userId) so the desktop app can
-  // inject it as the __session cookie and arrive genuinely authenticated.
-  const token = await authResult.getToken()
-  if (!token) {
+  // Read the actual __session cookie from the request headers.
+  // This is the long-lived session token Clerk manages — NOT the short-lived
+  // JWT from getToken() which expires in ~60 seconds and was causing every
+  // restart to require re-authentication. Server-side code can read httpOnly
+  // cookies; only client-side JS is blocked from accessing them.
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get('__session')
+  if (!sessionCookie?.value) {
     return '/onboard'
   }
-  const deepLinkUrl = `agentcorp://auth-callback?token=${encodeURIComponent(token)}&userId=${encodeURIComponent(authResult.userId)}&redirect=/workspace`
 
+  const deepLinkUrl = `agentcorp://auth-callback?token=${encodeURIComponent(sessionCookie.value)}&userId=${encodeURIComponent(authResult.userId)}&redirect=/workspace`
   return deepLinkUrl
 }

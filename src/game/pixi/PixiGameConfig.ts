@@ -16,6 +16,7 @@ export class PixiGame {
   private simulationLoop: SimulationLoop | null = null;
   private container: HTMLElement | null = null;
   private initialized = false;
+  private boundHandleResize: () => void = this.handleResize.bind(this);
 
   async initialize(container: HTMLElement): Promise<void> {
     if (this.initialized) return;
@@ -57,6 +58,9 @@ export class PixiGame {
     store.initAgents();
     centralOrchestrator.initWorkers();
 
+    // Load sprites before creating entities
+    await this.agentManager.loadSprites();
+
     // Create agent entities from store
     const agents = store.agents;
     this.agentManager.createAgents(agents);
@@ -64,17 +68,24 @@ export class PixiGame {
     // Start simulation
     this.simulationLoop.start();
 
-    // Handle resize
-    window.addEventListener('resize', this.handleResize.bind(this));
+    // Window resize handler (sidebar / split-pane changes use ResizeObserver in GameCanvas)
+    window.addEventListener('resize', this.boundHandleResize);
 
     this.initialized = true;
     console.log('[PixiGame] Initialized');
   }
 
+  resize(width: number, height: number): void {
+    if (!this.app || width <= 0 || height <= 0) return;
+    this.app.renderer.resize(width, height);
+  }
+
   private handleResize(): void {
     if (!this.app || !this.container) return;
     const rect = this.container.getBoundingClientRect();
-    this.app.renderer.resize(rect.width, rect.height);
+    if (rect.width > 0 && rect.height > 0) {
+      this.app.renderer.resize(rect.width, rect.height);
+    }
   }
 
   destroy(): void {
@@ -94,7 +105,7 @@ export class PixiGame {
       this.container.innerHTML = '';
     }
 
-    window.removeEventListener('resize', this.handleResize.bind(this));
+    window.removeEventListener('resize', this.boundHandleResize);
     this.initialized = false;
     console.log('[PixiGame] Destroyed');
   }

@@ -9,6 +9,8 @@ export class UIOverlay {
   private hudContainer: Container;
   private hudText: Text;
   private selectedAgentPanel: Container | null = null;
+  private selectedAgentId: string | null = null;
+  private panelValueTexts: Map<string, Text> = new Map();
 
   constructor(app: Application, agentManager: AgentManager) {
     this.app = app;
@@ -53,9 +55,18 @@ export class UIOverlay {
     const selectedAgent = selectedId ? store.agents.find(a => a.id === selectedId) : null;
 
     if (selectedAgent) {
-      if (!this.selectedAgentPanel) {
+      if (!this.selectedAgentPanel || this.selectedAgentId !== selectedId) {
+        // Agent changed — rebuild panel
+        if (this.selectedAgentPanel) {
+          this.hudContainer.removeChild(this.selectedAgentPanel);
+          this.selectedAgentPanel.destroy();
+          this.selectedAgentPanel = null;
+          this.panelValueTexts.clear();
+        }
+        this.selectedAgentId = selectedId;
         this.createSelectedAgentPanel(selectedAgent);
       } else {
+        // Same agent — just update value text in place
         this.updateSelectedAgentPanelContent(selectedAgent);
       }
     } else {
@@ -63,6 +74,8 @@ export class UIOverlay {
         this.hudContainer.removeChild(this.selectedAgentPanel);
         this.selectedAgentPanel.destroy();
         this.selectedAgentPanel = null;
+        this.selectedAgentId = null;
+        this.panelValueTexts.clear();
       }
     }
   }
@@ -83,27 +96,30 @@ export class UIOverlay {
     const styleBold = new TextStyle({ fontFamily: 'monospace', fontSize: 10, fill: 0x00f5ff, fontWeight: 'bold' });
 
     const lines = [
-      { label: 'NAME: ', value: agent.name },
-      { label: 'ROLE: ', value: agent.role.toUpperCase() },
-      { label: 'ENERGY: ', value: `${Math.round(agent.energy)}%` },
-      { label: 'MOOD: ', value: agent.mood.toUpperCase() },
-      { label: 'STATUS: ', value: agent.workStatus.toUpperCase() },
-      { label: 'EFFICIENCY: ', value: `${Math.round(agent.efficiency)}%` },
-      { label: 'TASKS DONE: ', value: agent.performance?.tasksCompleted?.toString() ?? '0' },
-      { label: 'SUCCESS RATE: ', value: `${Math.round((agent.performance?.successRate ?? 1) * 100)}%` },
+      { label: 'NAME: ',        value: agent.name,                                          static: true },
+      { label: 'ROLE: ',        value: agent.role.toUpperCase(),                            static: true },
+      { label: 'ENERGY: ',      value: `${Math.round(agent.energy)}%`,                      static: false },
+      { label: 'MOOD: ',        value: agent.mood.toUpperCase(),                            static: false },
+      { label: 'STATUS: ',      value: agent.workStatus.toUpperCase(),                      static: false },
+      { label: 'EFFICIENCY: ',  value: `${Math.round(agent.efficiency)}%`,                  static: false },
+      { label: 'TASKS DONE: ',  value: agent.performance?.tasksCompleted?.toString() ?? '0', static: false },
+      { label: 'SUCCESS RATE: ',value: `${Math.round((agent.performance?.successRate ?? 1) * 100)}%`, static: false },
     ];
 
+    this.panelValueTexts.clear();
     let y = 8;
     for (const line of lines) {
       const labelText = new Text({ text: line.label, style: styleBold });
-      labelText.position.x = 8;
-      labelText.position.y = y;
+      labelText.position.set(8, y);
       this.selectedAgentPanel.addChild(labelText);
 
       const valueText = new Text({ text: line.value, style });
-      valueText.position.x = 8 + labelText.width + 4;
-      valueText.position.y = y;
+      valueText.position.set(8 + labelText.width + 4, y);
       this.selectedAgentPanel.addChild(valueText);
+
+      if (!line.static) {
+        this.panelValueTexts.set(line.label, valueText);
+      }
 
       y += 20;
     }
@@ -112,13 +128,19 @@ export class UIOverlay {
   }
 
   private updateSelectedAgentPanelContent(agent: ReturnType<typeof useGameStore.getState>['agents'][0]): void {
-    if (!this.selectedAgentPanel) return;
+    const updates: Record<string, string> = {
+      'ENERGY: ':       `${Math.round(agent.energy)}%`,
+      'MOOD: ':         agent.mood.toUpperCase(),
+      'STATUS: ':       agent.workStatus.toUpperCase(),
+      'EFFICIENCY: ':   `${Math.round(agent.efficiency)}%`,
+      'TASKS DONE: ':   agent.performance?.tasksCompleted?.toString() ?? '0',
+      'SUCCESS RATE: ': `${Math.round((agent.performance?.successRate ?? 1) * 100)}%`,
+    };
 
-    // Update text children - simplified approach: recreate
-    this.hudContainer.removeChild(this.selectedAgentPanel);
-    this.selectedAgentPanel.destroy();
-    this.selectedAgentPanel = null;
-    this.createSelectedAgentPanel(agent);
+    for (const [key, val] of Object.entries(updates)) {
+      const t = this.panelValueTexts.get(key);
+      if (t && t.text !== val) t.text = val;
+    }
   }
 
   destroy(): void {

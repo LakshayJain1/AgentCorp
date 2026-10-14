@@ -7,6 +7,7 @@ export default function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Initialize PixiJS once
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -28,6 +29,21 @@ export default function GameCanvas() {
       mounted = false;
       pixiGame.destroy();
     };
+  }, []);
+
+  // ResizeObserver — handles panel toggle (hidden → visible) and sidebar open/close.
+  // window.resize alone misses CSS display changes, so this is the primary resize path.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      pixiGame.resize(width, height);
+    });
+
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   if (error) {

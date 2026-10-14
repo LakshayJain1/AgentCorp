@@ -75,8 +75,11 @@ export const WALLS: Array<{ x1: number; y1: number; x2: number; y2: number }> = 
   { x1: 175, y1: 340, x2: 475, y2: 340 },
 ];
 
+let _locationsCache: OfficeLocation[] | null = null;
+
 // Convert zones + desks to OfficeLocation[] for gameStore compatibility
 export function toOfficeLocations(): OfficeLocation[] {
+  if (_locationsCache) return _locationsCache;
   const locations: OfficeLocation[] = [];
 
   // Add role-based desk locations
@@ -128,6 +131,7 @@ export function toOfficeLocations(): OfficeLocation[] {
     height: MEETING_AREA.height,
   });
 
+  _locationsCache = locations;
   return locations;
 }
 

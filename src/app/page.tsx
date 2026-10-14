@@ -243,14 +243,36 @@ export default function LandingPage() {
         {/* ============ ECOSYSTEM SIMULATOR ============ */}
         <section id="landscape" className="relative section-pad bg-gradient-to-b from-transparent via-ocean-50/60 to-transparent">
           <div className="mx-auto max-w-6xl px-4 md:px-6">
-            <div className="max-w-2xl reveal">
-              <span className="eyebrow text-ocean-600">Living Ecosystem</span>
-              <h2 className="display-title mt-3 text-navy">
-                A living ecosystem, <span className="font-serif italic font-normal text-ocean-600">not just a dashboard</span>
-              </h2>
-              <p className="prose-body mt-4">Step away from corporate charts into an autonomous digital village. Watch agents coordinate, rest, and ship.</p>
+
+            {/* Header + callout chips in one row on desktop */}
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 reveal">
+              <div className="max-w-2xl">
+                <span className="eyebrow text-ocean-600">Living Ecosystem</span>
+                <h2 className="display-title mt-3 text-navy">
+                  A living office, <span className="font-serif italic font-normal text-ocean-600">not just a dashboard</span>
+                </h2>
+                <p className="prose-body mt-4">
+                  Hit <strong className="text-navy font-semibold">Run Demo</strong> to watch a goal flow through your virtual org — from CEO briefing to shipped code.
+                  Click any agent node to inspect its live energy, morale, and current task.
+                </p>
+              </div>
+
+              {/* Feature chips */}
+              <div className="flex flex-wrap lg:flex-col gap-2 lg:gap-1.5 shrink-0">
+                {[
+                  { label: 'Automatic burnout recovery', color: 'bg-amber-100 text-amber-700' },
+                  { label: 'Knowledge handoff on swap', color: 'bg-violet-100 text-violet-700' },
+                  { label: 'QA loop every sprint', color: 'bg-emerald-100 text-emerald-700' },
+                ].map((chip) => (
+                  <span key={chip.label} className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full ${chip.color}`}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70 shrink-0" />
+                    {chip.label}
+                  </span>
+                ))}
+              </div>
             </div>
-            <div className="mt-14 reveal">
+
+            <div className="mt-10 reveal">
               <AgentEcosystemIllustration />
             </div>
           </div>

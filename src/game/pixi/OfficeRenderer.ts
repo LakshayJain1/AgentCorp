@@ -1,4 +1,4 @@
-import { Application, Graphics, Container } from 'pixi.js';
+import { Application, Graphics, Container, Text, TextStyle } from 'pixi.js';
 import { CANVAS, ZONES, MEETING_AREA, toOfficeLocations } from './PixiOfficeLayout';
 
 export class OfficeRenderer {
@@ -6,6 +6,7 @@ export class OfficeRenderer {
   private officeContainer: Container;
   private officeGraphics: Graphics;
   private furnitureGraphics: Graphics;
+  private labelsContainer: Container;
 
   constructor(app: Application) {
     this.app = app;
@@ -15,9 +16,11 @@ export class OfficeRenderer {
 
     this.officeGraphics = new Graphics();
     this.furnitureGraphics = new Graphics();
-    this.officeContainer.addChild(this.officeGraphics, this.furnitureGraphics);
+    this.labelsContainer = new Container();
+    this.officeContainer.addChild(this.officeGraphics, this.furnitureGraphics, this.labelsContainer);
 
     this.drawOffice();
+    this.drawZoneLabels();
   }
 
   private drawOffice(): void {
@@ -144,27 +147,27 @@ export class OfficeRenderer {
 
   private drawDevHubFurniture(g: Graphics): void {
     const clusterPositions = [
-      { x: 210, y: 50 }, { x: 310, y: 50 },
-      { x: 210, y: 140 }, { x: 310, y: 140 },
+      { x: 210, y: 10 }, { x: 310, y: 10 },
+      { x: 210, y: 90 }, { x: 310, y: 90 },
     ];
     for (const pos of clusterPositions) {
       this.drawDeskCluster(g, pos.x, pos.y);
     }
 
     const cluster2Positions = [
-      { x: 210, y: 220 }, { x: 310, y: 220 },
-      { x: 210, y: 290 }, { x: 310, y: 290 },
+      { x: 210, y: 170 }, { x: 310, y: 170 },
+      { x: 210, y: 250 }, { x: 310, y: 250 },
     ];
     for (const pos of cluster2Positions) {
       this.drawDeskCluster(g, pos.x, pos.y);
     }
 
     // "FOCUS > PLAN > EXECUTE" poster
-    g.rect(340, 10, 60, 50); g.fill({ color: 0x1a1a2e });
-    g.rect(340, 10, 60, 50); g.stroke({ width: 1, color: 0x00f5ff, alpha: 0.3 });
-    g.rect(348, 18, 44, 1); g.fill({ color: 0x00f5ff, alpha: 0.5 });
-    g.rect(348, 30, 44, 1); g.fill({ color: 0x00f5ff, alpha: 0.5 });
-    g.rect(348, 42, 44, 1); g.fill({ color: 0x00f5ff, alpha: 0.5 });
+    g.rect(400, 10, 60, 50); g.fill({ color: 0x1a1a2e });
+    g.rect(400, 10, 60, 50); g.stroke({ width: 1, color: 0x00f5ff, alpha: 0.3 });
+    g.rect(408, 18, 44, 1); g.fill({ color: 0x00f5ff, alpha: 0.5 });
+    g.rect(408, 30, 44, 1); g.fill({ color: 0x00f5ff, alpha: 0.5 });
+    g.rect(408, 42, 44, 1); g.fill({ color: 0x00f5ff, alpha: 0.5 });
 
     this.drawPlant(g, 190, 55);
     this.drawPlant(g, 460, 55);
@@ -173,11 +176,27 @@ export class OfficeRenderer {
   }
 
   private drawDeskCluster(g: Graphics, x: number, y: number): void {
-    g.rect(x, y, 75, 55); g.fill({ color: 0x3a2a1a });
-    g.rect(x + 3, y + 3, 69, 49); g.fill({ color: 0x4a3a2a });
-    g.rect(x + 20, y - 12, 35, 22); g.fill({ color: 0x0a0a1a });
-    g.rect(x + 22, y - 10, 31, 18); g.fill({ color: 0x00f5ff, alpha: 0.06 });
-    g.rect(x + 25, y + 58, 25, 14); g.fill({ color: 0x1a1a2e });
+    const W = 54;
+    const H = 54;
+    const border = 6;
+    // Outer dark border
+    g.rect(x, y, W, H); g.fill({ color: 0x3d2b1f });
+    // Inner warm brown
+    g.rect(x + border, y + border, W - border * 2, H - border * 2); g.fill({ color: 0x5d4a36 });
+    // Glass separator - translucent blue with highlight edges
+    const bw = 7;
+    const bx = x + W / 2 - bw / 2;
+    g.rect(bx, y, bw, H); g.fill({ color: 0x2d9cdb, alpha: 0.55 });
+    g.rect(bx, y, 1, H); g.fill({ color: 0xbfe9ff, alpha: 0.5 });
+    g.rect(bx + bw - 1, y, 1, H); g.fill({ color: 0xbfe9ff, alpha: 0.5 });
+    // Workstations - small gray base + slim black monitor, mirrored
+    const cy = y + H / 2;
+    // Left
+    g.rect(x + 8, cy - 6, 10, 12); g.fill({ color: 0x2e3338 });
+    g.rect(x + 12, cy - 8, 8, 16); g.fill({ color: 0x0e0e10 });
+    // Right
+    g.rect(x + W - 18, cy - 6, 10, 12); g.fill({ color: 0x2e3338 });
+    g.rect(x + W - 20, cy - 8, 8, 16); g.fill({ color: 0x0e0e10 });
   }
 
   private drawPMFurniture(g: Graphics): void {
@@ -241,7 +260,6 @@ export class OfficeRenderer {
   }
 
   private drawLegend(g: Graphics): void {
-    const W = CANVAS.width;
     const H = CANVAS.height;
     const lx = 10;
     const ly = H - 80;
@@ -259,11 +277,28 @@ export class OfficeRenderer {
       { color: 0x1a1410, label: 'Kitchen' },
     ];
 
+    const labelStyle = new TextStyle({ fontFamily: 'monospace', fontSize: 9, fill: 0x8888aa });
+
     items.forEach((item, i) => {
       const iy = ly + 8 + i * 10;
       g.rect(lx + 6, iy, 8, 8); g.fill({ color: item.color });
       g.rect(lx + 6, iy, 8, 8); g.stroke({ width: 1, color: 0x2d2d5e, alpha: 0.3 });
+
+      const label = new Text({ text: item.label, style: labelStyle });
+      label.position.set(lx + 18, iy - 1);
+      this.labelsContainer.addChild(label);
     });
+  }
+
+  private drawZoneLabels(): void {
+    const zoneStyle = new TextStyle({ fontFamily: 'monospace', fontSize: 9, fill: 0x4444aa });
+
+    for (const zone of ZONES) {
+      const label = new Text({ text: zone.name.toUpperCase(), style: zoneStyle });
+      label.alpha = 0.7;
+      label.position.set(zone.x + 4, zone.y + 4);
+      this.labelsContainer.addChild(label);
+    }
   }
 
   private drawPlant(g: Graphics, x: number, y: number): void {
@@ -273,6 +308,7 @@ export class OfficeRenderer {
   }
 
   destroy(): void {
+    this.labelsContainer.destroy({ children: true });
     this.officeContainer.destroy({ children: true });
   }
 }
