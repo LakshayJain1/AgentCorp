@@ -88,7 +88,49 @@ export default function SetupWizard() {
     return () => clearInterval(timer);
   }, [step]);
 
+  // On desktop the user already authenticated in the system browser — never
+  // show the in-app Clerk sign-in form. Treat desktop as always signed-in for
+  // wizard routing purposes.
+  const isDesktop = typeof window !== 'undefined' &&
+    !!(window as unknown as { agentcorpDesktop?: { available?: boolean } }).agentcorpDesktop?.available;
+
   useEffect(() => {
+    // On desktop: don't wait for Clerk's client-side resolution — skip straight
+    // to step 2. The session cookie was injected by the Electron main process and
+    // is valid server-side; Clerk's React SDK may lag behind on client-side state.
+    if (isDesktop && isSignedIn === undefined) {
+      const saved = sessionStorage.getItem('wizardState');
+      if (saved) {
+        try {
+          const state = JSON.parse(saved);
+          const targetStep = (state.step === 0 || state.step >= 5) ? 2 : Math.max(state.step, 2);
+          setStep(targetStep);
+          setCompanyName(state.companyName);
+          setCompanyProduct(state.companyProduct);
+          setDevCount(state.devCount);
+          setGhConnected(state.ghConnected ?? true);
+          setGhRepo(state.ghRepo ?? '');
+          setGhToken(state.ghToken ?? '');
+          setGhCommit(state.ghCommit ?? true);
+          setVConnected(state.vConnected ?? true);
+          setVToken(state.vToken ?? '');
+          setVDeploy(state.vDeploy ?? true);
+          setSConnected(state.sConnected ?? false);
+          setSUrl(state.sUrl ?? '');
+          setSBroadcast(state.sBroadcast ?? true);
+          setAiProvider(state.aiProvider ?? 'gemini');
+          setAiKey(state.aiKey ?? '');
+        } catch {
+          sessionStorage.removeItem('wizardState');
+          setStep(2);
+        }
+      } else {
+        setStep(2);
+      }
+      setIsRestoring(false);
+      return;
+    }
+
     if (isSignedIn === undefined) return;
     const saved = sessionStorage.getItem('wizardState');
     if (saved) {
@@ -128,7 +170,7 @@ export default function SetupWizard() {
       }
     }
     setIsRestoring(false);
-  }, [isSignedIn]);
+  }, [isSignedIn, isDesktop]);
 
   useEffect(() => {
     if (isRestoring) return;
@@ -245,29 +287,47 @@ export default function SetupWizard() {
       <div className="absolute bottom-[-20%] left-[-15%] w-[800px] h-[800px] bg-teal/15 rounded-full blur-[180px] pointer-events-none animate-driftSlow" style={{ animationDelay: '-8s' }} />
       <div className="absolute inset-0 grid-dots opacity-60 pointer-events-none" />
 
-      <div className="fixed top-0 left-0 right-0 h-16 border-b border-navy/5 bg-white/70 backdrop-blur-xl flex items-center justify-between px-6 z-40">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-[10px] bg-gradient-to-br from-ocean to-teal flex items-center justify-center shadow-sm">
-            <Cpu className="w-4 h-4 text-white" />
+      <div className="w-full max-w-6xl mx-auto px-4 md:px-6 py-10 relative z-10 flex flex-col min-h-screen">
+
+        {/* Page header — logo + step progress only, no nav links */}
+        <div className="flex flex-col items-center gap-5 mb-10 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-[8px] bg-gradient-to-br from-ocean to-teal flex items-center justify-center shadow-sm">
+              <Cpu className="w-3.5 h-3.5 text-white" />
+            </div>
+            <span className="font-semibold text-sm text-navy/70 font-display">AgentCorp</span>
           </div>
-          <span className="font-semibold text-sm text-navy font-display">AgentCorp</span>
-        </div>
-        <div className="flex items-center gap-4 text-xs text-navy/40">
-          <span className="hover:text-navy cursor-pointer transition-colors">Docs</span>
-          <span className="hover:text-navy cursor-pointer transition-colors">Pricing</span>
-          <span className="hover:text-navy cursor-pointer transition-colors">Status</span>
-          {step === 0 && (
-            <button
-              onClick={() => setStep(1)}
-              className="px-3.5 py-1.5 rounded-full bg-ocean-600 text-white font-semibold hover:bg-ocean-700 transition-all cursor-pointer shadow-[0_4px_16px_rgba(10,132,255,0.3)] text-xs"
-            >
-              Sign In
-            </button>
+
+          {step >= 1 && (
+            <div className="flex items-center gap-1.5">
+              {[
+                { label: 'Account', s: 1 },
+                { label: 'Workspace', s: 2 },
+                { label: 'Launch', s: 3 },
+              ].map(({ label, s }, i) => {
+                const allDone = step === 5;
+                const active = !allDone && step === s;
+                const done = allDone || step > s;
+                return (
+                  <div key={s} className="flex items-center gap-1.5">
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-semibold transition-all duration-300 ${
+                      allDone        ? 'bg-green-100 text-green-700' :
+                      active         ? 'bg-ocean-600 text-white shadow-sm' :
+                      done           ? 'bg-green-100 text-green-700' :
+                                       'bg-[rgba(23,23,31,0.05)] text-navy/35'
+                    }`}>
+                      {done ? <Check className="w-3 h-3" /> : <span className="w-3 text-center">{s}</span>}
+                      <span>{label}</span>
+                    </div>
+                    {i < 2 && <ChevronRight className="w-3 h-3 text-navy/20" />}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
-      </div>
 
-      <div className="w-full max-w-6xl mx-auto px-4 md:px-6 pt-24 pb-12 relative z-10 flex items-center justify-center min-h-screen">
+        <div className="flex-1 flex items-center justify-center w-full">
         <AnimatePresence mode="wait">
           {step === 0 && (
             <motion.div
@@ -285,6 +345,7 @@ export default function SetupWizard() {
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-ocean-50 border border-ocean-100 text-ocean-600 text-[10px] font-semibold tracking-wider">
                     <Sparkles size={10} /> Active Agent Sandbox v2.0.6
                   </div>
+
                   <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight leading-[1.1] text-navy">
                     Build <span className="gradient-text">AI teammates</span>,<br />not automations.
                   </h1>
@@ -946,6 +1007,7 @@ export default function SetupWizard() {
             </motion.div>
           )}
         </AnimatePresence>
+        </div>
       </div>
     </div>
   );
