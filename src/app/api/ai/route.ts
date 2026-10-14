@@ -16,7 +16,7 @@ interface RequestBody {
   model?: string;
 }
 
-async function callOpenRouter(body: RequestBody): Promise<string | null> {
+async function callOpenRouter(body: RequestBody, apiKey: string = OPENROUTER_API_KEY): Promise<string | null> {
   const messages: { role: string; content: string }[] = [];
 
   if (body.systemPrompt) {
@@ -32,7 +32,7 @@ async function callOpenRouter(body: RequestBody): Promise<string | null> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model: body.model || 'openai/gpt-4o-mini',
@@ -107,20 +107,29 @@ export async function POST(req: NextRequest) {
   try {
     const body: RequestBody = await req.json();
 
+    // BYOK: desktop app sends the user's own key in x-byok-key header.
+    // It takes precedence over server env vars so Vercel env never needed for desktop users.
+    const byokKey = req.headers.get('x-byok-key') || '';
+
     if (body.action === 'check') {
+      const hasKey = byokKey.length > 0 || OPENROUTER_API_KEY.length > 0 || GEMINI_API_KEY.length > 0;
       return NextResponse.json({
-        available: OPENROUTER_API_KEY.length > 0 || GEMINI_API_KEY.length > 0,
-        configured: OPENROUTER_API_KEY.length > 0 || GEMINI_API_KEY.length > 0,
-        provider: OPENROUTER_API_KEY.length > 0 ? 'openrouter' : GEMINI_API_KEY.length > 0 ? 'gemini' : 'none',
-        message: OPENROUTER_API_KEY.length > 0
-          ? 'OpenRouter API key is configured'
-          : GEMINI_API_KEY.length > 0
-            ? 'Gemini API key is configured (fallback)'
-            : 'No API key set. Using mock AI responses.',
+        available: hasKey,
+        configured: hasKey,
+        provider: byokKey.length > 0 ? 'byok' : OPENROUTER_API_KEY.length > 0 ? 'openrouter' : GEMINI_API_KEY.length > 0 ? 'gemini' : 'none',
+        message: byokKey.length > 0
+          ? 'Using your own API key'
+          : OPENROUTER_API_KEY.length > 0
+            ? 'OpenRouter API key is configured'
+            : GEMINI_API_KEY.length > 0
+              ? 'Gemini API key is configured (fallback)'
+              : 'No API key set. Using mock AI responses.',
       });
     }
 
-    const hasOpenRouter = OPENROUTER_API_KEY.length > 0;
+    // Resolve which key to use: BYOK > server OpenRouter > server Gemini
+    const effectiveOpenRouterKey = byokKey.length > 0 ? byokKey : OPENROUTER_API_KEY;
+    const hasOpenRouter = effectiveOpenRouterKey.length > 0;
     const hasGemini = GEMINI_API_KEY.length > 0;
 
     if (!hasOpenRouter && !hasGemini) {
@@ -134,7 +143,7 @@ export async function POST(req: NextRequest) {
     let content: string | null = null;
 
     if (hasOpenRouter) {
-      content = await callOpenRouter(body);
+      content = await callOpenRouter(body, effectiveOpenRouterKey);
     }
 
     if (!content && hasGemini) {

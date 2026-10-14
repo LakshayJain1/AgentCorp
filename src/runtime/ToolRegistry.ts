@@ -1,6 +1,6 @@
 import { ToolDefinition, ToolResult } from '@/agents/AgentTypes';
 import { WorkspaceScope } from '@/connectors/ConnectorTypes';
-import { ToolCapability } from '@/execution/ToolExecutor';
+import { ToolCapability, getToolExecutor, detectExecutorEnv } from '@/execution/ToolExecutor';
 
 const FILE_EXEC_CAPABILITIES: ToolCapability[] = [
   'read_file',
@@ -14,6 +14,17 @@ const FILE_EXEC_CAPABILITIES: ToolCapability[] = [
 interface ToolHandler {
   definition: ToolDefinition;
   execute: (params: Record<string, string>) => Promise<ToolResult>;
+}
+
+// Reads the BYOK key from Electron storage when running on desktop.
+async function getByokApiKey(): Promise<string | null> {
+  try {
+    const api = typeof window !== 'undefined' ? (window as unknown as { electronAPI?: { apiKey?: { get: (p: string) => Promise<string | null> } } }).electronAPI : undefined;
+    if (!api?.apiKey) return null;
+    return await api.apiKey.get('openrouter') || await api.apiKey.get('gemini');
+  } catch {
+    return null;
+  }
 }
 
 class ToolRegistry {
@@ -31,9 +42,15 @@ class ToolRegistry {
         const start = performance.now();
         console.log('[AgentCorp] ask_agent executing — role:', agentRole, 'question length:', question?.length);
         try {
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          // On desktop: attach the user's BYOK key so the API route uses it
+          if (detectExecutorEnv() === 'desktop') {
+            const byokKey = await getByokApiKey();
+            if (byokKey) headers['x-byok-key'] = byokKey;
+          }
           const res = await fetch('/api/ai', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({ prompt: question, role: agentRole, action: 'chat' }),
           });
           console.log('[AgentCorp] /api/ai response status:', res.status);
@@ -51,6 +68,30 @@ class ToolRegistry {
         }
       },
     });
+
+    // On desktop: register real file/exec tools via the DesktopExecutor
+    if (detectExecutorEnv() === 'desktop') {
+      this.registerDesktopTools();
+    }
+  }
+
+  private registerDesktopTools(): void {
+    const executor = getToolExecutor();
+    const desktopCapabilities: Array<{ name: ToolCapability; description: string; parameters: Record<string, string> }> = [
+      { name: 'read_file', description: 'Read a file from the workspace by relative path.', parameters: { path: 'string' } },
+      { name: 'write_file', description: 'Write content to a file in the workspace.', parameters: { path: 'string', content: 'string' } },
+      { name: 'patch_file', description: 'Overwrite a file in the workspace (alias for write_file).', parameters: { path: 'string', content: 'string' } },
+      { name: 'search_code', description: 'Search files in the workspace by regex pattern.', parameters: { pattern: 'string', dir: 'string' } },
+      { name: 'run_command', description: 'Run an allowlisted command (tsc, npx, node, npm) in the workspace.', parameters: { cmd: 'string', args: 'string', cwd: 'string' } },
+      { name: 'run_tests', description: 'Run vitest in the workspace and return results.', parameters: { cwd: 'string' } },
+    ];
+    for (const cap of desktopCapabilities) {
+      this.register({
+        definition: { name: cap.name, description: cap.description, parameters: cap.parameters },
+        execute: (params) => executor.execute(cap.name, params),
+      });
+    }
+    console.log('[AgentCorp] ToolRegistry: desktop tools registered (read_file, write_file, patch_file, search_code, run_command, run_tests)');
   }
 
   private register(handler: ToolHandler): void {
@@ -118,20 +159,24 @@ class ToolRegistry {
     scope?: WorkspaceScope,
   ): Promise<ToolResult> {
     console.log('[AgentCorp] executeTool called:', name, Object.keys(params));
-    // File/exec capabilities route through server APIs scoped to the USER's repo —
-    // never direct fs, token never leaves the server. Without a connected repo
-    // scope they are denied by construction (per-user isolation).
+    // File/exec capabilities: on desktop they run locally via DesktopExecutor;
+    // on Vercel they route through the GitHub API (requires a connected repo scope).
     if ((FILE_EXEC_CAPABILITIES as string[]).includes(name)) {
       const capability = name as ToolCapability;
-      if (!scope || !scope.repo) {
-        return {
-          success: false,
-          output: '',
-          error: `denied: no-connected-repo — '${capability}' requires the user to connect their own repo first (scope userId/workspaceId/repo).`,
-          duration: 0,
-        };
+      if (detectExecutorEnv() === 'desktop') {
+        // Desktop: execute locally — the registered tool handler already covers this,
+        // so just fall through to the normal tool.execute() path below.
+      } else {
+        if (!scope || !scope.repo) {
+          return {
+            success: false,
+            output: '',
+            error: `denied: no-connected-repo — '${capability}' requires the user to connect their own repo first (scope userId/workspaceId/repo).`,
+            duration: 0,
+          };
+        }
+        return this.executeRepoCapability(capability, params, scope);
       }
-      return this.executeRepoCapability(capability, params, scope);
     }
     const tool = this.tools.get(name);
     if (!tool) {

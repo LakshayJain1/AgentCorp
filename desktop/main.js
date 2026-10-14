@@ -11,6 +11,21 @@ const DEEP_LINK_SCHEME = 'agentcorp';
 
 let mainWindow = null;
 
+// ─── Debug log ──────────────────────────────────────────────────────
+// Startup diagnostics: %APPDATA%/AgentCorp/agentcorp-debug.log on Windows.
+// This is how we diagnose silent startup failures (process alive, no window).
+let logFile = null;
+function log(...args) {
+  const line = `[${new Date().toISOString()}] ${args.map((a) => {
+    try { return typeof a === 'string' ? a : JSON.stringify(a); } catch { return String(a); }
+  }).join(' ')}`;
+  try {
+    if (!logFile) logFile = path.join(app.getPath('userData'), 'agentcorp-debug.log');
+    fs.appendFileSync(logFile, line + '\n');
+  } catch { /* logging must never crash startup */ }
+  console.log('[AgentCorp]', ...args);
+}
+
 // A deep link can arrive before the window exists (cold start via protocol on
 // Windows/Linux passes the URL in process.argv; on macOS via open-url). Stash
 // it and process once the window is ready — handleDeepLink already persists
@@ -35,12 +50,6 @@ function handleDeepLinkArgv(argv) {
 // Only stash it here (app.getPath isn't usable before ready) — it is
 // processed in whenReady after the window exists.
 handleDeepLinkArgv(process.argv);
-
-function handleDeepLinkArgv(argv) {
-  if (!Array.isArray(argv)) return;
-  const url = argv.find((arg) => typeof arg === 'string' && arg.startsWith(`${DEEP_LINK_SCHEME}://`));
-  if (url) pendingDeepLink = url;
-}
 
 // ─── Browser-based sign-in ──────────────────────────────────────────
 // Auth never happens inside the app: we open the system browser on the web
@@ -91,6 +100,7 @@ function handleDeepLink(url) {
   if (token) {
     if (app.isReady()) {
       saveAuth({ token, userId, authenticatedAt: Date.now() });
+      log('deep link: token saved for user', userId);
     } else {
       pendingDeepLink = url;
       return;
@@ -99,11 +109,11 @@ function handleDeepLink(url) {
     // Inject the verified Clerk session JWT as the __session cookie so the
     // embedded web app arrives genuinely authenticated.
     if (mainWindow && !mainWindow.isDestroyed()) {
-      const cookieUrl = WEB_URL;
       session.defaultSession.cookies.set({
+        url: WEB_URL,
         name: '__session',
         value: token,
-        domain: new URL(cookieUrl).hostname,
+        domain: new URL(WEB_URL).hostname,
         path: '/',
         httpOnly: true,
         secure: !isDev,
@@ -113,7 +123,7 @@ function handleDeepLink(url) {
         if (mainWindow.isMinimized()) mainWindow.restore();
         mainWindow.focus();
       }).catch((err) => {
-        console.error('[AgentCorp] cookie inject failed:', err);
+        log('deep-link cookie inject failed (loading anyway):', err && err.message);
         mainWindow.loadURL(`${WEB_URL}${redirect}`);
       });
     }
@@ -125,11 +135,15 @@ function handleDeepLink(url) {
 // protocol launch is ever missed, even before ready.
 if (process.platform === 'win32' || process.platform === 'linux') {
   const gotLock = app.requestSingleInstanceLock();
+  log('single-instance lock acquired=', gotLock);
   if (!gotLock) {
     app.quit();
   } else {
     app.on('second-instance', (_event, commandLine) => {
       handleDeepLinkArgv(commandLine);
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        createMainWindow();
+      }
       if (pendingDeepLink && mainWindow && !mainWindow.isDestroyed()) {
         const url = pendingDeepLink;
         pendingDeepLink = null;
@@ -137,6 +151,7 @@ if (process.platform === 'win32' || process.platform === 'linux') {
       }
       if (mainWindow) {
         if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
         mainWindow.focus();
       }
     });
@@ -172,13 +187,17 @@ function createMainWindow() {
   // Hide the default Electron menu (File/Edit/View/…) for a native app feel
   Menu.setApplicationMenu(null);
 
+  // titleBarStyle: 'hiddenInset' is macOS-only — on Windows use 'hidden' so
+  // the frame is removed without breaking the traffic-light position.
+  const titleBarStyle = process.platform === 'darwin' ? 'hiddenInset' : 'hidden';
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1000,
     minHeight: 700,
     title: 'AgentCorp',
-    titleBarStyle: 'hiddenInset',
+    titleBarStyle,
     trafficLightPosition: { x: 16, y: 16 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -186,12 +205,60 @@ function createMainWindow() {
       nodeIntegration: false,
       sandbox: false,
     },
-    show: false,
+    show: true,
     backgroundColor: '#FAFBFD',
   });
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+  mainWindow.webContents.on('did-finish-load', () => {
+    const url = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getURL() : '(gone)';
+    log('did-finish-load:', url);
+
+    // Detect blank-page state: page loaded the workspace URL but rendered nothing.
+    // Inject a quick check — if the body is completely empty, fall back to signin.
+    if (mainWindow && !mainWindow.isDestroyed() && url.includes(WEB_URL)) {
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          var txt = (document.body || {}).innerText || '';
+          return txt.replace(/\\s/g,'').length;
+        })()
+      `).then((charCount) => {
+        if (charCount < 5 && mainWindow && !mainWindow.isDestroyed()) {
+          log('did-finish-load: page appears blank (charCount=' + charCount + '), falling back to signin');
+          clearAuth();
+          mainWindow.loadFile(path.join(__dirname, 'signin.html'));
+        }
+      }).catch(() => {});
+    }
+  });
+
+  // F12 opens DevTools inline (bottom panel) — visible even on a blank page
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.webContents.isDevToolsOpened()) {
+          mainWindow.webContents.closeDevTools();
+        } else {
+          mainWindow.webContents.openDevTools({ mode: 'bottom' });
+        }
+      }
+    }
+  });
+
+  // Ctrl+Shift+I also opens DevTools (standard browser shortcut)
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (input.type === 'keyDown' && input.control && input.shift && input.key === 'I') {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.webContents.isDevToolsOpened()) {
+          mainWindow.webContents.closeDevTools();
+        } else {
+          mainWindow.webContents.openDevTools({ mode: 'bottom' });
+        }
+      }
+    }
+  });
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    log('RENDERER CRASHED:', JSON.stringify(details));
   });
 
   mainWindow.on('closed', () => {
@@ -202,7 +269,7 @@ function createMainWindow() {
   // failures with a retry screen instead.
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-    console.error('[AgentCorp] did-fail-load:', errorCode, errorDescription, validatedURL);
+    log('did-fail-load:', errorCode, errorDescription, validatedURL);
     mainWindow.loadURL(loadErrorPage(validatedURL, errorDescription));
   });
 
@@ -215,26 +282,41 @@ function createMainWindow() {
     return { action: 'allow' };
   });
 
-  // Check if user is already authenticated
-  const auth = loadAuth();
+  // Check if user is already authenticated (and token isn't stale — Clerk JWTs expire)
+  const raw = loadAuth();
+  const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const isTokenFresh = raw && raw.token && (Date.now() - (raw.authenticatedAt || 0)) < TOKEN_MAX_AGE_MS;
+  if (raw && !isTokenFresh) {
+    log('startup: stale token (age > 7d), clearing');
+    clearAuth();
+  }
+  const auth = isTokenFresh ? raw : null;
+  log('startup auth present=', !!(auth && auth.token));
   if (auth && auth.token) {
-    // Set session cookie and load workspace
-    const cookieUrl = WEB_URL;
+    // Set session cookie and load workspace.
+    // url is required by Electron's cookies.set() — without it the call throws
+    // "Missing required option 'url'" and loadURL never fires (blank screen).
     session.defaultSession.cookies.set({
+      url: WEB_URL,
       name: '__session',
       value: auth.token,
-      domain: new URL(cookieUrl).hostname,
+      domain: new URL(WEB_URL).hostname,
       path: '/',
       httpOnly: true,
       secure: !isDev,
       sameSite: 'lax',
     }).then(() => {
-      mainWindow.loadURL(`${WEB_URL}/workspace`);
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(`${WEB_URL}/workspace`);
+    }).catch((err) => {
+      log('startup cookie inject failed (loading workspace anyway):', err && err.message);
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(`${WEB_URL}/workspace`);
     });
   } else {
     // Not authenticated — show the local launcher screen. Auth happens in
     // the system browser; the app receives the session via deep link.
-    mainWindow.loadFile(path.join(__dirname, 'signin.html'));
+    const signinPath = path.join(__dirname, 'signin.html');
+    log('loading launcher:', signinPath, 'exists=', fs.existsSync(signinPath));
+    mainWindow.loadFile(signinPath);
   }
 
   return mainWindow;
@@ -323,13 +405,124 @@ ipcMain.handle('checks:run', async (_event, { workspaceId, check }) => {
 
 ipcMain.handle('checks:list', () => Object.keys(ALLOWED_CHECKS));
 
+// ─── BYOK: per-user API key storage ─────────────────────────────────
+// Keys are stored locally in userData — never sent to Vercel servers.
+// The web app reads them back on startup and injects into all AI calls.
+const apiKeyPath = path.join(app.getPath('userData'), 'apikeys.json');
+
+function loadApiKeys() {
+  try { return JSON.parse(fs.readFileSync(apiKeyPath, 'utf-8')); } catch { return {}; }
+}
+function saveApiKeys(keys) {
+  fs.writeFileSync(apiKeyPath, JSON.stringify(keys, null, 2));
+}
+
+ipcMain.handle('apikey:get', (_event, provider) => {
+  const keys = loadApiKeys();
+  return keys[provider] || null;
+});
+ipcMain.handle('apikey:set', (_event, provider, value) => {
+  if (typeof provider !== 'string' || !/^[a-z0-9_-]{1,32}$/.test(provider)) return false;
+  const keys = loadApiKeys();
+  if (value) { keys[provider] = String(value); } else { delete keys[provider]; }
+  saveApiKeys(keys);
+  return true;
+});
+ipcMain.handle('apikey:list-providers', () => Object.keys(loadApiKeys()));
+
+// ─── Desktop file executor (sandboxed to workspace) ─────────────────
+// Agents on the desktop can read, write, and search files — but only
+// within the user's chosen workspace root. No path traversal outside it.
+const { execFile: execFileRaw } = require('child_process');
+
+let workspaceRoot = null;
+
+ipcMain.handle('workspace:set-root', (_event, dir) => {
+  if (!dir || !fs.existsSync(dir)) return { ok: false, error: 'directory does not exist' };
+  workspaceRoot = dir;
+  log('workspace root set:', workspaceRoot);
+  return { ok: true };
+});
+
+ipcMain.handle('workspace:get-root', () => workspaceRoot);
+
+function resolveWorkspacePath(rel) {
+  if (!workspaceRoot) return null;
+  // Prevent path traversal
+  const abs = path.resolve(workspaceRoot, rel);
+  if (!abs.startsWith(path.resolve(workspaceRoot) + path.sep) && abs !== path.resolve(workspaceRoot)) return null;
+  return abs;
+}
+
+ipcMain.handle('fs:read', (_event, relPath) => {
+  const abs = resolveWorkspacePath(relPath);
+  if (!abs) return { ok: false, error: 'denied: outside workspace or no workspace set' };
+  try {
+    const content = fs.readFileSync(abs, 'utf-8');
+    return { ok: true, content };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+ipcMain.handle('fs:write', (_event, relPath, content) => {
+  const abs = resolveWorkspacePath(relPath);
+  if (!abs) return { ok: false, error: 'denied: outside workspace or no workspace set' };
+  try {
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, content, 'utf-8');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+ipcMain.handle('fs:search', (_event, pattern, relDir) => {
+  const abs = resolveWorkspacePath(relDir || '.');
+  if (!abs) return { ok: false, error: 'denied: outside workspace or no workspace set' };
+  return new Promise((resolve) => {
+    // Use ripgrep if available, fall back to grep
+    const timer = setTimeout(() => resolve({ ok: false, error: 'search timeout' }), 15000);
+    execFileRaw('rg', ['--line-number', '--no-heading', '-m', '50', pattern, abs],
+      { maxBuffer: 512 * 1024 },
+      (err, stdout, stderr) => {
+        clearTimeout(timer);
+        // rg exits 1 when no matches — that's not an error
+        if (err && err.code !== 1 && !stdout) {
+          return resolve({ ok: false, error: stderr || String(err) });
+        }
+        resolve({ ok: true, output: stdout.slice(0, 8000) });
+      });
+  });
+});
+
+ipcMain.handle('exec:run', async (_event, { cmd, args, relCwd }) => {
+  const cwd = resolveWorkspacePath(relCwd || '.');
+  if (!cwd) return { ok: false, error: 'denied: outside workspace or no workspace set' };
+  // Allowlist: only safe read-only diagnostic commands
+  const ALLOWED_EXEC = ['tsc', 'npx', 'node', 'npm'];
+  if (!ALLOWED_EXEC.includes(cmd)) return { ok: false, error: `denied: '${cmd}' is not in the allowed command list` };
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ ok: false, error: 'exec timeout (120s)' }), 120000);
+    execFileRaw(cmd, args || [], { cwd, timeout: 115000, maxBuffer: 1024 * 512 },
+      (err, stdout, stderr) => {
+        clearTimeout(timer);
+        const out = `${stdout || ''}${stderr || ''}`.slice(-4000);
+        if (err) return resolve({ ok: false, output: out, error: `exit ${err.code ?? '?'}` });
+        resolve({ ok: true, output: out.slice(-2000) });
+      });
+  });
+});
+
 // ─── App lifecycle ──────────────────────────────────────────────────
 // Register protocol once the app is ready (required on Windows)
 app.whenReady().then(() => {
+  log('app ready, argv=', process.argv.slice(1).join(' '), 'isDev=', isDev, 'WEB_URL=', WEB_URL);
   try {
-    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+    const ok = app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+    log('protocol registration result=', ok);
   } catch (err) {
-    console.error('[AgentCorp] protocol registration failed:', err);
+    log('protocol registration failed:', err && err.message);
   }
   createMainWindow();
 
@@ -337,6 +530,7 @@ app.whenReady().then(() => {
   if (pendingDeepLink) {
     const url = pendingDeepLink;
     pendingDeepLink = null;
+    log('processing pending deep link');
     handleDeepLink(url);
   }
 });

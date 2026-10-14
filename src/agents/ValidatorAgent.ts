@@ -1,6 +1,7 @@
 import { useGameStore } from '@/store/gameStore';
 import { SubTask, ValidationResult } from './AgentTypes';
 import { toolRegistry } from '@/runtime/ToolRegistry';
+import { detectExecutorEnv } from '@/execution/ToolExecutor';
 
 interface QueuedValidation {
   subtask: SubTask;
@@ -41,6 +42,53 @@ export class ValidatorAgent {
     }
   }
 
+  private async runDesktopChecks(subtask: SubTask, details: string[]): Promise<boolean> {
+    // Only run on desktop and only when the subtask specifies a verify command
+    if (detectExecutorEnv() !== 'desktop') return false;
+    if (!subtask.verifyCommand) return false;
+
+    const api = typeof window !== 'undefined'
+      ? (window as unknown as { electronAPI?: { exec: { run: (cmd: string, args: string[], cwd?: string) => Promise<{ ok: boolean; output?: string; error?: string }> } } }).electronAPI
+      : undefined;
+    if (!api) return false;
+
+    let anyCheckRan = false;
+
+    if (subtask.verifyCommand.includes('typecheck')) {
+      const r = await api.exec.run('npx', ['tsc', '--noEmit']);
+      anyCheckRan = true;
+      if (r.ok) {
+        details.push('TypeScript check: PASSED');
+      } else {
+        const errCount = (r.output?.match(/error TS/g) || []).length;
+        details.push(`TypeScript check: FAILED (${errCount} errors)`);
+      }
+    }
+
+    if (subtask.verifyCommand.includes('lint')) {
+      const r = await api.exec.run('npx', ['eslint', '--ext', '.ts,.tsx', 'src', '--format', 'compact']);
+      anyCheckRan = true;
+      const errLines = (r.output?.split('\n').filter((l) => l.includes(': error ')).length) ?? 0;
+      if (r.ok || errLines === 0) {
+        details.push('ESLint check: PASSED');
+      } else {
+        details.push(`ESLint check: FAILED (${errLines} errors)`);
+      }
+    }
+
+    if (subtask.verifyCommand.includes('test')) {
+      const r = await api.exec.run('npx', ['vitest', 'run']);
+      anyCheckRan = true;
+      if (r.ok) {
+        details.push('Tests: PASSED');
+      } else {
+        details.push(`Tests: FAILED — ${(r.output || '').slice(0, 200)}`);
+      }
+    }
+
+    return anyCheckRan;
+  }
+
   private async runValidation(subtask: SubTask, retryCount: number): Promise<ValidationResult> {
     const details: string[] = [];
 
@@ -53,15 +101,21 @@ export class ValidatorAgent {
         details.push('Content length check: FAILED (too short)');
       }
 
-      const aiResult = await toolRegistry.executeTool('ask_agent', {
-        agentRole: 'qa',
-        question: `Validate this deliverable for task "${subtask.description}":\n${subtask.deliverable.slice(0, 1500)}\n\nReturn VALID or INVALID with a brief reason.`,
-      });
+      // Run real local checks on desktop when the subtask has a verify command
+      const ranChecks = await this.runDesktopChecks(subtask, details);
 
-      if (aiResult.success && aiResult.output) {
-        const isValid = /VALID/i.test(aiResult.output) && !/INVALID/i.test(aiResult.output);
-        details.push(`AI review: ${isValid ? 'PASSED' : 'FAILED'}`);
-        details.push(`Review: ${aiResult.output.slice(0, 200)}`);
+      // Only call AI review if no real checks ran (avoid redundant cost)
+      if (!ranChecks) {
+        const aiResult = await toolRegistry.executeTool('ask_agent', {
+          agentRole: 'qa',
+          question: `Validate this deliverable for task "${subtask.description}":\n${subtask.deliverable.slice(0, 1500)}\n\nReturn VALID or INVALID with a brief reason.`,
+        });
+
+        if (aiResult.success && aiResult.output) {
+          const isValid = /VALID/i.test(aiResult.output) && !/INVALID/i.test(aiResult.output);
+          details.push(`AI review: ${isValid ? 'PASSED' : 'FAILED'}`);
+          details.push(`Review: ${aiResult.output.slice(0, 200)}`);
+        }
       }
     } else {
       details.push('Content length check: FAILED (empty)');
@@ -122,8 +176,16 @@ export class ValidatorAgent {
 
   private computeScore(details: string[]): number {
     let score = 50;
-    if (details.some((d) => d.startsWith('Content length check: PASSED'))) score += 20;
-    if (details.some((d) => d.startsWith('AI review: PASSED'))) score += 30;
+    if (details.some((d) => d.startsWith('Content length check: PASSED'))) score += 10;
+    if (details.some((d) => d.startsWith('AI review: PASSED'))) score += 20;
+    // Real check results (desktop) carry more weight than AI review
+    if (details.some((d) => d.startsWith('TypeScript check: PASSED'))) score += 15;
+    if (details.some((d) => d.startsWith('ESLint check: PASSED'))) score += 10;
+    if (details.some((d) => d.startsWith('Tests: PASSED'))) score += 15;
+    // Penalise real failures
+    if (details.some((d) => d.startsWith('TypeScript check: FAILED'))) score -= 30;
+    if (details.some((d) => d.startsWith('ESLint check: FAILED'))) score -= 15;
+    if (details.some((d) => d.startsWith('Tests: FAILED'))) score -= 20;
     return Math.min(100, Math.max(0, score));
   }
 

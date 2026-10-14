@@ -59,14 +59,24 @@ export class VercelExecutor implements ToolExecutor {
 
 declare global {
   interface Window {
-    agentcorpDesktop?: { execute?: unknown };
+    agentcorpDesktop?: { available?: boolean };
+    electronAPI?: {
+      fs: {
+        read: (relPath: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
+        write: (relPath: string, content: string) => Promise<{ ok: boolean; error?: string }>;
+        search: (pattern: string, relDir?: string) => Promise<{ ok: boolean; output?: string; error?: string }>;
+      };
+      exec: {
+        run: (cmd: string, args: string[], relCwd?: string) => Promise<{ ok: boolean; output?: string; error?: string }>;
+      };
+    };
   }
 }
 
-// Detection hook for P1: returns 'desktop' only when the Electron preload bridge exists.
+// Detection hook: returns 'desktop' only when the Electron preload bridge exists.
 export function detectExecutorEnv(): ExecutorEnv {
   try {
-    if (typeof window !== 'undefined' && window.agentcorpDesktop) return 'desktop';
+    if (typeof window !== 'undefined' && window.agentcorpDesktop?.available) return 'desktop';
   } catch {
     // SSR — default to vercel-safe
   }
@@ -86,7 +96,52 @@ export function getCapabilityMatrix(env: ExecutorEnv): Record<ToolCapability, 'r
   };
 }
 
+// Desktop executor: routes tool calls through the Electron IPC bridge.
+// Sandboxed to the user's chosen workspace root on the main process side.
+export class DesktopExecutor implements ToolExecutor {
+  readonly env: ExecutorEnv = 'desktop';
+
+  capabilities(): ToolCapability[] {
+    return [...ALL_TOOL_CAPABILITIES];
+  }
+
+  async execute(capability: ToolCapability, params: Record<string, string>): Promise<ToolResult> {
+    const start = performance.now();
+    const done = (r: Omit<ToolResult, 'duration'>): ToolResult => ({ ...r, duration: performance.now() - start });
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+    if (!api) return done({ success: false, output: '', error: 'DesktopExecutor: electronAPI not available' });
+
+    try {
+      if (capability === 'read_file') {
+        if (!params.path) return done({ success: false, output: '', error: 'read_file: missing path' });
+        const r = await api.fs.read(params.path);
+        return r.ok ? done({ success: true, output: r.content ?? '' }) : done({ success: false, output: '', error: r.error });
+      }
+      if (capability === 'write_file' || capability === 'patch_file') {
+        if (!params.path || params.content === undefined) return done({ success: false, output: '', error: `${capability}: missing path or content` });
+        const r = await api.fs.write(params.path, params.content);
+        return r.ok ? done({ success: true, output: `wrote ${params.path}` }) : done({ success: false, output: '', error: r.error });
+      }
+      if (capability === 'search_code') {
+        if (!params.pattern) return done({ success: false, output: '', error: 'search_code: missing pattern' });
+        const r = await api.fs.search(params.pattern, params.dir);
+        return r.ok ? done({ success: true, output: r.output ?? '' }) : done({ success: false, output: '', error: r.error });
+      }
+      if (capability === 'run_command' || capability === 'run_tests') {
+        const cmd = params.cmd || (capability === 'run_tests' ? 'npx' : '');
+        const args = params.args ? params.args.split(' ') : (capability === 'run_tests' ? ['vitest', 'run'] : []);
+        if (!cmd) return done({ success: false, output: '', error: `${capability}: missing cmd` });
+        const r = await api.exec.run(cmd, args, params.cwd);
+        return r.ok ? done({ success: true, output: r.output ?? '' }) : done({ success: false, output: r.output ?? '', error: r.error });
+      }
+      return done({ success: false, output: '', error: `unknown capability: ${capability}` });
+    } catch (e) {
+      return done({ success: false, output: '', error: String(e) });
+    }
+  }
+}
+
 export function getToolExecutor(): ToolExecutor {
-  // P0: always Vercel-safe. P1 adds DesktopExecutor when detectExecutorEnv() === 'desktop'.
+  if (detectExecutorEnv() === 'desktop') return new DesktopExecutor();
   return new VercelExecutor();
 }

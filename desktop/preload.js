@@ -16,6 +16,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listChecks: () => ipcRenderer.invoke('checks:list'),
   runChecks: (workspaceId, check) => ipcRenderer.invoke('checks:run', { workspaceId, check }),
 
+  // BYOK: user-supplied API keys stored locally, never sent to Vercel
+  apiKey: {
+    get: (provider) => ipcRenderer.invoke('apikey:get', provider),
+    set: (provider, value) => ipcRenderer.invoke('apikey:set', provider, value),
+    listProviders: () => ipcRenderer.invoke('apikey:list-providers'),
+  },
+
+  // Workspace: set the local directory agents can read/write
+  workspace: {
+    setRoot: (dir) => ipcRenderer.invoke('workspace:set-root', dir),
+    getRoot: () => ipcRenderer.invoke('workspace:get-root'),
+  },
+
+  // Desktop file executor — sandboxed to the workspace root
+  fs: {
+    read: (relPath) => ipcRenderer.invoke('fs:read', relPath),
+    write: (relPath, content) => ipcRenderer.invoke('fs:write', relPath, content),
+    search: (pattern, relDir) => ipcRenderer.invoke('fs:search', pattern, relDir),
+  },
+
+  // Desktop exec — allowlisted commands only (tsc, npx, node, npm)
+  exec: {
+    run: (cmd, args, relCwd) => ipcRenderer.invoke('exec:run', { cmd, args, relCwd }),
+  },
+
   // Platform
   platform: process.platform,
 });
