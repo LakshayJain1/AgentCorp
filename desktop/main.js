@@ -213,13 +213,7 @@ function createMainWindow() {
     const url = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getURL() : '(gone)';
     log('did-finish-load:', url);
 
-    // Clerk redirected to /sign-in — the saved JWT is expired. Clear it and
-    // show the local signin screen so the user can start a fresh auth flow.
-    if (mainWindow && !mainWindow.isDestroyed() && url.startsWith(WEB_URL) && url.includes('/sign-in')) {
-      log('did-finish-load: redirected to sign-in — JWT expired, clearing auth');
-      clearAuth();
-      mainWindow.loadFile(path.join(__dirname, 'signin.html'));
-    }
+    // Sign-in is now handled inside the BrowserWindow — no action needed on /sign-in loads.
   });
 
   // F12 opens DevTools inline (bottom panel) — visible even on a blank page
@@ -273,92 +267,68 @@ function createMainWindow() {
     return { action: 'allow' };
   });
 
-  // Decode a JWT and check its exp claim without verifying the signature.
-  // We only need to know if it's worth sending — Clerk's server validates it fully.
-  function isJwtExpired(token) {
-    try {
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
-      // Add a 30s buffer so we don't send a token that'll expire mid-request
-      return !payload.exp || (payload.exp * 1000) < (Date.now() + 30000);
-    } catch {
-      return true;
-    }
-  }
-
-  const raw = loadAuth();
-  let auth = null;
-  if (raw && raw.token) {
-    if (isJwtExpired(raw.token)) {
-      log('startup: JWT expired, clearing auth');
-      clearAuth();
+  // Auth lives in Electron's own cookie store (userData/Default/Cookies).
+  // We check for an existing __session cookie — if present, Clerk already
+  // has a valid session from a previous sign-in inside this BrowserWindow.
+  // No JWT passing, no deep links, no expiry juggling.
+  session.defaultSession.cookies.get({ url: WEB_URL, name: '__session' }).then((cookies) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (cookies.length > 0) {
+      log('startup: found existing __session cookie, loading workspace');
+      mainWindow.loadURL(`${WEB_URL}/workspace`);
     } else {
-      auth = raw;
+      log('startup: no session cookie, loading sign-in');
+      mainWindow.loadURL(`${WEB_URL}/sign-in?redirect_url=${encodeURIComponent('/workspace')}`);
     }
-  }
-  log('startup auth present=', !!(auth && auth.token));
-  if (auth && auth.token) {
-    // Set session cookie and load workspace.
-    // url is required by Electron's cookies.set() — without it the call throws
-    // "Missing required option 'url'" and loadURL never fires (blank screen).
-    session.defaultSession.cookies.set({
-      url: WEB_URL,
-      name: '__session',
-      value: auth.token,
-      domain: new URL(WEB_URL).hostname,
-      path: '/',
-      httpOnly: true,
-      secure: !isDev,
-      sameSite: 'lax',
-    }).then(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(`${WEB_URL}/workspace`);
-    }).catch((err) => {
-      log('startup cookie inject failed (loading workspace anyway):', err && err.message);
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(`${WEB_URL}/workspace`);
-    });
-  } else {
-    // Not authenticated — show the local launcher screen. Auth happens in
-    // the system browser; the app receives the session via deep link.
-    const signinPath = path.join(__dirname, 'signin.html');
-    log('loading launcher:', signinPath, 'exists=', fs.existsSync(signinPath));
-    mainWindow.loadFile(signinPath);
-  }
+  }).catch(() => {
+    log('startup: cookie check failed, loading sign-in');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.loadURL(`${WEB_URL}/sign-in?redirect_url=${encodeURIComponent('/workspace')}`);
+    }
+  });
 
   return mainWindow;
 }
 
 // ─── IPC handlers ───────────────────────────────────────────────────
-ipcMain.handle('auth:get-token', () => {
-  const auth = loadAuth();
-  return auth?.token || null;
+ipcMain.handle('auth:get-token', async () => {
+  const cookies = await session.defaultSession.cookies.get({ url: WEB_URL, name: '__session' }).catch(() => []);
+  return cookies[0]?.value || null;
 });
 
-ipcMain.handle('auth:is-authenticated', () => {
-  const auth = loadAuth();
-  return !!(auth && auth.token);
+ipcMain.handle('auth:is-authenticated', async () => {
+  const cookies = await session.defaultSession.cookies.get({ url: WEB_URL, name: '__session' }).catch(() => []);
+  return cookies.length > 0;
 });
 
-ipcMain.handle('auth:logout', () => {
+ipcMain.handle('auth:logout', async () => {
   clearAuth();
-  session.defaultSession.cookies.remove(WEB_URL, '__session');
+  // Remove all Clerk cookies for this domain so the next load goes to sign-in
+  const allCookies = await session.defaultSession.cookies.get({ url: WEB_URL }).catch(() => []);
+  for (const c of allCookies) {
+    await session.defaultSession.cookies.remove(WEB_URL, c.name).catch(() => {});
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.loadFile(path.join(__dirname, 'signin.html'));
+    mainWindow.loadURL(`${WEB_URL}/sign-in?redirect_url=${encodeURIComponent('/workspace')}`);
   }
 });
 
 ipcMain.handle('auth:start-browser-signin', () => {
-  startBrowserSignin();
+  // No longer used — sign-in now happens inside the BrowserWindow.
+  // Kept for backwards compatibility with preload callers.
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.loadURL(`${WEB_URL}/sign-in?redirect_url=${encodeURIComponent('/workspace')}`);
+  }
 });
 
-// Manual fallback: user pastes the agentcorp:// link (e.g. copied from the
-// "Open in Desktop App" page) when the OS handoff doesn't reach the app.
 ipcMain.handle('auth:handle-link', (_event, url) => {
+  // Deep-link fallback kept for users on older builds.
   if (typeof url !== 'string' || !url.startsWith(`${DEEP_LINK_SCHEME}://`)) {
     return { success: false, error: 'That does not look like an AgentCorp link (agentcorp://…)' };
   }
   try {
     handleDeepLink(url);
-    const auth = loadAuth();
-    return { success: !!(auth && auth.token) };
+    return { success: true };
   } catch (err) {
     return { success: false, error: String(err) };
   }
