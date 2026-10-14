@@ -1,5 +1,11 @@
-import { Application, Graphics, Container, Text, TextStyle } from 'pixi.js';
+import { Application, Graphics, Container, Text, TextStyle, Texture, Sprite, Rectangle, Assets } from 'pixi.js';
 import { CANVAS, ZONES, WALL_H, MEETING_AREA } from './PixiOfficeLayout';
+
+// Each frame in ComputerSheet.png is 16×16px, sheet is 5 cols × 10 rows.
+// Animation rows: 0 = standard blue screen, 1 = active (brighter),
+// 2 = red/alert, etc. We pick one static frame per monitor.
+const COMPUTER_FRAME_W = 16;
+const COMPUTER_FRAME_H = 16;
 
 export class OfficeRenderer {
   private app: Application;
@@ -7,7 +13,9 @@ export class OfficeRenderer {
   private officeGraphics: Graphics;
   private wallFaceGraphics: Graphics;
   private furnitureGraphics: Graphics;
+  private spriteContainer: Container;
   private labelsContainer: Container;
+  private computerTexture: Texture | null = null;
 
   constructor(app: Application) {
     this.app = app;
@@ -18,16 +26,57 @@ export class OfficeRenderer {
     this.officeGraphics = new Graphics();
     this.wallFaceGraphics = new Graphics();
     this.furnitureGraphics = new Graphics();
+    this.spriteContainer = new Container();
     this.labelsContainer = new Container();
     this.officeContainer.addChild(
       this.officeGraphics,
       this.wallFaceGraphics,
       this.furnitureGraphics,
+      this.spriteContainer,
       this.labelsContainer,
     );
 
+    this.loadSpritesAndDraw();
+  }
+
+  private async loadSpritesAndDraw(): Promise<void> {
+    try {
+      const baseTexture = await Assets.load<Texture>('/sprites/ComputerSheet.png');
+      this.computerTexture = baseTexture;
+    } catch {
+      // Sprite sheet unavailable — monitors fall back to drawn rectangles
+      this.computerTexture = null;
+    }
     this.drawOffice();
     this.drawZoneLabels();
+  }
+
+  // Returns a sprite showing one frame from the computer sheet.
+  // col: 0-4 (frame within animation), row: 0-9 (animation index)
+  private makeComputerSprite(col: number, row: number, scale = 2): Sprite {
+    if (!this.computerTexture) {
+      // Fallback: invisible 1×1 sprite (drawn rect will show instead)
+      return new Sprite(Texture.EMPTY);
+    }
+    const frame = new Rectangle(
+      col * COMPUTER_FRAME_W,
+      row * COMPUTER_FRAME_H,
+      COMPUTER_FRAME_W,
+      COMPUTER_FRAME_H,
+    );
+    const tex = new Texture({ source: this.computerTexture.source, frame });
+    const sprite = new Sprite(tex);
+    sprite.scale.set(scale);
+    // Anchor bottom-center so placement x/y is the base of the monitor
+    sprite.anchor.set(0.5, 1);
+    return sprite;
+  }
+
+  // Place a computer sprite at canvas coords (cx, cy = bottom-center of monitor)
+  private placeComputer(cx: number, cy: number, animRow = 0, scale = 2): void {
+    const sprite = this.makeComputerSprite(0, animRow, scale);
+    sprite.position.set(cx, cy);
+    this.spriteContainer.addChild(sprite);
   }
 
   // ─── Color helpers ────────────────────────────────────────────────────
@@ -155,14 +204,8 @@ export class OfficeRenderer {
     // Executive desk
     this.drawCabinet(g, 50, 58, 70, 40, 0x4a3a2a, 9);
 
-    // Monitor — glow screen
-    g.rect(65, 42, 40, 26).fill({ color: 0x080810 });
-    g.rect(67, 44, 36, 22).fill({ color: 0x00f5ff, alpha: 0.06 });
-    // Screen radial glow
-    g.rect(72, 47, 26, 13).fill({ color: 0x00f5ff, alpha: 0.14 });
-    g.rect(67, 44, 36, 1).fill({ color: 0x00f5ff, alpha: 0.30 }); // top scanline
-    // Monitor stand shadow
-    g.rect(82, 68, 6, 3).fill({ color: 0x000000, alpha: 0.4 });
+    // Monitor sprite (animation row 0 = standard blue screen)
+    this.placeComputer(85, 62, 0, 2);
 
     // Chair (with cabinet front)
     this.drawCabinet(g, 68, 106, 32, 16, 0x2a2a40, 5);
@@ -182,11 +225,8 @@ export class OfficeRenderer {
   private drawHRFurniture(g: Graphics): void {
     this.drawCabinet(g, 48, 192, 72, 38, 0x4a3a2a, 9);
 
-    // Monitor
-    g.rect(63, 177, 36, 24).fill({ color: 0x080810 });
-    g.rect(65, 179, 32, 20).fill({ color: 0xf472b6, alpha: 0.07 });
-    g.rect(70, 181, 22, 10).fill({ color: 0xf472b6, alpha: 0.16 });
-    g.rect(65, 179, 32, 1).fill({ color: 0xf472b6, alpha: 0.28 });
+    // Monitor sprite (row 1 = slightly different animation)
+    this.placeComputer(84, 191, 1, 2);
 
     // Chair
     this.drawCabinet(g, 68, 237, 28, 14, 0x222238, 5);
@@ -289,25 +329,20 @@ export class OfficeRenderer {
     g.rect(bx, y, 1, H).fill({ color: 0xbfe9ff, alpha: 0.5 });
     g.rect(bx + bw - 1, y, 1, H).fill({ color: 0xbfe9ff, alpha: 0.5 });
 
-    // Workstation bases + monitors
+    // Workstation bases + computer sprites (scale=1 = 16px, fits in cluster)
     const cy = y + H / 2;
-    g.rect(x + 8, cy - 6, 10, 12).fill({ color: 0x2e3338 });
-    g.rect(x + 12, cy - 9, 8, 16).fill({ color: 0x0e0e10 });
-    g.rect(x + 13, cy - 8, 6, 10).fill({ color: 0x00f5ff, alpha: 0.12 });
-
-    g.rect(x + W - 18, cy - 6, 10, 12).fill({ color: 0x2e3338 });
-    g.rect(x + W - 20, cy - 9, 8, 16).fill({ color: 0x0e0e10 });
-    g.rect(x + W - 19, cy - 8, 6, 10).fill({ color: 0x00f5ff, alpha: 0.12 });
+    g.rect(x + 8, cy - 4, 10, 10).fill({ color: 0x2e3338 }); // base left
+    this.placeComputer(x + 13, cy + 6, 0, 1);
+    g.rect(x + W - 18, cy - 4, 10, 10).fill({ color: 0x2e3338 }); // base right
+    this.placeComputer(x + W - 13, cy + 6, 3, 1);
   }
 
   // ─── PM Desk ─────────────────────────────────────────────────────────
   private drawPMFurniture(g: Graphics): void {
     this.drawCabinet(g, 288, 382, 82, 42, 0x4a3a2a, 9);
 
-    g.rect(308, 368, 42, 26).fill({ color: 0x080810 });
-    g.rect(310, 370, 38, 22).fill({ color: 0x4ecdc4, alpha: 0.07 });
-    g.rect(316, 373, 26, 12).fill({ color: 0x4ecdc4, alpha: 0.18 });
-    g.rect(310, 370, 38, 1).fill({ color: 0x4ecdc4, alpha: 0.30 });
+    // Monitor sprite
+    this.placeComputer(329, 382, 2, 2);
 
     this.drawCabinet(g, 312, 430, 30, 14, 0x222238, 5);
   }
@@ -343,13 +378,10 @@ export class OfficeRenderer {
   private drawResearcherFurniture(g: Graphics): void {
     // Long bench desk
     this.drawCabinet(g, 498, 178, 200, 48, 0x4a3a2a, 9);
-    // Four monitors
+    // Four monitor sprites (vary animation row for variety)
     for (let i = 0; i < 4; i++) {
       const mx = 510 + i * 48;
-      g.rect(mx, 162, 32, 20).fill({ color: 0x080810 });
-      g.rect(mx + 2, 164, 28, 16).fill({ color: 0x45b7d1, alpha: 0.07 });
-      g.rect(mx + 6, 167, 20, 9).fill({ color: 0x45b7d1, alpha: 0.18 });
-      g.rect(mx + 2, 164, 28, 1).fill({ color: 0x45b7d1, alpha: 0.28 });
+      this.placeComputer(mx + 16, 178, i % 4, 2);
     }
 
     // Bookshelf (right wall)
