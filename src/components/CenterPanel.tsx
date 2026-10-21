@@ -189,6 +189,21 @@ export default function CenterPanel() {
           wrapper: 'bg-[#FFE6E6]/70 border border-[#FFE6E6]',
           text: 'text-rose-950/90',
         };
+      case 'sales':
+        return {
+          wrapper: 'bg-[#FFF3E0]/70 border border-[#FFD580]/30',
+          text: 'text-amber-950/90',
+        };
+      case 'finance':
+        return {
+          wrapper: 'bg-[#E6FBF0]/70 border border-[#26de81]/20',
+          text: 'text-emerald-950/90',
+        };
+      case 'ops':
+        return {
+          wrapper: 'bg-[#EAF0FF]/70 border border-[#4b7bec]/20',
+          text: 'text-blue-950/90',
+        };
       default:
         return {
           wrapper: 'bg-white/70 border border-navy/5',

@@ -1,15 +1,5 @@
-import { SignIn } from '@clerk/nextjs';
+import { redirect } from 'next/navigation';
 
 export default function SignInPage() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-white px-4">
-      <SignIn
-        appearance={{
-          elements: {
-            card: 'shadow-none border border-navy/10 rounded-2xl',
-          },
-        }}
-      />
-    </div>
-  );
+  redirect('/auth/login');
 }

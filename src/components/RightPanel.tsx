@@ -5,19 +5,21 @@ import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Cpu, Database, Users, CheckSquare, FileText,
-  ChevronRight, ChevronDown, Folder, AlertTriangle, Copy, Download, Check, X
+  ChevronRight, ChevronDown, Folder, AlertTriangle, Copy, Download, Check, X,
+  LayoutDashboard, Plug
 } from 'lucide-react';
+import ConnectorsTab from '@/components/ConnectorsTab';
 
 export default function RightPanel() {
   const agents = useGameStore((s) => s.agents);
   const tasks = useGameStore((s) => s.tasks);
   const projects = useGameStore((s) => s.deliverableProjects);
-  const connectors = useGameStore((s) => s.connectors);
   const simulation = useGameStore((s) => s.simulation);
   const setSelectedTask = useGameStore((s) => s.setSelectedTask);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [listCollapsed, setListCollapsed] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'integrations'>('overview');
 
   // Dynamic values
   const onlineAgents = agents.filter((a) => a.online).length;
@@ -102,12 +104,56 @@ export default function RightPanel() {
     }
   };
 
-  // Connected count of integrations
-  const connectedCount = Object.values(connectors).filter((c) => c && 'connected' in c && c.connected).length;
+  const connectors = useGameStore((s) => s.connectors);
+  const connectedCount = Object.values(connectors).filter(
+    (c) => c && 'connected' in c && (c as { connected: boolean }).connected
+  ).length;
 
   return (
-    <div className="w-1/4 shrink-0 h-full min-h-0 overflow-y-auto glass-panel p-4 space-y-4.5 glass-scrollbar bg-[#FAFBFD]/30 border-l">
-      
+    <div className="w-full lg:w-1/4 shrink-0 h-full min-h-0 flex flex-col glass-panel bg-[#FAFBFD]/30 border-l">
+
+      {/* Tab Bar */}
+      <div className="shrink-0 flex items-center gap-1 px-3 pt-3 pb-0 border-b border-navy/6">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold rounded-t-lg transition-all cursor-pointer ${
+            activeTab === 'overview'
+              ? 'text-navy border-b-2 border-ocean-500 bg-white/60'
+              : 'text-navy/45 hover:text-navy/70'
+          }`}
+        >
+          <LayoutDashboard className="w-3.5 h-3.5" />
+          Overview
+        </button>
+        <button
+          onClick={() => setActiveTab('integrations')}
+          className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold rounded-t-lg transition-all cursor-pointer ${
+            activeTab === 'integrations'
+              ? 'text-navy border-b-2 border-ocean-500 bg-white/60'
+              : 'text-navy/45 hover:text-navy/70'
+          }`}
+        >
+          <Plug className="w-3.5 h-3.5" />
+          Integrations
+          {connectedCount > 0 && (
+            <span className="ml-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-emerald-100 text-emerald-600">
+              {connectedCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Integrations tab */}
+      {activeTab === 'integrations' && (
+        <div className="flex-1 overflow-y-auto p-4 glass-scrollbar">
+          <ConnectorsTab />
+        </div>
+      )}
+
+      {/* Overview tab */}
+      {activeTab === 'overview' && (
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 glass-scrollbar">
+
       {/* 1. Live Activity Section */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -341,38 +387,8 @@ export default function RightPanel() {
         )}
       </div>
 
-      {/* 4. Integrations Section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-lg bg-navy/5 flex items-center justify-center">
-              <CheckSquare className="w-3.5 h-3.5 text-navy/60" />
-            </span>
-            <h3 className="text-sm font-bold text-navy font-display tracking-tight">Integrations</h3>
-          </div>
-          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-100">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#34C759] animate-pulse" />
-            <span className="text-[8px] font-bold text-[#34C759] uppercase">LIVE</span>
-          </div>
-          <span className="text-[10px] text-navy/40 font-medium">{connectedCount} of 10 connected</span>
-        </div>
-
-        {/* Warning Platform Box */}
-        <div className="bg-[#EBF2FC]/50 border border-[#D6E9FF] rounded-2xl p-3.5 shadow-sm hover:bg-[#EBF2FC]/70 transition-colors cursor-pointer flex items-start justify-between gap-3">
-          <div className="flex gap-2.5 min-w-0">
-            <AlertTriangle className="w-4 h-4 text-[#0A84FF] shrink-0 mt-0.5" />
-            <div className="text-[10px] text-navy/70 leading-normal">
-              <strong className="block text-navy font-bold">Setup needed (platform owner):</strong>
-              <ul className="list-disc ml-3.5 mt-1 space-y-0.5 font-medium text-navy/65">
-                <li>GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY + OAuth client ID/secret</li>
-                <li>OPENROUTER_API_KEY and/or GEMINI_API_KEY</li>
-                <li>GitHub OAuth for your own repos unlocks more features</li>
-              </ul>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-[#0A84FF]/60 shrink-0 mt-1" />
-        </div>
       </div>
+      )}
 
     </div>
   );

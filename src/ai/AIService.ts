@@ -322,6 +322,27 @@ Include: goals, user stories, wireframe description, component tree, data flow. 
         'QA approved! All acceptance criteria met. No critical issues found.',
         'I\'m rejecting this build. There\'s a data integrity issue in the migration.',
       ],
+      sales: [
+        'Pitch deck drafted — 10 slides covering problem, solution, market, and ask.',
+        'ICP defined: mid-market SaaS, 50–500 employees, growth stage. Outreach templates ready.',
+        'Pricing strategy complete: Starter / Growth / Enterprise tiers with feature matrix.',
+        'Sales proposal ready. Value prop leads with ROI, objection handling appended.',
+        'Pipeline framework built. Qualification criteria mapped to deal stages.',
+      ],
+      finance: [
+        'Financial model complete. 12-month P&L shows break-even at month 8 with current burn.',
+        'Budget plan drafted. Engineering at 45%, marketing 25%, ops 20%, reserve 10%.',
+        'Revenue projection: $0 → $180K ARR by month 12 assuming 15% MoM growth.',
+        'Cash flow analysis done. Runway is 14 months at current spend rate.',
+        'CAC: $420, LTV: $3,200, LTV:CAC ratio 7.6x — healthy for Series A raise.',
+      ],
+      ops: [
+        'SOP drafted with 7 steps, quality checks, and escalation path defined.',
+        'Onboarding plan complete: pre-day-one checklist, week 1 agenda, 30/60/90 milestones.',
+        'OKR framework ready: 3 objectives, 9 key results, owners and measurement cadence set.',
+        'Runbook documented. All steps have explicit owners and rollback procedures.',
+        'Workflow optimized — removed 3 manual handoff steps, estimated 40% time saving.',
+      ],
     };
     const responses = mockByRole[agentRole] || ['Processing your request.'];
     return responses[Math.floor(Math.random() * responses.length)];

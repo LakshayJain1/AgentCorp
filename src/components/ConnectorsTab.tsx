@@ -154,10 +154,17 @@ const CONNECTORS: ConnectorDef[] = [
 
 export default function ConnectorsTab() {
   const { updateConnectors } = useGameStore();
+  const connectors = useGameStore((s) => s.connectors);
   const [platformStatus, setPlatformStatus] = useState<{ githubAppConfigured: boolean; aiConfigured: boolean; needed: string[] } | null>(null);
   const [activeAccordion, setActiveAccordion] = useState<ConnectorId | null>(null);
   const [savedStates, setSavedStates] = useState<Record<string, boolean>>({});
-  const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>({});
+  // Pre-populate from persisted store so saved credentials show on reopen
+  const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>(() => ({
+    github: { repoUrl: connectors.github.repoUrl, token: connectors.github.token },
+    vercel:  { token: connectors.vercel.token },
+    slack:   { webhookUrl: connectors.slack.webhookUrl },
+    ai:      { provider: connectors.ai.provider, apiKey: connectors.ai.apiKey },
+  }));
 
   const toggleAccordion = (id: ConnectorId) => {
     setActiveAccordion(activeAccordion === id ? null : id);
@@ -326,7 +333,7 @@ export default function ConnectorsTab() {
                     transition={{ duration: 0.18 }}
                     className="overflow-hidden border-t border-navy/5"
                   >
-                    <div className="p-3 space-y-2.5 bg-white/70/60">
+                    <div className="p-3 space-y-2.5 bg-white/70">
                       <p className="text-[10px] text-navy/55 leading-relaxed">{connector.desc}</p>
 
                       {connector.fields.map((field) => (

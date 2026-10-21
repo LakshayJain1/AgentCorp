@@ -129,7 +129,7 @@ DELIVERABLE TYPE: ${task.deliverableType || 'code'}
  2. Type (code, research, qa, documentation, analysis)
  3. Estimated effort (1-10 scale)
  4. Dependencies (list dependent subtask indices, 0-based)
- 5. Assignable roles (developer, qa_worker, research_worker, documentation)
+ 5. Assignable roles (developer, qa_worker, research_worker, documentation, sales_worker, finance_worker, ops_worker)
  6. acceptanceCriteria (one checkable sentence, e.g. "logout clears session and redirects to /login")
  7. verifyCommand (one of: "ci:<repo>@<branch>" | "desktop:typecheck|lint|test")
 

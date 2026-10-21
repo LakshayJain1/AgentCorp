@@ -11,6 +11,9 @@ const ROLE_COLORS: Record<string, number> = {
   engineer: 0xf9ca24,
   qa: 0xa29bfe,
   hr: 0xf472b6,
+  sales: 0xff9f43,
+  finance: 0x26de81,
+  ops: 0x4b7bec,
 };
 
 // All roles share the same sprite sheets from the CEO folder

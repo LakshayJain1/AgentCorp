@@ -11,6 +11,9 @@ import { processTasks } from '@/systems/TaskSystem';
 import { DeveloperAgent } from '@/agents/DeveloperAgent';
 import { QAAgent } from '@/agents/QAAgent';
 import { ResearchAgent } from '@/agents/ResearchAgent';
+import { SalesAgent } from '@/agents/SalesAgent';
+import { FinanceAgent } from '@/agents/FinanceAgent';
+import { OpsAgent } from '@/agents/OpsAgent';
 import { classifyIntent } from '@/ai/IntentClassifier';
 import { LoopOrchestrator } from './LoopOrchestrator';
 import { aiService } from '@/ai/AIService';
@@ -71,6 +74,12 @@ export class CentralOrchestrator {
         this.workers.push(new QAAgent(agent.id));
       } else if (agent.workerRole === 'research_worker') {
         this.workers.push(new ResearchAgent(agent.id));
+      } else if (agent.workerRole === 'sales_worker') {
+        this.workers.push(new SalesAgent(agent.id));
+      } else if (agent.workerRole === 'finance_worker') {
+        this.workers.push(new FinanceAgent(agent.id));
+      } else if (agent.workerRole === 'ops_worker') {
+        this.workers.push(new OpsAgent(agent.id));
       }
     }
     console.log('[AgentCorp] initWorkers: registered', this.workers.length, 'workers');
@@ -89,6 +98,30 @@ export class CentralOrchestrator {
 
     const intent = await classifyIntent(request);
     console.log('[AgentCorp] classified intent:', intent.type, intent.requiredKeys);
+
+    if (intent.type === 'chat') {
+      // Conversational message — CEO replies directly in the chat panel, no task spawned
+      const ceo = store.agents.find((a) => a.role === 'ceo');
+      const pm = store.agents.find((a) => a.role === 'pm');
+      if (ceo) {
+        const replyTarget = pm?.id ?? ceo.id;
+        store.sendMessage(ceo.id, replyTarget, intent.chatReply || `Hey! I'm Alex, your CEO. Tell me what you need built and I'll get the team on it.`);
+        store.pushAgentActivity(ceo.id, {
+          id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          agentId: ceo.id,
+          type: 'communicating',
+          message: intent.chatReply || 'Chatting with user',
+          timestamp: Date.now(),
+        });
+      }
+      this.emit({
+        type: 'log',
+        data: { message: `Conversational message — CEO responded directly.` },
+        timestamp: Date.now(),
+        streamId: `chat_${Date.now()}`,
+      });
+      return;
+    }
 
     if (intent.type === 'needs_credentials') {
       // Add the task first so it exists in the store before requesting credentials
@@ -329,7 +362,8 @@ export class CentralOrchestrator {
     // Find the best available worker agent for this task
     const workerAgent = store.agents.find((a) =>
       a.online &&
-      (a.workerRole === 'developer' || a.workerRole === 'research_worker' || a.workerRole === 'qa_worker')
+      (a.workerRole === 'developer' || a.workerRole === 'research_worker' || a.workerRole === 'qa_worker'
+        || a.workerRole === 'sales_worker' || a.workerRole === 'finance_worker' || a.workerRole === 'ops_worker')
     );
 
     if (!workerAgent) {

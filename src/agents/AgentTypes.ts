@@ -1,6 +1,6 @@
-export type AgentRole = 'ceo' | 'pm' | 'researcher' | 'engineer' | 'qa' | 'hr';
+export type AgentRole = 'ceo' | 'pm' | 'researcher' | 'engineer' | 'qa' | 'hr' | 'sales' | 'finance' | 'ops';
 
-export type WorkerRole = 'developer' | 'qa_worker' | 'research_worker' | 'documentation';
+export type WorkerRole = 'developer' | 'qa_worker' | 'research_worker' | 'documentation' | 'sales_worker' | 'finance_worker' | 'ops_worker';
 
 export type AgentState = 'idle' | 'walking' | 'working' | 'communicating' | 'resting';
 
@@ -274,7 +274,7 @@ export interface OfficeLocation {
   name: string;
   x: number;
   y: number;
-  role: AgentRole | 'general' | 'coffee' | 'meeting' | 'gaming';
+  role: AgentRole | 'general' | 'coffee' | 'meeting' | 'gaming' | 'biz_ops';
   width: number;
   height: number;
 }

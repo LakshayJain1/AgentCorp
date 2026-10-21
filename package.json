@@ -14,7 +14,7 @@
     "desktop:build:win": "next build && cd desktop && npm run build:win"
   },
   "dependencies": {
-    "@clerk/nextjs": "^7.4.2",
+    "@auth0/nextjs-auth0": "^4.32.1",
     "@pixi/react": "^8.0.5",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",

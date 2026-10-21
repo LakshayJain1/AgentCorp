@@ -5,7 +5,7 @@ import { completeClerkOnboarding } from '@/app/onboard/_actions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, SignIn, SignUp } from '@clerk/nextjs';
+import { useUser } from '@auth0/nextjs-auth0/client';
 import {
   GitBranch, Play, Key, Sparkles, Server, Check, ArrowRight,
   ShieldCheck, ChevronRight, CreditCard, Users,
@@ -14,7 +14,8 @@ import {
 
 export default function SetupWizard() {
   const { initializePersonalizedOffice } = useGameStore();
-  const { isSignedIn, user } = useUser();
+  const { user, isLoading: authLoading } = useUser();
+  const isSignedIn = !authLoading && !!user;
   const router = useRouter();
 
   const [step, setStep] = useState<number>(1);
@@ -213,8 +214,7 @@ export default function SetupWizard() {
         developersCount: devCount,
       });
       if (res?.success) {
-        // Reload so the client-side Clerk session picks up publicMetadata changes.
-        await user?.reload();
+        // No-op: onboarding state is in Zustand, no session reload needed.
       } else {
         console.warn('[Clerk] Onboarding metadata not saved:', res?.error);
       }
@@ -230,7 +230,7 @@ export default function SetupWizard() {
       'Onboarding AI CEO and PM agents...',
       `Spawning ${devCount} developer agents to floor desks...`,
       'Connecting system APIs (GitHub, Vercel, Slack hooks)...',
-      'Running Clerk secure proxy middleware test... OK',
+      'Running Auth0 secure middleware test... OK',
       'All departments active. Deploying visual layer...'
     ];
     let currentLogIndex = 0;
@@ -505,67 +505,28 @@ export default function SetupWizard() {
                   <div className="w-6 h-6 rounded-md bg-gradient-to-br from-ocean to-violet-500 flex items-center justify-center shadow-sm">
                     <ShieldCheck size={14} className="text-white" />
                   </div>
-                  <span className="text-xs font-semibold text-navy/40 uppercase">Clerk Secure Auth</span>
+                  <span className="text-xs font-semibold text-navy/40 uppercase">Auth0 Secure Auth</span>
                 </div>
                 <h2 className="text-xl font-extrabold tracking-tight text-navy">
                   {authComponent === 'signin' ? 'Sign in to AgentCorp' : 'Create your account'}
                 </h2>
                 <p className="text-xs text-navy/55 mt-1">
-                  Provide secure credentials to establish host synchronization
+                  Authenticate securely to establish host synchronization
                 </p>
               </div>
 
-              {authComponent === 'signin' ? (
-                <SignIn
-                  appearance={{
-                    elements: {
-                      rootBox: 'w-full',
-                      card: 'bg-transparent shadow-none p-0',
-                      header: 'hidden',
-                      headerTitle: 'hidden',
-                      headerSubtitle: 'hidden',
-                      footer: 'hidden',
-                      socialButtonsBlockButton: 'w-full py-2.5 rounded-xl border border-navy/10 bg-white hover:bg-white/70 text-xs font-semibold text-navy/80 flex items-center justify-center gap-2 transition-all',
-                      socialButtonsBlockButtonText: 'text-navy/80 text-xs font-semibold',
-                      dividerLine: 'bg-[rgba(23,23,31,0.05)]',
-                      dividerText: 'text-[10px] text-navy/40 uppercase',
-                      dividerRow: 'my-5',
-                      formFieldLabel: 'text-[9px] font-semibold text-navy/55 uppercase tracking-wider mb-1.5',
-                      formFieldInput: 'w-full py-2 bg-white/70 border border-navy/10 rounded-xl text-navy text-xs outline-none focus:border-ocean-400/60 transition-all',
-                      formButtonPrimary: 'w-full py-2.5 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-semibold text-xs transition-all shadow-sm',
-                      identityPreviewText: 'text-navy/80 text-xs',
-                      identityPreviewEditButton: 'text-ocean-600 hover:text-ocean-700 text-xs',
-                      alternativeMethodsBlockButton: 'w-full py-2.5 rounded-xl border border-navy/10 bg-white hover:bg-white/70 text-xs font-semibold text-navy/80 flex items-center justify-center gap-2 transition-all',
-                      alternativeMethodsBlockButtonText: 'text-navy/80 text-xs font-semibold',
-                    },
-                  }}
-                />
-              ) : (
-                <SignUp
-                  appearance={{
-                    elements: {
-                      rootBox: 'w-full',
-                      card: 'bg-transparent shadow-none p-0',
-                      header: 'hidden',
-                      headerTitle: 'hidden',
-                      headerSubtitle: 'hidden',
-                      footer: 'hidden',
-                      socialButtonsBlockButton: 'w-full py-2.5 rounded-xl border border-navy/10 bg-white hover:bg-white/70 text-xs font-semibold text-navy/80 flex items-center justify-center gap-2 transition-all',
-                      socialButtonsBlockButtonText: 'text-navy/80 text-xs font-semibold',
-                      dividerLine: 'bg-[rgba(23,23,31,0.05)]',
-                      dividerText: 'text-[10px] text-navy/40 uppercase',
-                      dividerRow: 'my-5',
-                      formFieldLabel: 'text-[9px] font-semibold text-navy/55 uppercase tracking-wider mb-1.5',
-                      formFieldInput: 'w-full py-2 bg-white/70 border border-navy/10 rounded-xl text-navy text-xs outline-none focus:border-ocean-400/60 transition-all',
-                      formButtonPrimary: 'w-full py-2.5 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-semibold text-xs transition-all shadow-sm',
-                      identityPreviewText: 'text-navy/80 text-xs',
-                      identityPreviewEditButton: 'text-ocean-600 hover:text-ocean-700 text-xs',
-                      alternativeMethodsBlockButton: 'w-full py-2.5 rounded-xl border border-navy/10 bg-white hover:bg-white/70 text-xs font-semibold text-navy/80 flex items-center justify-center gap-2 transition-all',
-                      alternativeMethodsBlockButtonText: 'text-navy/80 text-xs font-semibold',
-                    },
-                  }}
-                />
-              )}
+              <div className="space-y-3">
+                <a
+                  href={authComponent === 'signup' ? '/auth/login?screen_hint=signup' : '/auth/login'}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-ocean to-teal text-white text-xs font-bold flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(10,132,255,0.30)] hover:opacity-90 transition-opacity"
+                >
+                  <ShieldCheck size={14} />
+                  {authComponent === 'signin' ? 'Continue with Auth0' : 'Create account with Auth0'}
+                </a>
+                <p className="text-[10px] text-navy/40 text-center leading-relaxed">
+                  Supports Google, GitHub, email & more.<br />Authentication happens in your browser — nothing touches this page.
+                </p>
+              </div>
 
               <div className="mt-5 text-center">
                 <span className="text-xs text-navy/55">
@@ -594,7 +555,7 @@ export default function SetupWizard() {
               </div>
 
               <div className="mt-4 text-center flex items-center justify-center gap-1 text-[9px] text-navy/40">
-                <ShieldCheck size={10} /> Securely compiled & authenticated via Clerk
+                <ShieldCheck size={10} /> Securely compiled & authenticated via Auth0
               </div>
             </motion.div>
           )}

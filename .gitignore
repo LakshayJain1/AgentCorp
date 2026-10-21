@@ -50,3 +50,5 @@ desktop/.env*
 public/downloads/
 # clerk configuration (can include secrets)
 /.clerk/
+
+.env*.local

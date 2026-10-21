@@ -1,7 +1,7 @@
 import { Agent, AgentWorkStatus, AgentFSMState, AgentMood } from '@/agents/AgentTypes';
 import { Sprite, Container, Graphics, Text, TextStyle, Texture, ColorSource } from 'pixi.js';
 import { Application } from 'pixi.js';
-import { CANVAS, findLocationByRole, findLocationById, isWallBetween, toOfficeLocations } from './PixiOfficeLayout';
+import { CANVAS, WALKABLE_Y_MIN, findLocationByRole, findLocationById, isWallBetween, toOfficeLocations } from './PixiOfficeLayout';
 import { useGameStore } from '@/store/gameStore';
 
 export interface AgentEntityData {
@@ -285,6 +285,8 @@ export class AgentEntity {
       if (this.state === 'walking') this.state = 'working';
     }
 
+    this.y = Math.max(WALKABLE_Y_MIN, this.y);
+
     // Check for new goal
     const distToTarget = Math.sqrt(
       (this.x - this.targetX) ** 2 + (this.y - this.targetY) ** 2
@@ -304,7 +306,7 @@ export class AgentEntity {
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > threshold && this.state !== 'walking') {
       this.targetX = targetX + (Math.random() - 0.5) * 15;
-      this.targetY = targetY + (Math.random() - 0.5) * 15;
+      this.targetY = Math.max(WALKABLE_Y_MIN, targetY + (Math.random() - 0.5) * 15);
       this.state = 'walking';
     } else if (dist <= threshold && this.state !== 'walking') {
       this.state = 'resting';
@@ -316,6 +318,7 @@ export class AgentEntity {
     const meeting = findLocationByRole('meeting');
     const coffee = findLocationByRole('coffee');
 
+    const clampY = (ty: number) => Math.max(WALKABLE_Y_MIN, ty);
     const isValidTarget = (tx: number, ty: number) => !isWallBetween(this.x, this.y, tx, ty);
 
     const r = Math.random();
@@ -323,7 +326,7 @@ export class AgentEntity {
     // 1. Need coffee (low energy)
     if (this.energy < 40 && coffee && r < 0.5) {
       const tx = coffee.x + (Math.random() - 0.5) * 10;
-      const ty = coffee.y + (Math.random() - 0.5) * 10;
+      const ty = clampY(coffee.y + (Math.random() - 0.5) * 10);
       if (isValidTarget(tx, ty)) {
         this.targetX = tx;
         this.targetY = ty;
@@ -335,7 +338,7 @@ export class AgentEntity {
     // 2. Go to meeting
     if (meeting && r < 0.15 + (this.role === 'pm' || this.role === 'ceo' ? 0.1 : 0)) {
       const tx = meeting.x + (Math.random() - 0.5) * 20;
-      const ty = meeting.y + (Math.random() - 0.5) * 10;
+      const ty = clampY(meeting.y + (Math.random() - 0.5) * 10);
       if (isValidTarget(tx, ty)) {
         this.targetX = tx;
         this.targetY = ty;
@@ -353,7 +356,7 @@ export class AgentEntity {
       if (others.length > 0) {
         const target = others[Math.floor(Math.random() * others.length)];
         const tx = target.x + (Math.random() - 0.5) * 15;
-        const ty = target.y + (Math.random() - 0.5) * 10;
+        const ty = clampY(target.y + (Math.random() - 0.5) * 10);
         if (isValidTarget(tx, ty)) {
           this.targetX = tx;
           this.targetY = ty;
@@ -366,7 +369,7 @@ export class AgentEntity {
     // 4. Stay near own desk
     if (location) {
       const tx = location.x + (Math.random() - 0.5) * 20;
-      const ty = location.y + (Math.random() - 0.5) * 10;
+      const ty = clampY(location.y + (Math.random() - 0.5) * 10);
       if (isValidTarget(tx, ty)) {
         this.targetX = tx;
         this.targetY = ty;
@@ -391,7 +394,8 @@ export class AgentEntity {
       this.efficiency = Math.max(10, this.efficiency - rate * 0.4);
     }
 
-    const isWorker = this.role === 'engineer' || this.role === 'qa' || this.role === 'researcher';
+    const isWorker = this.role === 'engineer' || this.role === 'qa' || this.role === 'researcher'
+      || this.role === 'sales' || this.role === 'finance' || this.role === 'ops';
     if (this.efficiency < 50 && isWorker && !this.cooldownRemainingSeconds && this.online) {
       this.cooldownRemainingSeconds = 180 + Math.random() * 60;
       this.cooldownType = 'burnout';

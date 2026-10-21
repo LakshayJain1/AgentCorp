@@ -98,7 +98,7 @@ export default function LeftSidebar() {
   };
 
   return (
-    <div className="w-1/4 shrink-0 h-full min-h-0 glass-sidebar flex flex-col justify-between">
+    <div className="w-full lg:w-1/4 shrink-0 h-full min-h-0 glass-sidebar flex flex-col justify-between">
       <div className="flex-1 flex flex-col min-h-0">
         {/* New Chat & Library Buttons */}
         <div className="p-4 flex items-center gap-2.5">

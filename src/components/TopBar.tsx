@@ -2,13 +2,14 @@
 
 import { useGameStore } from '@/store/gameStore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useUser, UserButton } from '@clerk/nextjs';
+import { useUser } from '@auth0/nextjs-auth0/client';
 import { useMemo, useState, useRef, useEffect } from 'react';
 import ScrumMeeting from '@/components/ScrumMeeting';
 import { Cpu, Play, Pause, Search, Command, X } from 'lucide-react';
 
 export default function TopBar() {
-  const { isSignedIn, user } = useUser();
+  const { user, isLoading } = useUser();
+  const isSignedIn = !isLoading && !!user;
   const simulation = useGameStore((s) => s.simulation);
   const setPaused = useGameStore((s) => s.setPaused);
   const agents = useGameStore((s) => s.agents);
@@ -58,12 +59,12 @@ export default function TopBar() {
             AgentCorp
             <span className="text-[9px] bg-white/80 text-navy/50 px-1.5 py-0.5 rounded-md font-medium border border-navy/5">v2.0</span>
           </h1>
-          <p className="text-[10px] text-navy/50 font-medium">Autonomous Multi-Agent Workspace</p>
+          <p className="hidden md:block text-[10px] text-navy/50 font-medium">Autonomous Multi-Agent Workspace</p>
         </div>
       </div>
 
-      {/* Center: Search Bar */}
-      <div className="flex-1 flex justify-center px-4">
+      {/* Center: Search Bar — hidden on small screens */}
+      <div className="hidden md:flex flex-1 justify-center px-4">
         <div ref={boxRef} className="relative w-full max-w-xl">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-navy/30" />
           <input
@@ -147,12 +148,22 @@ export default function TopBar() {
       <div className="flex items-center gap-2.5 shrink-0">
         {isSignedIn && (
           <div className="flex items-center gap-2 pr-3 border-r glass-divider">
-            <span className="text-[9px] text-navy/50 font-medium uppercase">Operator</span>
+            <span className="hidden md:inline text-[9px] text-navy/50 font-medium uppercase">Operator</span>
             <div className="flex items-center gap-1.5">
-              <UserButton />
-              <span className="text-xs font-semibold text-navy">
-                {user?.firstName || user?.username || 'Alex Chen'}
+              {user?.picture ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.picture} alt="avatar" className="w-6 h-6 rounded-full border border-navy/10" />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-ocean to-teal flex items-center justify-center text-white text-[9px] font-bold">
+                  {(user?.name?.[0] || user?.email?.[0] || 'A').toUpperCase()}
+                </div>
+              )}
+              <span className="hidden md:inline text-xs font-semibold text-navy">
+                {(user?.name as string | undefined) || (user?.email as string | undefined) || 'Operator'}
               </span>
+              <a href="/auth/logout" className="hidden md:inline text-[9px] text-navy/40 hover:text-navy/70 font-medium transition-colors">
+                Sign out
+              </a>
             </div>
           </div>
         )}
@@ -172,7 +183,7 @@ export default function TopBar() {
           {simulation.paused ? 'Resume' : 'Pause'}
         </motion.button>
 
-        <div className="flex items-center gap-2.5 pl-3 border-l glass-divider">
+        <div className="hidden md:flex items-center gap-2.5 pl-3 border-l glass-divider">
           <span className="text-navy/50 text-[9px] font-semibold uppercase">Efficiency</span>
           <div className="relative w-9 h-9 flex items-center justify-center">
             <svg className="w-full h-full transform -rotate-90">

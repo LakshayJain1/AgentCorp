@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Agent, Task, SubTask, ValidationResult, GameEvent, SimulationState, AgentRole, OfficeLocation, DeliverableType, AgentActivity, AgentPerformance, AgentWorkStatus, ConversationMessage, TaskExecutionLog, DeliverableProject } from '@/agents/AgentTypes';
+import { Agent, Task, SubTask, ValidationResult, GameEvent, SimulationState, AgentRole, WorkerRole, OfficeLocation, DeliverableType, AgentActivity, AgentPerformance, AgentWorkStatus, ConversationMessage, TaskExecutionLog, DeliverableProject, AgentMemoryEntry } from '@/agents/AgentTypes';
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
 import { configLoader } from '@/config/ConfigLoader';
 import { toOfficeLocations } from '@/game/pixi/PixiOfficeLayout';
@@ -22,6 +22,9 @@ const DEFAULT_AGENT_NAMES: Record<AgentRole, { name: string; color: number; emoj
   engineer: { name: 'Mike', color: 0xf9ca24, emoji: '💻' },
   qa: { name: 'Tina', color: 0xa29bfe, emoji: '🔍' },
   hr: { name: 'Riley', color: 0xf472b6, emoji: '📊' },
+  sales: { name: 'Jordan', color: 0xff9f43, emoji: '💼' },
+  finance: { name: 'Morgan', color: 0x26de81, emoji: '💰' },
+  ops: { name: 'Casey', color: 0x4b7bec, emoji: '⚙️' },
 };
 
 const DEFAULT_OFFICE_LOCATIONS: OfficeLocation[] = toOfficeLocations();
@@ -142,7 +145,13 @@ function createAgent(role: AgentRole): Agent {
     workStatus: 'idle',
     currentTaskId: null,
     currentSubTaskId: null,
-    workerRole: role === 'engineer' ? 'developer' as const : role === 'qa' ? 'qa_worker' as const : role === 'researcher' ? 'research_worker' as const : null,
+    workerRole: role === 'engineer' ? 'developer' as const
+      : role === 'qa' ? 'qa_worker' as const
+      : role === 'researcher' ? 'research_worker' as const
+      : role === 'sales' ? 'sales_worker' as const
+      : role === 'finance' ? 'finance_worker' as const
+      : role === 'ops' ? 'ops_worker' as const
+      : null,
     x: location ? location.x - 20 + Math.random() * 40 : 200 + Math.random() * 100,
     y: location ? location.y - 10 + Math.random() * 20 : 200 + Math.random() * 80,
     targetX: location ? location.x + (Math.random() - 0.5) * 50 : 200 + Math.random() * 100,
@@ -220,6 +229,15 @@ function detectDeliverableType(title: string): { type: DeliverableType; lang?: s
   }
   if (t.includes('feedback') || t.includes('review') || t.includes('audit') || t.includes('compliance')) {
     return { type: 'analysis', lang: 'markdown' };
+  }
+  if (t.includes('pitch') || t.includes('deck') || t.includes('proposal') || t.includes('sales') || t.includes('outreach') || t.includes('prospect')) {
+    return { type: 'report', lang: 'markdown' };
+  }
+  if (t.includes('budget') || t.includes('forecast') || t.includes('projection') || t.includes('revenue') || t.includes('p&l') || t.includes('burn') || t.includes('runway') || t.includes('financ')) {
+    return { type: 'report', lang: 'markdown' };
+  }
+  if (t.includes('sop') || t.includes('runbook') || t.includes('playbook') || t.includes('checklist') || t.includes('onboard') || t.includes('workflow') || t.includes('process') || t.includes('okr') || t.includes('kpi')) {
+    return { type: 'doc', lang: 'markdown' };
   }
   return { type: 'code', lang: 'typescript' };
 }
@@ -351,6 +369,9 @@ interface GameStore {
   // Deliverable Projects
   addDeliverableProject: (project: DeliverableProject) => void;
 
+  // Persisted agent snapshots — role-indexed, merged back into agents on init
+  _agentSnapshots: Array<{ role: AgentRole; performance: AgentPerformance; memory: AgentMemoryEntry[] }>;
+
   // User Personalization & Connectors Tab
   isInitialized: boolean;
   companyName: string;
@@ -409,13 +430,24 @@ export const useGameStore = create<GameStore>()(
   showAgentRoster: true,
   isMuted: false,
   showLibrary: false,
+  _agentSnapshots: [],
 
   initAgents: () => {
-    const roles: AgentRole[] = ['ceo', 'pm', 'researcher', 'engineer', 'qa', 'hr'];
-    const agents = roles.map(createAgent);
+    const roles: AgentRole[] = ['ceo', 'pm', 'researcher', 'engineer', 'qa', 'hr', 'sales', 'finance', 'ops'];
+    const snapshots = get()._agentSnapshots;
+    const agents = roles.map((role) => {
+      const a = createAgent(role);
+      const snap = snapshots.find((s) => s.role === role);
+      if (snap) {
+        a.performance = snap.performance;
+        a.memory = snap.memory;
+      }
+      return a;
+    });
     const initialEvent = createGameEvent('system', 'AgentCorp systems initialized. All agents ready.');
-
-    set({ agents, events: [initialEvent], deliverableProjects: [], tasks: [] });
+    // Do NOT reset tasks/deliverableProjects here — persisted values from localStorage are authoritative.
+    // initializePersonalizedOffice resets them explicitly when starting fresh.
+    set({ agents, events: [initialEvent] });
   },
 
   addTask: () => {
@@ -847,6 +879,55 @@ export const useGameStore = create<GameStore>()(
       get().addEvent(devEvent);
     }
     
+    // Spawn Sales, Finance, and Ops agents
+    const bizRoles: Array<{ role: AgentRole; workerRole: WorkerRole; emoji: string }> = [
+      { role: 'sales', workerRole: 'sales_worker', emoji: '💼' },
+      { role: 'finance', workerRole: 'finance_worker', emoji: '💰' },
+      { role: 'ops', workerRole: 'ops_worker', emoji: '⚙️' },
+    ];
+    for (const biz of bizRoles) {
+      const info = AGENT_NAMES()[biz.role];
+      const location = toOfficeLocations().find(l => l.id === biz.role + '_desk' || l.role === biz.role);
+      const bizAgent: import('@/agents/AgentTypes').Agent = {
+        id: generateId('agent'),
+        name: info.name,
+        role: biz.role,
+        traits: AGENT_PERSONALITIES()[biz.role] || AGENT_PERSONALITIES().researcher,
+        energy: 100,
+        maxEnergy: 100,
+        mood: 'neutral',
+        state: 'idle',
+        fsmState: 'idle' as const,
+        workStatus: 'idle',
+        currentTaskId: null,
+        currentSubTaskId: null,
+        workerRole: biz.workerRole,
+        x: location ? location.x + Math.random() * 20 - 10 : 560 + Math.random() * 40,
+        y: location ? location.y + Math.random() * 10 - 5 : 260 + Math.random() * 20,
+        targetX: location ? location.x : 560,
+        targetY: location ? location.y : 260,
+        conversations: [],
+        efficiency: 75 + Math.floor(Math.random() * 20),
+        color: info.color,
+        emoji: biz.emoji,
+        officeLocation: 'biz_ops_area',
+        aiReady: false,
+        activity: [],
+        performance: {
+          tasksCompleted: 0, tasksFailed: 0, avgCompletionTime: 0,
+          successRate: 1, collaborationScore: 50, reliabilityScore: 75,
+          toolUsageCount: 0, specializationTags: [], seniority: 'junior',
+          productivityScore: 50, promotionLevel: 'trial', reviewsCount: 0,
+          lastReviewAt: null,
+        },
+        memory: [],
+        online: true,
+        lastActiveAt: Date.now(),
+        lastGoalTime: 0,
+      };
+      set((state) => ({ agents: [...state.agents, bizAgent] }));
+    }
+
     // Add custom event log
     const event = createGameEvent('system', `🏢 Personalized office for ${companyName} initialized! All departments active.`);
     get().addEvent(event);
@@ -897,12 +978,40 @@ export const useGameStore = create<GameStore>()(
 }),
     {
       name: 'agentcorp-storage',
+      version: 3,
+      migrate: (persisted: unknown, fromVersion: number) => {
+        // v2 → v3: sales/finance/ops agents added — drop stale agent list so initAgents rebuilds it
+        if (fromVersion < 3) {
+          const s = persisted as Record<string, unknown>;
+          delete s.agents;
+        }
+        return persisted;
+      },
       partialize: (state) => ({
         isInitialized: state.isInitialized,
         companyName: state.companyName,
         companyProduct: state.companyProduct,
         developersCount: state.developersCount,
         connectors: state.connectors,
+
+        // Tasks: last 100 by recency, strip executionLogs (largest field)
+        tasks: [...state.tasks]
+          .sort((a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt))
+          .slice(0, 100)
+          .map(({ executionLogs: _logs, ...t }) => ({ ...t, executionLogs: [] as TaskExecutionLog[] })),
+
+        // Deliverables: last 20, content capped at 8 KB
+        deliverableProjects: [...state.deliverableProjects]
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, 20)
+          .map((p) => ({ ...p, content: p.content?.slice(0, 8_000) ?? '' })),
+
+        // Agent snapshots: role-indexed, memory trimmed to last 20 entries
+        _agentSnapshots: state.agents.map((a) => ({
+          role: a.role,
+          performance: a.performance,
+          memory: a.memory.slice(-20),
+        })),
       }),
     },
   ),

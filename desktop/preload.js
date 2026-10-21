@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openBrowser: (url) => ipcRenderer.invoke('auth:open-browser', url),
   startBrowserSignin: () => ipcRenderer.invoke('auth:start-browser-signin'),
   handleLink: (url) => ipcRenderer.invoke('auth:handle-link', url),
+  getAuthServerInfo: () => ipcRenderer.invoke('auth:server-info'),
 
   // App info
   getInfo: () => ipcRenderer.invoke('app:get-info'),

@@ -8,8 +8,11 @@ const ROLE_COLORS: Record<string, string> = {
   pm: '#0A84FF',
   researcher: '#BF5AF2',
   engineer: '#FF9F0A',
-  qa: '#BF5AF2',
+  qa: '#34C759',
   hr: '#FF375F',
+  sales: '#FF9F43',
+  finance: '#26de81',
+  ops: '#4b7bec',
 };
 
 export default function ConversationPanel() {

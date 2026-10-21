@@ -1,6 +1,8 @@
 const { app, BrowserWindow, ipcMain, shell, session, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const crypto = require('crypto');
 
 const isDev = process.env.NODE_ENV === 'development';
 // Allow override via env at runtime: AGENTCORP_WEB_URL="https://<your-app>.vercel.app"
@@ -8,6 +10,10 @@ const isDev = process.env.NODE_ENV === 'development';
 const WEB_URL = (process.env.AGENTCORP_WEB_URL || '').replace(/\/+$/, '')
   || (isDev ? 'http://localhost:3000' : 'https://agent-corp.vercel.app');
 const DEEP_LINK_SCHEME = 'agentcorp';
+// Auth0 tenant and native app client (no secret — PKCE only).
+// Set AUTH0_DOMAIN and AUTH0_ELECTRON_CLIENT_ID in the environment or .env.
+const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || process.env.AUTH0_ISSUER_BASE_URL?.replace('https://', '') || '';
+const AUTH0_CLIENT_ID = process.env.AUTH0_ELECTRON_CLIENT_ID || process.env.AUTH0_CLIENT_ID || '';
 
 let mainWindow = null;
 
@@ -32,6 +38,64 @@ function log(...args) {
 // the token via saveAuth, and createMainWindow picks it up via loadAuth.
 let pendingDeepLink = null;
 
+// ─── Local auth server ───────────────────────────────────────────────
+// More reliable than OS protocol routing (especially on Windows dev). The web
+// page POSTs the Clerk session token directly to http://localhost:PORT/auth.
+// A random state nonce ties the server to the browser session that opened it.
+const AUTH_SERVER_PORT = 51432;
+let authServerState = null; // one-time nonce generated per sign-in attempt
+let authServer = null;
+
+function generateState() {
+  authServerState = crypto.randomBytes(24).toString('hex');
+  return authServerState;
+}
+
+function startAuthServer() {
+  if (authServer) return; // already running
+  authServer = http.createServer((req, res) => {
+    // CORS headers so the web page can POST from any origin
+    res.setHeader('Access-Control-Allow-Origin', WEB_URL);
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+    if (req.method !== 'POST' || req.url !== '/auth') {
+      res.writeHead(404); res.end(); return;
+    }
+
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { token, userId, state } = JSON.parse(body);
+        if (!authServerState || state !== authServerState) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'invalid state' }));
+          return;
+        }
+        authServerState = null; // consume nonce — single use
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+        log('local auth server: token received for user', userId);
+        // Re-use the same deep link handler to inject cookie & load workspace
+        handleDeepLink(`${DEEP_LINK_SCHEME}://auth-callback?token=${encodeURIComponent(token)}&userId=${encodeURIComponent(userId || '')}&redirect=/workspace`);
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: String(e) }));
+      }
+    });
+  });
+
+  authServer.listen(AUTH_SERVER_PORT, '127.0.0.1', () => {
+    log(`local auth server listening on 127.0.0.1:${AUTH_SERVER_PORT}`);
+  });
+  authServer.on('error', (e) => {
+    log('local auth server error:', e.message);
+    authServer = null;
+  });
+}
+
 function handleDeepLinkArgv(argv) {
   if (!Array.isArray(argv)) return;
   const url = argv.find((arg) => typeof arg === 'string' && arg.startsWith(`${DEEP_LINK_SCHEME}://`));
@@ -51,16 +115,53 @@ function handleDeepLinkArgv(argv) {
 // processed in whenReady after the window exists.
 handleDeepLinkArgv(process.argv);
 
-// ─── System-browser sign-in ─────────────────────────────────────────
-// OAuth (Google etc.) must run in the system browser so the OS shows the
-// real "Choose an account" picker using the user's saved Google cookies.
-// After Clerk authenticates, /desktop-redirect reads the actual __session
-// cookie (long-lived) and sends it back via agentcorp:// deep link.
-// Electron injects it into its own session; Clerk's SDK then refreshes it.
+// ─── Auth0 PKCE helpers ──────────────────────────────────────────────
+function base64URLEncode(buf) {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function generatePKCEPair() {
+  const verifier = base64URLEncode(crypto.randomBytes(32));
+  const challenge = base64URLEncode(
+    crypto.createHash('sha256').update(verifier).digest()
+  );
+  return { verifier, challenge };
+}
+
+let pkceVerifier = null; // stashed while browser is open
+
+// ─── System-browser sign-in (Auth0 PKCE) ────────────────────────────
+// Opens the real system browser to Auth0's authorize endpoint.
+// Auth0 redirects to agentcorp://callback?code=...&state=...
+// Electron exchanges the code for tokens (no secret needed — PKCE).
 function startBrowserSignin() {
-  const signInUrl = `${WEB_URL}/sign-in?redirect_url=${encodeURIComponent('/desktop-redirect')}`;
-  log('opening system browser for sign-in:', signInUrl);
-  shell.openExternal(signInUrl);
+  if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID) {
+    log('AUTH0_DOMAIN / AUTH0_ELECTRON_CLIENT_ID not set — falling back to web sign-in');
+    const signInUrl = `${WEB_URL}/auth/login?returnTo=${encodeURIComponent('/desktop-redirect')}`;
+    shell.openExternal(signInUrl);
+    return;
+  }
+
+  startAuthServer(); // local server as backup delivery channel
+  const state = generateState();
+  const { verifier, challenge } = generatePKCEPair();
+  pkceVerifier = verifier;
+
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: AUTH0_CLIENT_ID,
+    redirect_uri: `${DEEP_LINK_SCHEME}://callback`,
+    scope: 'openid profile email offline_access',
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    state,
+    audience: process.env.AUTH0_AUDIENCE || '',
+  });
+  if (!process.env.AUTH0_AUDIENCE) params.delete('audience');
+
+  const authorizeUrl = `https://${AUTH0_DOMAIN}/authorize?${params.toString()}`;
+  log('opening Auth0 PKCE authorize:', authorizeUrl);
+  shell.openExternal(authorizeUrl);
 }
 
 // ─── Persistent auth storage ────────────────────────────────────────
@@ -83,54 +184,76 @@ function clearAuth() {
 }
 
 // ─── Deep link handling ─────────────────────────────────────────────
-// Safe to call at any time: persists the token immediately when possible,
-// loads the workspace when the window exists, otherwise stashes for whenReady.
 function handleDeepLink(url) {
   if (!url || !url.startsWith(`${DEEP_LINK_SCHEME}://`)) return;
 
-  let token = null;
-  let userId = null;
-  let redirect = '/workspace';
-  try {
-    const parsed = new URL(url);
-    token = parsed.searchParams.get('token');
-    userId = parsed.searchParams.get('userId');
-    redirect = parsed.searchParams.get('redirect') || '/workspace';
-  } catch {
+  let parsed;
+  try { parsed = new URL(url); } catch { return; }
+
+  // ── Auth0 PKCE callback: agentcorp://callback?code=XXX&state=YYY ──
+  if (parsed.hostname === 'callback' && parsed.searchParams.get('code')) {
+    const code = parsed.searchParams.get('code');
+    log('deep link: Auth0 PKCE code received, exchanging for tokens');
+    exchangeCodeForTokens(code);
     return;
   }
 
-  if (token) {
-    if (app.isReady()) {
-      saveAuth({ token, userId, authenticatedAt: Date.now() });
-      log('deep link: token saved for user', userId);
-    } else {
-      pendingDeepLink = url;
-      return;
-    }
+  // ── Legacy / local-server path: agentcorp://auth-callback?token=XXX ──
+  const token = parsed.searchParams.get('token');
+  const userId = parsed.searchParams.get('userId');
+  const redirect = parsed.searchParams.get('redirect') || '/workspace';
 
-    // Inject the verified Clerk session JWT as the __session cookie so the
-    // embedded web app arrives genuinely authenticated.
+  if (token) {
+    if (!app.isReady()) { pendingDeepLink = url; return; }
+    saveAuth({ token, userId, authenticatedAt: Date.now() });
+    log('deep link: token saved for user', userId);
+    loadWorkspace(redirect);
+  }
+}
+
+async function exchangeCodeForTokens(code) {
+  if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID) {
+    log('cannot exchange code: AUTH0 config missing');
+    return;
+  }
+  try {
+    const resp = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        client_id: AUTH0_CLIENT_ID,
+        code_verifier: pkceVerifier,
+        code,
+        redirect_uri: `${DEEP_LINK_SCHEME}://callback`,
+      }),
+    });
+    pkceVerifier = null; // consumed
+    const tokens = await resp.json();
+    if (tokens.error) throw new Error(`${tokens.error}: ${tokens.error_description}`);
+
+    saveAuth({
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      idToken: tokens.id_token,
+      expiresAt: Date.now() + (tokens.expires_in || 86400) * 1000,
+      authenticatedAt: Date.now(),
+    });
+    log('Auth0 PKCE: tokens stored, loading workspace');
+    loadWorkspace('/workspace');
+  } catch (err) {
+    log('Auth0 PKCE token exchange failed:', err && err.message);
     if (mainWindow && !mainWindow.isDestroyed()) {
-      session.defaultSession.cookies.set({
-        url: WEB_URL,
-        name: '__session',
-        value: token,
-        domain: new URL(WEB_URL).hostname,
-        path: '/',
-        httpOnly: true,
-        secure: !isDev,
-        sameSite: 'lax',
-      }).then(() => {
-        mainWindow.loadURL(`${WEB_URL}${redirect}`);
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.focus();
-      }).catch((err) => {
-        log('deep-link cookie inject failed (loading anyway):', err && err.message);
-        mainWindow.loadURL(`${WEB_URL}${redirect}`);
-      });
+      mainWindow.loadFile(path.join(__dirname, 'signin.html'));
     }
   }
+}
+
+function loadWorkspace(redirect) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.loadURL(`${WEB_URL}${redirect}`);
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
 }
 
 // Protocol registration happens in whenReady (required on Windows).
@@ -161,10 +284,14 @@ if (process.platform === 'win32' || process.platform === 'linux') {
   }
 }
 
-// macOS (and early Windows launches): stash protocol URLs until ready.
+// macOS: protocol URLs arrive via open-url after app is ready.
 app.on('open-url', (event, url) => {
   if (event && typeof event.preventDefault === 'function') event.preventDefault();
-  pendingDeepLink = url;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    handleDeepLink(url);
+  } else {
+    pendingDeepLink = url;
+  }
 });
 
 function loadErrorPage(targetUrl, errorDescription) {
@@ -222,8 +349,40 @@ function createMainWindow() {
   mainWindow.webContents.on('did-finish-load', () => {
     const url = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getURL() : '(gone)';
     log('did-finish-load:', url);
+  });
 
-    // Sign-in is now handled inside the BrowserWindow — no action needed on /sign-in loads.
+  // ── Core UX guarantee ────────────────────────────────────────────────
+  // If Clerk's middleware ever redirects to /sign-in or /sign-up inside the
+  // Electron window (e.g. cookie expired, session rejected), intercept it and
+  // open the system browser instead. This ensures Google/GitHub OAuth ALWAYS
+  // runs in the user's real browser — never in an in-app WebView.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    try {
+      const parsed = new URL(url);
+      const webHost = new URL(WEB_URL).hostname;
+      const isOurHost = parsed.hostname === webHost;
+      const isSignIn = parsed.pathname.startsWith('/sign-in') || parsed.pathname.startsWith('/sign-up');
+      if (isOurHost && isSignIn) {
+        event.preventDefault();
+        log('intercepted in-app sign-in navigation — opening system browser');
+        startBrowserSignin();
+      }
+    } catch { /* malformed URL — let it through */ }
+  });
+
+  // Also catch sign-in pages that load without a navigation event
+  // (e.g. SPA client-side route change after session expiry).
+  mainWindow.webContents.on('did-navigate', (_event, url) => {
+    try {
+      const parsed = new URL(url);
+      const webHost = new URL(WEB_URL).hostname;
+      const isOurHost = parsed.hostname === webHost;
+      const isSignIn = parsed.pathname.startsWith('/sign-in') || parsed.pathname.startsWith('/sign-up');
+      if (isOurHost && isSignIn) {
+        log('landed on sign-in page — loading local sign-in launcher instead');
+        mainWindow.loadFile(path.join(__dirname, 'signin.html'));
+      }
+    } catch {}
   });
 
   // F12 opens DevTools inline (bottom panel) — visible even on a blank page
@@ -279,47 +438,46 @@ function createMainWindow() {
 
   const signinHtml = path.join(__dirname, 'signin.html');
 
-  // On startup: if we have a persisted Clerk session cookie go straight to the
-  // workspace; otherwise show the local sign-in launcher that opens the system
-  // browser (real Google account picker, no in-app email/password form).
-  session.defaultSession.cookies.get({ url: WEB_URL, name: '__session' }).then((cookies) => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (cookies.length > 0) {
-      log('startup: found existing __session cookie, loading workspace');
-      mainWindow.loadURL(`${WEB_URL}/workspace`);
-    } else {
-      log('startup: no session cookie, showing local sign-in launcher');
-      mainWindow.loadFile(signinHtml);
-    }
-  }).catch(() => {
-    log('startup: cookie check failed, showing local sign-in launcher');
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.loadFile(signinHtml);
-    }
-  });
+  // On startup: if we have valid persisted Auth0 tokens go straight to the
+  // workspace; otherwise show the local sign-in launcher.
+  const savedAuth = loadAuth();
+  const isValid = savedAuth && (
+    savedAuth.expiresAt ? Date.now() < savedAuth.expiresAt : !!(savedAuth.accessToken || savedAuth.token)
+  );
+  if (isValid) {
+    log('startup: valid auth found, loading workspace');
+    mainWindow.loadURL(`${WEB_URL}/workspace`);
+  } else {
+    log('startup: no valid auth, showing sign-in launcher');
+    mainWindow.loadFile(signinHtml);
+  }
 
   return mainWindow;
 }
 
 // ─── IPC handlers ───────────────────────────────────────────────────
-ipcMain.handle('auth:get-token', async () => {
-  const cookies = await session.defaultSession.cookies.get({ url: WEB_URL, name: '__session' }).catch(() => []);
-  return cookies[0]?.value || null;
+ipcMain.handle('auth:get-token', () => {
+  const auth = loadAuth();
+  return auth?.accessToken || auth?.token || null;
 });
 
-ipcMain.handle('auth:is-authenticated', async () => {
-  const cookies = await session.defaultSession.cookies.get({ url: WEB_URL, name: '__session' }).catch(() => []);
-  return cookies.length > 0;
+ipcMain.handle('auth:is-authenticated', () => {
+  const auth = loadAuth();
+  if (!auth) return false;
+  // Check expiry for Auth0 PKCE tokens; legacy token entries have no expiresAt
+  if (auth.expiresAt) return Date.now() < auth.expiresAt;
+  return !!(auth.accessToken || auth.token);
 });
 
 ipcMain.handle('auth:logout', async () => {
   clearAuth();
-  // Remove all Clerk cookies for this domain so the next startup goes through sign-in
-  const allCookies = await session.defaultSession.cookies.get({ url: WEB_URL }).catch(() => []);
-  for (const c of allCookies) {
-    await session.defaultSession.cookies.remove(WEB_URL, c.name).catch(() => {});
-  }
+  pkceVerifier = null;
   if (mainWindow && !mainWindow.isDestroyed()) {
+    // Auth0 logout — clears Auth0 session in system browser too
+    if (AUTH0_DOMAIN && AUTH0_CLIENT_ID) {
+      const logoutUrl = `https://${AUTH0_DOMAIN}/v2/logout?client_id=${AUTH0_CLIENT_ID}&returnTo=${encodeURIComponent(WEB_URL)}`;
+      shell.openExternal(logoutUrl);
+    }
     mainWindow.loadFile(path.join(__dirname, 'signin.html'));
   }
 });
@@ -328,6 +486,11 @@ ipcMain.handle('auth:start-browser-signin', () => {
   // Opens the system browser so Google OAuth shows the real account picker.
   startBrowserSignin();
 });
+
+ipcMain.handle('auth:server-info', () => ({
+  port: AUTH_SERVER_PORT,
+  state: authServerState,
+}));
 
 ipcMain.handle('auth:handle-link', (_event, url) => {
   // Deep-link fallback kept for users on older builds.
@@ -501,7 +664,14 @@ ipcMain.handle('exec:run', async (_event, { cmd, args, relCwd }) => {
 app.whenReady().then(() => {
   log('app ready, argv=', process.argv.slice(1).join(' '), 'isDev=', isDev, 'WEB_URL=', WEB_URL);
   try {
-    const ok = app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+    // On Windows dev mode, pass the script path so the OS routes the deep link
+    // to this exact running instance via second-instance, not a fresh spawn.
+    let ok;
+    if (isDev && process.platform === 'win32') {
+      ok = app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, process.execPath, [path.resolve(process.argv[1])]);
+    } else {
+      ok = app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+    }
     log('protocol registration result=', ok);
   } catch (err) {
     log('protocol registration failed:', err && err.message);

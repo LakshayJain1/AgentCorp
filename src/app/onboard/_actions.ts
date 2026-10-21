@@ -1,30 +1,24 @@
-'use server'
+'use server';
 
-import { auth, clerkClient } from '@clerk/nextjs/server'
+import { auth0 } from '@/lib/auth0';
 
-export async function completeClerkOnboarding(formData: {
-  companyName: string
-  companyProduct: string
-  developersCount: number
+// Onboarding completion is tracked in Zustand (localStorage) on the client.
+// This server action just validates the user is authenticated and returns
+// their identity — no external metadata API call needed.
+export async function completeOnboarding(formData: {
+  companyName: string;
+  companyProduct: string;
+  developersCount: number;
 }) {
-  try {
-    const authResult = await auth()
-    if (!authResult.userId) {
-      return { error: 'Not authenticated' }
-    }
-
-    const client = await clerkClient()
-    await client.users.updateUserMetadata(authResult.userId, {
-      publicMetadata: {
-        onboardingComplete: true,
-        companyName: formData.companyName,
-        companyProduct: formData.companyProduct,
-        developersCount: formData.developersCount,
-      },
-    })
-    return { success: true }
-  } catch (err) {
-    console.error('[Clerk] Failed to update user metadata:', err)
-    return { error: 'Failed to save onboarding status' }
+  const session = await auth0.getSession();
+  if (!session?.user?.sub) {
+    return { error: 'Not authenticated' };
   }
+  // Intentionally a no-op beyond auth check: the game store's
+  // initializePersonalizedOffice + Zustand persist handles all state.
+  console.log('[Auth0] Onboarding completed for', session.user.sub, formData);
+  return { success: true };
 }
+
+// Keep old name so SetupWizard.tsx import doesn't break during transition.
+export const completeClerkOnboarding = completeOnboarding;

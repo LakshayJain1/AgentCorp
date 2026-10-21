@@ -1,25 +1,30 @@
-'use server'
+'use server';
 
-import { auth } from '@clerk/nextjs/server'
-import { cookies } from 'next/headers'
+import { auth0 } from '@/lib/auth0';
 
+export interface DesktopAuthPayload {
+  token: string;
+  userId: string;
+  deepLinkUrl: string;
+}
+
+export async function getDesktopAuthPayload(): Promise<DesktopAuthPayload | null> {
+  const session = await auth0.getSession();
+  if (!session?.user?.sub) return null;
+
+  // Get the access token — Auth0 issues a proper long-lived JWT (not a 60s cookie).
+  const tokenResult = await auth0.getAccessToken();
+  const token = tokenResult?.token;
+  if (!token) return null;
+
+  const userId = session.user.sub;
+  const deepLinkUrl = `agentcorp://auth-callback?token=${encodeURIComponent(token)}&userId=${encodeURIComponent(userId)}&redirect=/workspace`;
+
+  return { token, userId, deepLinkUrl };
+}
+
+// Backwards compat alias.
 export async function getDesktopRedirectUrl(): Promise<string> {
-  const authResult = await auth()
-  if (!authResult.userId) {
-    return '/onboard'
-  }
-
-  // Read the actual __session cookie from the request headers.
-  // This is the long-lived session token Clerk manages — NOT the short-lived
-  // JWT from getToken() which expires in ~60 seconds and was causing every
-  // restart to require re-authentication. Server-side code can read httpOnly
-  // cookies; only client-side JS is blocked from accessing them.
-  const cookieStore = await cookies()
-  const sessionCookie = cookieStore.get('__session')
-  if (!sessionCookie?.value) {
-    return '/onboard'
-  }
-
-  const deepLinkUrl = `agentcorp://auth-callback?token=${encodeURIComponent(sessionCookie.value)}&userId=${encodeURIComponent(authResult.userId)}&redirect=/workspace`
-  return deepLinkUrl
+  const payload = await getDesktopAuthPayload();
+  return payload ? payload.deepLinkUrl : '/onboard';
 }

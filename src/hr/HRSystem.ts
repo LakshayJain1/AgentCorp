@@ -134,7 +134,8 @@ class PerformanceTracker {
       });
 
       // Underperformance alert and replacement
-      const isWorker = member.role === 'engineer' || member.role === 'qa' || member.role === 'researcher';
+      const isWorker = member.role === 'engineer' || member.role === 'qa' || member.role === 'researcher'
+        || member.role === 'sales' || member.role === 'finance' || member.role === 'ops';
       if (score < 50 && isWorker) {
         this.pushActivity(hrAgent.id, 'blocked', `🚨 Replacing underperforming agent ${member.name} (${member.role}). Onboarding replacement...`);
 
