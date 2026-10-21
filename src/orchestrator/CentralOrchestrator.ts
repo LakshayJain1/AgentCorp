@@ -393,6 +393,22 @@ export class CentralOrchestrator {
     });
     store.updateTask(task.id, { status: 'in_progress', assignedTo: workerAgent.id });
 
+    const logId = `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const startTs = Date.now();
+
+    store.addTaskExecutionLog(task.id, {
+      id: logId,
+      taskId: task.id,
+      agentId: workerAgent.id,
+      action: `Started "${task.title}"`,
+      tool: 'generateDeliverable',
+      input: task.title,
+      output: '',
+      duration: 0,
+      timestamp: startTs,
+      status: 'running',
+    });
+
     try {
       // Use AIService to generate deliverable directly
       const personalities = AGENT_PERSONALITIES();
@@ -418,6 +434,19 @@ export class CentralOrchestrator {
         store.completeTask(task.id);
         store.updateAgent(workerAgent.id, { currentTaskId: null, workStatus: 'idle', mood: 'happy' });
 
+        store.addTaskExecutionLog(task.id, {
+          id: `${logId}_done`,
+          taskId: task.id,
+          agentId: workerAgent.id,
+          action: `Completed "${task.title}"`,
+          tool: 'generateDeliverable',
+          input: task.title,
+          output: `${content.length} chars — ${deliverableType}${deliverableLang ? ` (${deliverableLang})` : ''}`,
+          duration: Date.now() - startTs,
+          timestamp: Date.now(),
+          status: 'success',
+        });
+
         this.emit({
           type: 'log',
           data: { message: `Task "${task.title}" completed by ${workerAgent.name}` },
@@ -440,6 +469,19 @@ export class CentralOrchestrator {
       console.error('[AgentCorp] executeDirectTask failed:', err);
       store.failTask(task.id);
       store.updateAgent(workerAgent.id, { currentTaskId: null, workStatus: 'idle', mood: 'frustrated' });
+
+      store.addTaskExecutionLog(task.id, {
+        id: `${logId}_err`,
+        taskId: task.id,
+        agentId: workerAgent.id,
+        action: `Failed "${task.title}"`,
+        tool: 'generateDeliverable',
+        input: task.title,
+        output: String(err),
+        duration: Date.now() - startTs,
+        timestamp: Date.now(),
+        status: 'error',
+      });
 
       this.emit({
         type: 'log',

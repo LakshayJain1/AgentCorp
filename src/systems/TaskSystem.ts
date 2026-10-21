@@ -43,6 +43,19 @@ const taskActions: TaskAction[] = [
 
       store.updateWorkStatus(ceo.id, 'completed');
 
+      store.addTaskExecutionLog(task.id, {
+        id: `log_ceo_${Date.now()}`,
+        taskId: task.id,
+        agentId: ceo.id,
+        action: `Prioritized task`,
+        tool: 'ceo:prioritize',
+        input: task.title,
+        output: msg,
+        duration: 0,
+        timestamp: Date.now(),
+        status: 'success',
+      });
+
       agentMemory.addSharedMemory({
         type: 'task',
         content: `CEO prioritized "${task.title}": ${msg}`,
@@ -126,6 +139,19 @@ const taskActions: TaskAction[] = [
 
       store.sendMessage(pm.id, worker.id, `You've been assigned: "${task.title}". Priority: ${task.priority}.`);
       store.updateWorkStatus(pm.id, 'completed');
+
+      store.addTaskExecutionLog(task.id, {
+        id: `log_pm_${Date.now()}`,
+        taskId: task.id,
+        agentId: pm.id,
+        action: `Assigned to ${worker.name}`,
+        tool: 'pm:assign',
+        input: task.title,
+        output: msg,
+        duration: 0,
+        timestamp: Date.now(),
+        status: 'success',
+      });
 
       const updatedTask = {
         ...task,

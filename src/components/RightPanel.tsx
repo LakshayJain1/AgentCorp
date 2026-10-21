@@ -236,20 +236,33 @@ export default function RightPanel() {
               </div>
               <p className="text-xs font-bold text-navy/80">No logs yet</p>
               <p className="text-[10px] text-navy/45 mt-1 max-w-[200px] mx-auto leading-normal">
-                Execution logs will appear here during agent activity.
+                Execution logs will appear here as agents process tasks.
               </p>
             </div>
           ) : (
-            <div className="w-full space-y-2 max-h-[160px] overflow-y-auto glass-scrollbar">
-              {executionLogs.map((log, idx) => (
-                <div key={idx} className="flex items-start gap-2 text-[10px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-navy/80 font-bold truncate">[{log.tool}] {log.action}</p>
-                    <p className="text-navy/40 text-[9px]">{log.taskTitle}</p>
+            <div className="w-full space-y-1.5 max-h-[200px] overflow-y-auto glass-scrollbar">
+              {executionLogs.map((log, idx) => {
+                const dot = log.status === 'success' ? 'bg-emerald-400'
+                  : log.status === 'error' ? 'bg-rose-400'
+                  : 'bg-amber-400 animate-pulse';
+                const agent = agents.find((a) => a.id === log.agentId);
+                return (
+                  <div key={idx} className="flex items-start gap-2 text-[10px] py-1.5 px-2 rounded-xl hover:bg-navy/4 transition-colors">
+                    <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${dot}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {agent && <span className="font-bold text-navy/70">{agent.emoji} {agent.name}</span>}
+                        <span className="text-[9px] font-mono text-navy/35 bg-navy/5 px-1 rounded">{log.tool}</span>
+                      </div>
+                      <p className="text-navy/60 truncate mt-0.5">{log.action}</p>
+                      <p className="text-navy/35 text-[9px] truncate">{log.taskTitle}</p>
+                    </div>
+                    <span className="text-[9px] text-navy/25 shrink-0 mt-0.5">
+                      {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
