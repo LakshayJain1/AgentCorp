@@ -137,7 +137,10 @@ let pkceVerifier = null; // stashed while browser is open
 function startBrowserSignin() {
   if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID) {
     log('AUTH0_DOMAIN / AUTH0_ELECTRON_CLIENT_ID not set — falling back to web sign-in');
-    const signInUrl = `${WEB_URL}/auth/login?returnTo=${encodeURIComponent('/desktop-redirect')}`;
+    startAuthServer();
+    const state = generateState();
+    const desktopRedirect = `/desktop-redirect?port=${AUTH_SERVER_PORT}&state=${state}`;
+    const signInUrl = `${WEB_URL}/auth/login?returnTo=${encodeURIComponent(desktopRedirect)}`;
     shell.openExternal(signInUrl);
     return;
   }
