@@ -41,7 +41,7 @@ export class PixiGame {
       antialias: false,
       // 'high-performance' fails silently on iOS Safari / Android WebView, leaving
       // renderer internals undefined and causing the "Cannot read .name" TypeError
-      powerPreference: 'default',
+      powerPreference: 'low-power',
       // Explicitly request WebGL; auto-detection tries WebGPU first on some mobile
       // browsers where the API is partially implemented and throws during init
       preference: 'webgl',

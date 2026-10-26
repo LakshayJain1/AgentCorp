@@ -14,7 +14,7 @@ import { ResearchAgent } from '@/agents/ResearchAgent';
 import { SalesAgent } from '@/agents/SalesAgent';
 import { FinanceAgent } from '@/agents/FinanceAgent';
 import { OpsAgent } from '@/agents/OpsAgent';
-import { classifyIntent } from '@/ai/IntentClassifier';
+import { classifyIntent, formatTicketTitle } from '@/ai/IntentClassifier';
 import { LoopOrchestrator } from './LoopOrchestrator';
 import { aiService } from '@/ai/AIService';
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
@@ -123,12 +123,30 @@ export class CentralOrchestrator {
       return;
     }
 
+    const ticketTitle = intent.ticketTitle || formatTicketTitle(request);
+    const pm = store.agents.find((a) => a.role === 'pm');
+    const ceo = store.agents.find((a) => a.role === 'ceo');
+
+    if (pm) {
+      store.pushAgentActivity(pm.id, {
+        id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        agentId: pm.id,
+        type: 'thinking',
+        message: `Triaging ticket: "${ticketTitle}" (${intent.type})`,
+        timestamp: Date.now(),
+      });
+    }
+
     if (intent.type === 'needs_credentials') {
-      // Add the task first so it exists in the store before requesting credentials
-      console.log('[AgentCorp] adding task first:', request);
-      store.addTaskWithTitle(request);
+      // Add the task with clean ticket title and detailed user request in description
+      console.log('[AgentCorp] PM creating task with title:', ticketTitle);
+      store.addTaskWithTitle(ticketTitle, undefined, request);
       const newTask = useGameStore.getState().tasks[useGameStore.getState().tasks.length - 1];
       const taskId = newTask?.id;
+
+      if (pm && ceo) {
+        store.sendMessage(pm.id, ceo.id, `Ticket "${ticketTitle}" requires external credentials (${intent.requiredKeys.map((k) => k.label).join(', ')}). Awaiting credentials.`);
+      }
 
       for (const key of intent.requiredKeys) {
         store.requestCredential(
@@ -140,16 +158,21 @@ export class CentralOrchestrator {
       }
       this.emit({
         type: 'log',
-        data: { message: `Request requires credentials: ${intent.requiredKeys.map((k) => k.label).join(', ')}. Awaiting user input.` },
+        data: { message: `Ticket "${ticketTitle}" requires credentials: ${intent.requiredKeys.map((k) => k.label).join(', ')}. Awaiting user input.` },
         timestamp: Date.now(),
         streamId: `intent_${Date.now()}`,
       });
     } else {
-      console.log('[AgentCorp] adding task with title:', request);
-      store.addTaskWithTitle(request);
+      console.log('[AgentCorp] PM creating task with title:', ticketTitle);
+      store.addTaskWithTitle(ticketTitle, undefined, request);
+
+      if (pm && ceo) {
+        store.sendMessage(pm.id, ceo.id, `Created ticket "${ticketTitle}". Assigning to development.`);
+      }
+
       this.emit({
         type: 'log',
-        data: { message: `Request classified as internal. Agents will work on it.` },
+        data: { message: `PM triaged ticket: "${ticketTitle}". Classified as internal.` },
         timestamp: Date.now(),
         streamId: `intent_${Date.now()}`,
       });
@@ -414,9 +437,12 @@ export class CentralOrchestrator {
       const personalities = AGENT_PERSONALITIES();
       const personality = personalities[workerAgent.role];
       const deliverableType = task.deliverableType || 'code';
-      const deliverableLang = task.deliverableLang || 'typescript';
+      const deliverableLang = task.deliverableLang;
+      const prompt = (task.description && task.description.length > task.title.length)
+        ? task.description
+        : task.title;
 
-      const content = await aiService.generateDeliverable(task.title, deliverableType, deliverableLang);
+      const content = await aiService.generateDeliverable(prompt, deliverableType, deliverableLang);
 
       if (content && content.length > 50) {
         // Success - store deliverable and complete task
