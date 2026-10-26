@@ -77,24 +77,32 @@ export function formatTicketTitle(text: string): string {
   return maxWords.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
-async function aiClassify(text: string): Promise<{ isTask: boolean; reply?: string; ticketTitle?: string }> {
+async function aiClassify(
+  text: string,
+  history?: { role: 'user' | 'agent'; text: string }[],
+): Promise<{ isTask: boolean; reply?: string; ticketTitle?: string }> {
   try {
-    const prompt = `You are the executive team (CEO and Project Manager) of AgentCorp, an AI-powered virtual company. A user just sent you a message.
+    const historyBlock = history && history.length > 0
+      ? `\nConversation so far (oldest first):\n${history.map((m) => `${m.role === 'user' ? 'User' : 'CEO'}: ${m.text}`).join('\n')}\n`
+      : '';
 
+    const prompt = `You are the executive team (CEO and Project Manager) of AgentCorp, an AI-powered virtual company. A user is chatting with you.
+${historyBlock}
 Your job:
-1. Decide if this message is a TASK INSTRUCTION for your team to work on, or a CONVERSATIONAL MESSAGE (greeting, question, small talk, feedback, status check, etc.).
+1. Decide if the LATEST message is a TASK INSTRUCTION for your team to work on, or a CONVERSATIONAL MESSAGE (greeting, question, small talk, feedback, status check, etc.). Use the conversation history above for context when the message references something said earlier.
 2. If it is a TASK, generate a concise, professional engineering/product ticket title (3 to 7 words, Title Case, e.g. "Build Stripe Checkout Integration", "Python Log Parser & CSV Exporter", "Design Landing Page Hero Section").
 
-Message: "${text}"
+Latest message: "${text}"
 
 Rules:
 - TASK: anything that asks the team to build, create, write, analyze, research, design, implement, fix, review, generate, make, plan, or do something concrete
 - CHAT: greetings (hi, hello, hey), questions about the system, thank yous, short affirmations, status checks ("how's it going"), vague messages with no actionable work
+- If the message references a prior topic (e.g. "what's your plan for that?"), treat it as CHAT and answer with context from the conversation history above
 - If genuinely ambiguous, lean toward CHAT and ask for clarification
 
 Respond with valid JSON only:
 {"isTask": true, "ticketTitle": "Short Professional Ticket Title"} if it's a task
-{"isTask": false, "reply": "your short friendly response as CEO"} if it's chat
+{"isTask": false, "reply": "your short friendly response as CEO, referencing conversation history where relevant"} if it's chat
 
 Return ONLY the JSON, no markdown, no explanation.`;
 
@@ -125,11 +133,14 @@ Return ONLY the JSON, no markdown, no explanation.`;
   }
 }
 
-export async function classifyIntent(text: string): Promise<IntentResult> {
+export async function classifyIntent(
+  text: string,
+  history?: { role: 'user' | 'agent'; text: string }[],
+): Promise<IntentResult> {
   console.log('[AgentCorp] classifyIntent called with:', text);
 
   // Step 1: AI-powered chat vs task classification + ticket title generation
-  const { isTask, reply, ticketTitle } = await aiClassify(text);
+  const { isTask, reply, ticketTitle } = await aiClassify(text, history);
   if (!isTask) {
     console.log('[AgentCorp] intent = chat');
     return {

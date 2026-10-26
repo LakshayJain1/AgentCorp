@@ -85,7 +85,7 @@ export class CentralOrchestrator {
     console.log('[AgentCorp] initWorkers: registered', this.workers.length, 'workers');
   }
 
-  async handleUserRequest(request: string): Promise<void> {
+  async handleUserRequest(request: string, history?: { role: 'user' | 'agent'; text: string }[]): Promise<void> {
     const store = useGameStore.getState();
     console.log('[AgentCorp] handleUserRequest received:', request);
 
@@ -96,7 +96,7 @@ export class CentralOrchestrator {
       streamId: `user_${Date.now()}`,
     });
 
-    const intent = await classifyIntent(request);
+    const intent = await classifyIntent(request, history);
     console.log('[AgentCorp] classified intent:', intent.type, intent.requiredKeys);
 
     if (intent.type === 'chat') {

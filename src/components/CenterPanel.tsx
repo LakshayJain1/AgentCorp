@@ -101,7 +101,12 @@ export default function CenterPanel() {
       ? `${text}\n\n[Attached file: ${attachedFile.name}]\n${attachedFile.content.slice(0, 4000)}`
       : text;
     addUserMessage(fullText);
-    centralOrchestrator.handleUserRequest(fullText);
+    // Build last 6 turns of history so the AI has conversational context
+    const history = allMessages.slice(-6).map((m) => ({
+      role: m.kind === 'user' ? 'user' as const : 'agent' as const,
+      text: m.message,
+    }));
+    centralOrchestrator.handleUserRequest(fullText, history);
     setInput('');
     setAttachedFile(null);
     setShowEmoji(false);
