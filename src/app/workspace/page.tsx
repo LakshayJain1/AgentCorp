@@ -9,32 +9,36 @@ import CredentialDialog from '@/components/CredentialDialog';
 import { useEffect, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { Users, MessageSquare, BarChart2 } from 'lucide-react';
+import { useUser } from '@auth0/nextjs-auth0/client';
 
 export default function WorkspacePage() {
   const router = useRouter();
   const isInitialized = useGameStore((s) => s.isInitialized);
   const showAgentRoster = useGameStore((s) => s.showAgentRoster);
   const [mobilePanel, setMobilePanel] = useState<'agents' | 'chat' | 'stats'>('chat');
-  // Track whether Zustand's persist middleware has finished reading from localStorage.
-  // Without this, isInitialized is briefly false on every reload and triggers /onboard.
   const [hydrated, setHydrated] = useState(false);
+  const { user, isLoading: authLoading } = useUser();
 
   useEffect(() => {
-    // onFinishHydration fires once the persisted state is merged in.
     const unsub = useGameStore.persist.onFinishHydration(() => setHydrated(true));
-    // If hydration already finished before this effect runs, mark immediately.
     if (useGameStore.persist.hasHydrated()) setHydrated(true);
     return unsub;
   }, []);
 
   useEffect(() => {
+    if (authLoading) return;
+    // Not authenticated — send to Auth0 login
+    if (!user) {
+      router.replace('/auth/login');
+      return;
+    }
+    // Authenticated but workspace not set up — send to onboarding
     if (hydrated && !isInitialized) {
       router.replace('/onboard');
     }
-  }, [hydrated, isInitialized, router]);
+  }, [hydrated, isInitialized, user, authLoading, router]);
 
-  // Render nothing until hydration is confirmed to avoid flash redirect.
-  if (!hydrated || !isInitialized) {
+  if (authLoading || !hydrated || !user || !isInitialized) {
     return null;
   }
 

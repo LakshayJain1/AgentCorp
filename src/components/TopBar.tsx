@@ -4,12 +4,14 @@ import { useGameStore } from '@/store/gameStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useMemo, useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import ScrumMeeting from '@/components/ScrumMeeting';
 import { Cpu, Play, Pause, Search, Command, X, UserPlus, Copy, Check } from 'lucide-react';
 
 export default function TopBar() {
   const { user, isLoading } = useUser();
   const isSignedIn = !isLoading && !!user;
+  const router = useRouter();
   const simulation = useGameStore((s) => s.simulation);
   const setPaused = useGameStore((s) => s.setPaused);
   const agents = useGameStore((s) => s.agents);
@@ -175,6 +177,16 @@ export default function TopBar() {
               <span className="hidden md:inline text-xs font-semibold text-navy">
                 {(user?.name as string | undefined) || (user?.email as string | undefined) || 'Operator'}
               </span>
+              <button
+                onClick={() => {
+                  useGameStore.persist.clearStorage();
+                  router.replace('/onboard');
+                }}
+                className="hidden md:inline text-[9px] text-navy/40 hover:text-rose-500 font-medium transition-colors cursor-pointer"
+                title="Clear workspace and restart onboarding"
+              >
+                Reset
+              </button>
               <a href="/auth/logout" className="hidden md:inline text-[9px] text-navy/40 hover:text-navy/70 font-medium transition-colors">
                 Sign out
               </a>
