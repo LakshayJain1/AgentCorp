@@ -566,6 +566,7 @@ export class AgentEntity {
   updateFromStore(data: Partial<AgentEntityData>): void {
     Object.assign(this, data);
     if (data.name !== undefined) this.label.text = data.name;
+    if ('online' in data) this.container.visible = this.online;
   }
 
   destroy(): void {
