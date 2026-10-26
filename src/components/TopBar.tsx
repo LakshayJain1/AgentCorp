@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useMemo, useState, useRef, useEffect } from 'react';
 import ScrumMeeting from '@/components/ScrumMeeting';
-import { Cpu, Play, Pause, Search, Command, X } from 'lucide-react';
+import { Cpu, Play, Pause, Search, Command, X, UserPlus, Copy, Check } from 'lucide-react';
 
 export default function TopBar() {
   const { user, isLoading } = useUser();
@@ -19,9 +19,23 @@ export default function TopBar() {
   const setSelectedTask = useGameStore((s) => s.setSelectedTask);
   const setCenterView = useGameStore((s) => s.setCenterView);
 
+  const orgId = useGameStore((s) => s.orgId);
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const inviteRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (inviteRef.current && !inviteRef.current.contains(e.target as Node)) {
+        setShowInvite(false);
+      }
+    };
+    if (showInvite) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showInvite]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -167,6 +181,57 @@ export default function TopBar() {
             </div>
           </div>
         )}
+
+        {/* Invite button */}
+        <div className="relative" ref={inviteRef}>
+          <button
+            onClick={() => setShowInvite((v) => !v)}
+            title="Invite teammates"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold rounded-full glass-card text-navy/60 hover:text-navy transition-colors cursor-pointer"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Invite</span>
+          </button>
+          <AnimatePresence>
+            {showInvite && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 top-10 z-50 w-80 bg-white border border-navy/10 rounded-2xl shadow-xl p-4 space-y-3"
+              >
+                <div>
+                  <p className="text-xs font-bold text-navy">Invite to workspace</p>
+                  <p className="text-[10px] text-navy/45 mt-0.5">Share this link — teammates will see live activity.</p>
+                </div>
+                <div className="flex items-center gap-2 bg-navy/3 border border-navy/8 rounded-xl px-3 py-2">
+                  <span className="flex-1 text-[10px] font-mono text-navy/55 truncate">
+                    {typeof window !== 'undefined' && orgId
+                      ? `${window.location.origin}/workspace?invite=${orgId}`
+                      : 'Launch workspace to generate link'}
+                  </span>
+                  <button
+                    disabled={!orgId}
+                    onClick={() => {
+                      if (!orgId) return;
+                      const link = `${window.location.origin}/workspace?invite=${orgId}`;
+                      navigator.clipboard.writeText(link).catch(() => {});
+                      setInviteCopied(true);
+                      setTimeout(() => setInviteCopied(false), 2000);
+                    }}
+                    className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-ocean-50 hover:bg-ocean-100 text-ocean-600 text-[10px] font-semibold transition-colors cursor-pointer disabled:opacity-40"
+                  >
+                    {inviteCopied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
+                  </button>
+                </div>
+                <p className="text-[9px] text-navy/35 leading-relaxed">
+                  Collaborators who open this link see your workspace in real-time via live event stream.
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         <ScrumMeeting />
 

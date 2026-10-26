@@ -9,7 +9,7 @@ import { useUser } from '@auth0/nextjs-auth0/client';
 import {
   GitBranch, Play, Key, Sparkles, Server, Check, ArrowRight,
   ShieldCheck, ChevronRight, CreditCard, Users,
-  CheckCircle2, DollarSign, ArrowUpRight, Loader2, Cpu
+  CheckCircle2, DollarSign, ArrowUpRight, Loader2, Cpu, Link, Copy, Mail
 } from 'lucide-react';
 
 export default function SetupWizard() {
@@ -48,6 +48,8 @@ export default function SetupWizard() {
   const [aiProvider, setAiProvider] = useState<'gemini' | 'openrouter'>('gemini');
   const [aiKey, setAiKey] = useState('');
 
+  const [inviteEmails, setInviteEmails] = useState<[string, string, string]>(['', '', '']);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
 
   const [deployStatus, setDeployStatus] = useState<string[]>([]);
@@ -196,7 +198,7 @@ export default function SetupWizard() {
     setTimeout(() => {
       setIsPaying(false);
       setPaymentSuccess(true);
-      setTimeout(() => handleLaunchSequence(), 1000);
+      setTimeout(() => setStep(4), 1000);
     }, 2000);
   };
 
@@ -256,7 +258,7 @@ export default function SetupWizard() {
       vercel: { connected: vConnected, token: vToken, autoDeploy: vDeploy },
       slack: { connected: sConnected, webhookUrl: sUrl, broadcastEvents: sBroadcast },
       ai: { provider: aiProvider, apiKey: aiKey },
-    });
+    }, inviteEmails.filter(Boolean));
 
     // 5. Explicitly navigate to /workspace — don't rely on the useEffect in onboard/page.tsx
     //    which may race against the store update.
@@ -767,8 +769,8 @@ export default function SetupWizard() {
                   <button onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-white/70 border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-[rgba(23,23,31,0.04)] transition-colors cursor-pointer">
                     Back
                   </button>
-                  <button onClick={handleLaunchSequence} className="flex-1 py-2.5 rounded-xl bg-green-50 hover:bg-green-100 border border-green-200 text-green-600 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
-                    Launch Simulation <ArrowRight size={14} />
+                  <button onClick={() => setStep(4)} className="flex-1 py-2.5 rounded-xl bg-green-50 hover:bg-green-100 border border-green-200 text-green-600 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                    Continue <ChevronRight size={14} />
                   </button>
                 </div>
               ) : (
@@ -905,6 +907,93 @@ export default function SetupWizard() {
                 </button>
                 <button onClick={handleLaunchSequence} className="flex-1 py-2.5 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer">
                   Launch Simulation <ArrowRight size={14} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 4 && (
+            <motion.div
+              key="invite"
+              variants={wizardVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.3 }}
+              className="w-full max-w-lg p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow space-y-6"
+            >
+              <div>
+                <h2 className="text-lg font-extrabold tracking-tight text-navy flex items-center gap-2">
+                  <Users size={18} className="text-ocean-600" /> Invite Teammates
+                </h2>
+                <p className="text-xs text-navy/55 mt-0.5">
+                  Share your workspace with collaborators. They&apos;ll see your team&apos;s activity in real-time.
+                </p>
+              </div>
+
+              {/* Invite link */}
+              <div className="space-y-2">
+                <label className="block text-[9px] font-semibold text-navy/55 uppercase tracking-wider">Workspace Invite Link</label>
+                <div className="flex items-center gap-2 bg-white/70 border border-navy/10 rounded-xl px-3 py-2">
+                  <Link size={13} className="text-ocean-500 shrink-0" />
+                  <span className="flex-1 text-[11px] text-navy/60 font-mono truncate">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/workspace?invite=pending` : 'https://agent-corp.vercel.app/workspace?invite=...'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const link = typeof window !== 'undefined'
+                        ? `${window.location.origin}/workspace?invite=pending`
+                        : '';
+                      navigator.clipboard.writeText(link).catch(() => {});
+                      setLinkCopied(true);
+                      setTimeout(() => setLinkCopied(false), 2000);
+                    }}
+                    className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-ocean-50 hover:bg-ocean-100 text-ocean-600 text-[10px] font-semibold transition-colors cursor-pointer"
+                  >
+                    {linkCopied ? <><Check size={10} /> Copied!</> : <><Copy size={10} /> Copy</>}
+                  </button>
+                </div>
+                <p className="text-[10px] text-navy/40 leading-relaxed">
+                  Anyone with this link can join your workspace and see live agent activity. The unique link is generated when you launch.
+                </p>
+              </div>
+
+              {/* Email invites */}
+              <div className="space-y-2">
+                <label className="block text-[9px] font-semibold text-navy/55 uppercase tracking-wider flex items-center gap-1.5">
+                  <Mail size={10} /> Notify teammates by email <span className="text-navy/35 normal-case font-medium">(optional)</span>
+                </label>
+                <div className="space-y-2">
+                  {([0, 1, 2] as const).map((i) => (
+                    <input
+                      key={i}
+                      type="email"
+                      placeholder={`teammate${i + 1}@company.com`}
+                      value={inviteEmails[i]}
+                      onChange={(e) => {
+                        const updated: [string, string, string] = [...inviteEmails] as [string, string, string];
+                        updated[i] = e.target.value;
+                        setInviteEmails(updated);
+                      }}
+                      className="w-full px-3.5 py-2 bg-white/70 border border-navy/10 rounded-xl text-navy text-xs outline-none focus:border-ocean-400/60 transition-all placeholder:text-navy/25"
+                    />
+                  ))}
+                </div>
+                <p className="text-[10px] text-navy/35">
+                  They&apos;ll receive the invite link. You can also share it directly from inside your workspace.
+                </p>
+              </div>
+
+              <div className="flex gap-4 pt-2">
+                <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl bg-white/70 border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-[rgba(23,23,31,0.04)] transition-colors cursor-pointer">
+                  Back
+                </button>
+                <button
+                  onClick={handleLaunchSequence}
+                  className="flex-1 py-2.5 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  Launch Workspace <ArrowRight size={14} />
                 </button>
               </div>
             </motion.div>

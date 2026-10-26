@@ -377,6 +377,8 @@ interface GameStore {
   companyName: string;
   companyProduct: string;
   developersCount: number;
+  orgId: string;
+  inviteEmails: string[];
   connectors: {
     github: { connected: boolean; repoUrl: string; token: string; autoCommit: boolean };
     vercel: { connected: boolean; token: string; autoDeploy: boolean };
@@ -387,7 +389,8 @@ interface GameStore {
     companyName: string,
     companyProduct: string,
     developersCount: number,
-    connectors: GameStore['connectors']
+    connectors: GameStore['connectors'],
+    inviteEmails?: string[]
   ) => void;
   updateConnectors: (connectors: Partial<GameStore['connectors']>) => void;
 }
@@ -415,6 +418,8 @@ export const useGameStore = create<GameStore>()(
   companyName: 'AgentCorp',
   companyProduct: 'Autonomous Developer Sandbox & OS',
   developersCount: 1,
+  orgId: '',
+  inviteEmails: [],
   connectors: {
     github: { connected: false, repoUrl: '', token: '', autoCommit: false },
     vercel: { connected: false, token: '', autoDeploy: false },
@@ -818,7 +823,8 @@ export const useGameStore = create<GameStore>()(
     }));
   },
 
-  initializePersonalizedOffice: (companyName, companyProduct, developersCount, connectors) => {
+  initializePersonalizedOffice: (companyName, companyProduct, developersCount, connectors, inviteEmails = []) => {
+    const orgId = get().orgId || `org_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     set({
       isInitialized: true,
       companyName,
@@ -826,6 +832,8 @@ export const useGameStore = create<GameStore>()(
       developersCount,
       connectors,
       tasks: [],
+      orgId,
+      inviteEmails,
     });
     
     // Re-initialize base agents
