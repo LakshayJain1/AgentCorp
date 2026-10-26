@@ -1,5 +1,5 @@
 import { useGameStore } from '@/store/gameStore';
-import { Agent, SubTask, StreamEvent, Task } from '@/agents/AgentTypes';
+import { Agent, AgentActivity, SubTask, StreamEvent, Task } from '@/agents/AgentTypes';
 import { PlannerAgent } from './PlannerAgent';
 import { TaskQueue } from './TaskQueue';
 import { BaseWorkerAgent } from '@/agents/BaseWorkerAgent';
@@ -467,6 +467,21 @@ export class CentralOrchestrator {
   }
 
   /**
+   * Post a visible agent-to-agent message in the chat feed and push an activity.
+   */
+  private agentSay(fromId: string, toId: string, message: string, activityType: AgentActivity['type'] = 'communicating'): void {
+    const store = useGameStore.getState();
+    store.sendMessage(fromId, toId, message);
+    store.pushAgentActivity(fromId, {
+      id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      agentId: fromId,
+      type: activityType,
+      message,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
    * Execute a task directly using AI, bypassing the full CEO/PM/Planner pipeline.
    * Used for user-created tasks that should be handled immediately.
    */
@@ -495,6 +510,10 @@ export class CentralOrchestrator {
       return;
     }
 
+    const pm = store.agents.find((a) => a.role === 'pm');
+    const ceo = store.agents.find((a) => a.role === 'ceo');
+    const short = task.title.length > 55 ? `${task.title.slice(0, 55)}…` : task.title;
+
     this.emit({
       type: 'log',
       data: { message: `Direct execution: ${workerAgent.name} (${workerAgent.role}) working on "${task.title}"` },
@@ -502,13 +521,14 @@ export class CentralOrchestrator {
       streamId: `direct_${task.id}`,
     });
 
-    // Update agent status
-    store.updateAgent(workerAgent.id, {
-      currentTaskId: task.id,
-      workStatus: 'thinking',
-      mood: 'focused',
-    });
+    // ── Stage 1: Assign — PM hands task to worker, worker acknowledges ──────
+    store.updateAgent(workerAgent.id, { currentTaskId: task.id, workStatus: 'thinking', mood: 'focused' });
     store.updateTask(task.id, { status: 'in_progress', assignedTo: workerAgent.id });
+
+    if (pm) {
+      this.agentSay(pm.id, workerAgent.id, `Hey ${workerAgent.name}, you're up! Working on: "${short}".`, 'communicating');
+    }
+    this.agentSay(workerAgent.id, pm?.id ?? workerAgent.id, `On it! Starting "${short}" now — I'll keep you posted.`, 'thinking');
 
     const logId = `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const startTs = Date.now();
@@ -527,19 +547,27 @@ export class CentralOrchestrator {
     });
 
     try {
-      // Use AIService to generate deliverable directly
-      const personalities = AGENT_PERSONALITIES();
-      const personality = personalities[workerAgent.role];
       const deliverableType = task.deliverableType || 'code';
       const deliverableLang = task.deliverableLang;
       const prompt = (task.description && task.description.length > task.title.length)
         ? task.description
         : task.title;
 
+      // ── Stage 2: Working ─────────────────────────────────────────────────
+      store.updateAgent(workerAgent.id, { workStatus: 'coding' });
+      this.agentSay(workerAgent.id, pm?.id ?? workerAgent.id, `Working through "${short}"… making solid progress.`, 'coding');
+
       const content = await aiService.generateDeliverable(prompt, deliverableType, deliverableLang);
 
       if (content && content.length > 50) {
-        // Success - store deliverable and complete task
+        // ── Stage 3: Review — brief pause before marking complete ────────────
+        store.updateTask(task.id, { status: 'review' });
+        store.updateAgent(workerAgent.id, { workStatus: 'reviewing' });
+        this.agentSay(workerAgent.id, pm?.id ?? workerAgent.id, `Done with "${short}"! Giving it a final review before I hand it off.`, 'reviewing');
+
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        // ── Stage 4: Complete ────────────────────────────────────────────────
         store.updateTask(task.id, { deliverable: content });
         store.addDeliverableProject({
           id: `project_${Date.now()}`,
@@ -553,6 +581,10 @@ export class CentralOrchestrator {
         });
         store.completeTask(task.id);
         store.updateAgent(workerAgent.id, { currentTaskId: null, workStatus: 'idle', mood: 'happy' });
+
+        if (pm) {
+          this.agentSay(pm.id, ceo?.id ?? pm.id, `${workerAgent.name} just wrapped up "${short}". Deliverable is live in the projects folder! ✅`, 'communicating');
+        }
 
         store.addTaskExecutionLog(task.id, {
           id: `${logId}_done`,
@@ -589,6 +621,10 @@ export class CentralOrchestrator {
       console.error('[AgentCorp] executeDirectTask failed:', err);
       store.failTask(task.id);
       store.updateAgent(workerAgent.id, { currentTaskId: null, workStatus: 'idle', mood: 'frustrated' });
+
+      if (pm) {
+        this.agentSay(pm.id, ceo?.id ?? pm.id, `Heads up — ${workerAgent.name} hit a blocker on "${short}". Task failed.`, 'communicating');
+      }
 
       store.addTaskExecutionLog(task.id, {
         id: `${logId}_err`,
