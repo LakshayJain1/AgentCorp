@@ -50,8 +50,17 @@ export default function CenterPanel() {
   const [showEmoji, setShowEmoji] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; content: string } | null>(null);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Agent list for @mention autocomplete
+  const mentionCandidates = useMemo(() => {
+    if (mentionQuery === null) return [];
+    return agents.filter((a) =>
+      a.name.toLowerCase().startsWith(mentionQuery.toLowerCase()),
+    ).slice(0, 6);
+  }, [agents, mentionQuery]);
 
   const allMessages = useMemo(() => {
     const seen = new Set<string>();
@@ -110,6 +119,7 @@ export default function CenterPanel() {
     setInput('');
     setAttachedFile(null);
     setShowEmoji(false);
+    setMentionQuery(null);
   };
 
   const handleNewChat = () => {
@@ -399,6 +409,38 @@ export default function CenterPanel() {
               </button>
             </div>
           )}
+          {/* @mention autocomplete dropdown */}
+          <AnimatePresence>
+            {mentionCandidates.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.12 }}
+                className="mb-1.5 bg-white border border-navy/10 rounded-2xl shadow-lg overflow-hidden"
+              >
+                {mentionCandidates.map((agent) => (
+                  <button
+                    key={agent.id}
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // prevent input blur
+                      // Replace the partial @mention with the full name
+                      const atIdx = input.lastIndexOf('@');
+                      const newInput = input.slice(0, atIdx) + `@${agent.name} `;
+                      setInput(newInput);
+                      setMentionQuery(null);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-navy/5 transition-colors cursor-pointer text-left"
+                  >
+                    <span className="text-base leading-none">{agent.emoji}</span>
+                    <div>
+                      <span className="text-[13px] font-semibold text-navy/90">{agent.name}</span>
+                      <span className="text-[11px] text-navy/40 ml-1.5 capitalize">{agent.role}</span>
+                    </div>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="flex items-center gap-3 bg-white border border-navy/10 rounded-2xl px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-ocean-100 focus-within:border-ocean-400/70 transition-all">
             {/* Left Plus icon = new chat */}
             <button
@@ -413,14 +455,27 @@ export default function CenterPanel() {
             <input
               type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={attachedFile ? `Message about ${attachedFile.name}...` : 'Message the team...'}
+              onChange={(e) => {
+                const val = e.target.value;
+                setInput(val);
+                // Detect @mention in progress: find last @ and extract partial name
+                const atIdx = val.lastIndexOf('@');
+                if (atIdx !== -1) {
+                  const partial = val.slice(atIdx + 1);
+                  // Only show dropdown if no space after @ yet (still typing name)
+                  setMentionQuery(partial.includes(' ') ? null : partial);
+                } else {
+                  setMentionQuery(null);
+                }
+              }}
+              placeholder={attachedFile ? `Message about ${attachedFile.name}...` : 'Message the team... (use @name to talk to a specific agent)'}
               className="flex-1 bg-transparent text-sm text-navy outline-none placeholder:text-navy/35 font-medium"
-              onKeyDown={(e) => { 
-                if (e.key === 'Enter' && !e.shiftKey) { 
-                  e.preventDefault(); 
-                  handleSend(); 
-                } 
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') { setMentionQuery(null); return; }
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
               }}
             />
 

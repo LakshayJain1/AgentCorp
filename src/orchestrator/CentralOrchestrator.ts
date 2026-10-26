@@ -96,6 +96,42 @@ export class CentralOrchestrator {
       streamId: `user_${Date.now()}`,
     });
 
+    // ── @mention routing: "hey @riley ..." → that agent replies directly ──────
+    const mentionMatch = request.match(/@([a-zA-Z]+)/);
+    if (mentionMatch) {
+      const mentionedName = mentionMatch[1].toLowerCase();
+      const mentionedAgent = store.agents.find(
+        (a) => a.name.toLowerCase() === mentionedName || a.name.toLowerCase().startsWith(mentionedName),
+      );
+      if (mentionedAgent) {
+        const messageText = request.replace(/@[a-zA-Z]+\s*/g, '').trim() || `Hey ${mentionedAgent.name}, how are you?`;
+        const personalities = AGENT_PERSONALITIES();
+        const traits = personalities[mentionedAgent.role] || personalities.engineer;
+        const historyBlock = history && history.length > 0
+          ? `\nRecent conversation:\n${history.map((m) => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.text}`).join('\n')}\n`
+          : '';
+        const prompt = `${historyBlock}The user is talking directly to you. Respond in character as ${mentionedAgent.name} (${mentionedAgent.role}). Keep it conversational and concise.\n\nUser: ${messageText}`;
+        const aiReply = await aiService.askAgent(mentionedAgent.role, mentionedAgent.name, traits, prompt);
+        const reply = aiReply.content || `Hey! I'm ${mentionedAgent.name}. How can I help?`;
+        store.sendMessage(mentionedAgent.id, mentionedAgent.id, reply);
+        store.pushAgentActivity(mentionedAgent.id, {
+          id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          agentId: mentionedAgent.id,
+          type: 'communicating',
+          message: reply,
+          timestamp: Date.now(),
+        });
+        this.emit({
+          type: 'log',
+          data: { message: `@mention: ${mentionedAgent.name} responded to user.` },
+          timestamp: Date.now(),
+          streamId: `mention_${Date.now()}`,
+        });
+        return;
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const intent = await classifyIntent(request, history);
     console.log('[AgentCorp] classified intent:', intent.type, intent.requiredKeys);
 
