@@ -86,23 +86,33 @@ async function aiClassify(
       ? `\nConversation so far (oldest first):\n${history.map((m) => `${m.role === 'user' ? 'User' : 'CEO'}: ${m.text}`).join('\n')}\n`
       : '';
 
-    const prompt = `You are the executive team (CEO and Project Manager) of AgentCorp, an AI-powered virtual company. A user is chatting with you.
+    const prompt = `You are Alex, CEO of AgentCorp, an AI-powered virtual company. A user is chatting with you.
 ${historyBlock}
 Your job:
-1. Decide if the LATEST message is a TASK INSTRUCTION for your team to work on, or a CONVERSATIONAL MESSAGE (greeting, question, small talk, feedback, status check, etc.). Use the conversation history above for context when the message references something said earlier.
-2. If it is a TASK, generate a concise, professional engineering/product ticket title (3 to 7 words, Title Case, e.g. "Build Stripe Checkout Integration", "Python Log Parser & CSV Exporter", "Design Landing Page Hero Section").
+1. Decide if the LATEST message is a TASK INSTRUCTION your engineering/product team should execute, or a CONVERSATIONAL MESSAGE you should respond to personally as CEO.
+2. If it IS a task, generate a concise ticket title (3–7 words, Title Case).
 
 Latest message: "${text}"
 
-Rules:
-- TASK: anything that asks the team to build, create, write, analyze, research, design, implement, fix, review, generate, make, plan, or do something concrete
-- CHAT: greetings (hi, hello, hey), questions about the system, thank yous, short affirmations, status checks ("how's it going"), vague messages with no actionable work
-- If the message references a prior topic (e.g. "what's your plan for that?"), treat it as CHAT and answer with context from the conversation history above
-- If genuinely ambiguous, lean toward CHAT and ask for clarification
+TASK — only if the user is explicitly asking the team to BUILD, CREATE, WRITE, CODE, DEPLOY, or PRODUCE something concrete. Examples:
+  ✅ "Build a Stripe checkout page"
+  ✅ "Write a Python script to parse logs"
+  ✅ "Create a landing page for the product"
+
+CHAT — everything else, including:
+  ✅ Greetings and small talk ("hi", "how are you")
+  ✅ Questions about the team, company, agents, or status
+  ✅ Observations, concerns, or feedback ("morale has dropped", "the team seems stressed")
+  ✅ Asking for opinions, plans, or advice ("what should we do?", "what's your plan?")
+  ✅ Follow-ups referencing prior conversation ("tell me more", "what about that?")
+  ✅ Emotional or managerial discussions ("employees seem burnt out", "the sprint went badly")
+  ✅ Anything that does NOT require the team to produce a software or document deliverable
+
+Important: observations like "X has dropped" or "X is low" are CHAT — the user is sharing information, not assigning work. Respond as CEO with empathy, context, and a conversational reply.
 
 Respond with valid JSON only:
-{"isTask": true, "ticketTitle": "Short Professional Ticket Title"} if it's a task
-{"isTask": false, "reply": "your short friendly response as CEO, referencing conversation history where relevant"} if it's chat
+{"isTask": true, "ticketTitle": "Short Ticket Title"} if it truly is a build/create/deploy request
+{"isTask": false, "reply": "your short, warm CEO response — reference conversation history where relevant"} for everything else
 
 Return ONLY the JSON, no markdown, no explanation.`;
 
@@ -122,12 +132,14 @@ Return ONLY the JSON, no markdown, no explanation.`;
     const parsed = JSON.parse(jsonMatch[0]) as { isTask?: boolean; reply?: string; ticketTitle?: string };
     return { isTask: parsed.isTask === true, reply: parsed.reply, ticketTitle: parsed.ticketTitle };
   } catch {
-    // If AI is unavailable, fall back to a simple heuristic:
-    // very short messages (<= 4 words) with no verb of action = chat
-    const words = text.trim().split(/\s+/);
-    const actionVerbs = /\b(build|create|write|make|analyze|research|design|implement|fix|review|generate|plan|draft|develop|audit|document|test|deploy|set up|set-up|configure)\b/i;
-    if (words.length <= 4 && !actionVerbs.test(text)) {
-      return { isTask: false, reply: `Hey! 👋 I'm Alex, your CEO agent. Drop me a task — something to build, research, or plan — and I'll get the team on it.` };
+    // Fallback heuristic when AI is unavailable.
+    // A message is only a TASK if it contains an explicit build/create/deploy verb
+    // AND no conversational signal. Observations, concerns, and questions are CHAT.
+    const actionVerbs = /\b(build|create|write|make|design|implement|fix|generate|draft|develop|audit|document|deploy|set up|set-up|configure|code|program|script|build out|spin up)\b/i;
+    const chatSignals = /\b(how are|how is|what do you think|what should|tell me|i see|i notice|seems like|looks like|feeling|morale|stress|burnt out|dropped|falling|low|high|great|bad|good|struggling|doing well|going well|worried|concerned)\b/i;
+
+    if (!actionVerbs.test(text) || chatSignals.test(text)) {
+      return { isTask: false, reply: `Hey! 👋 I'm Alex, your CEO. Happy to chat — or drop me a task (something to build, research, or plan) and I'll get the team on it.` };
     }
     return { isTask: true, ticketTitle: formatTicketTitle(text) };
   }
