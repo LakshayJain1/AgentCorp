@@ -213,13 +213,13 @@ export default function CenterPanel() {
   };
 
   return (
-    <div className="w-1/2 flex flex-col min-w-0 h-full border-r border-l glass-divider bg-[#FAFBFD]/50">
+    <div className="flex-1 lg:w-1/2 lg:flex-none flex flex-col min-w-0 h-full lg:border-r lg:border-l glass-divider bg-[#FAFBFD]/50">
       {/* Top Toggle & Control Bar */}
-      <div className="shrink-0 flex items-center justify-between px-5 py-3 border-b glass-divider bg-white/40">
+      <div className="shrink-0 flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 border-b glass-divider bg-white/40">
         <div className="flex gap-1.5 p-1 bg-[rgba(23,23,31,0.03)] rounded-full">
           <button
             onClick={() => setCenterView('chat')}
-            className={`relative px-5 py-1.5 text-xs font-bold rounded-full transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+            className={`relative px-3 sm:px-5 py-1.5 text-xs font-bold rounded-full transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
               centerView === 'chat' ? 'text-white' : 'text-navy/55 hover:text-navy/80'
             }`}
           >
@@ -235,7 +235,7 @@ export default function CenterPanel() {
           </button>
           <button
             onClick={() => setCenterView('office')}
-            className={`relative px-5 py-1.5 text-xs font-bold rounded-full transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+            className={`relative px-3 sm:px-5 py-1.5 text-xs font-bold rounded-full transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
               centerView === 'office' ? 'text-white' : 'text-navy/55 hover:text-navy/80'
             }`}
           >
@@ -314,7 +314,7 @@ export default function CenterPanel() {
 
       {/* Chat View */}
       <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${centerView === 'chat' ? '' : 'hidden'}`}>
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4.5 glass-scrollbar min-h-0 pb-16">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 space-y-4 glass-scrollbar min-h-0">
           {filteredMessages.length === 0 && (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -334,7 +334,7 @@ export default function CenterPanel() {
                   transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
                   className="flex gap-3 justify-end"
                 >
-                  <div className="max-w-[75%]">
+                  <div className="max-w-[85%] sm:max-w-[75%]">
                     <div className="flex items-center justify-end gap-2 mb-1.5">
                       <span className="text-[10px] font-bold text-navy/50">YOU</span>
                       <span className="text-[9px] text-navy/35 font-medium">{formatTime(msg.timestamp)}</span>
@@ -361,7 +361,7 @@ export default function CenterPanel() {
                   {msg.fromEmoji}
                 </div>
                 
-                <div className="flex-1 max-w-[80%]">
+                <div className="flex-1 max-w-[88%] sm:max-w-[80%]">
                   {/* Sender Name, Role, Timestamp Header */}
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-1.5">
@@ -383,7 +383,7 @@ export default function CenterPanel() {
         </div>
 
         {/* Input Bar */}
-        <div className="shrink-0 px-5 py-4 border-t glass-divider bg-white/40 relative">
+        <div className="shrink-0 px-3 sm:px-5 py-3 sm:py-4 border-t glass-divider bg-white/40 relative">
           {attachedFile && (
             <div className="mb-2 flex items-center gap-2 bg-ocean-50 border border-ocean-200 rounded-xl px-3 py-1.5 text-xs">
               <FileText className="w-3.5 h-3.5 text-ocean-600" />
@@ -466,7 +466,7 @@ export default function CenterPanel() {
       </div>
 
       {/* Office View - always mounted, hidden via CSS */}
-      <div className={`flex-1 p-3 ${centerView === 'office' ? '' : 'hidden'}`}>
+      <div className={`flex-1 p-3 min-h-0 flex flex-col ${centerView === 'office' ? '' : 'hidden'}`}>
         <GameCanvas />
       </div>
     </div>
