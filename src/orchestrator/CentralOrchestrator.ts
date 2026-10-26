@@ -96,7 +96,7 @@ export class CentralOrchestrator {
       streamId: `user_${Date.now()}`,
     });
 
-    // ── @mention routing: "hey @riley ..." → that agent replies directly ──────
+    // ── @mention routing ────────────────────────────────────────────────────
     const mentionMatch = request.match(/@([a-zA-Z]+)/);
     if (mentionMatch) {
       const mentionedName = mentionMatch[1].toLowerCase();
@@ -110,27 +110,83 @@ export class CentralOrchestrator {
         const historyBlock = history && history.length > 0
           ? `\nRecent conversation:\n${history.map((m) => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.text}`).join('\n')}\n`
           : '';
-        const prompt = `${historyBlock}The user is talking directly to you. Respond in character as ${mentionedAgent.name} (${mentionedAgent.role}). Keep it conversational and concise.\n\nUser: ${messageText}`;
-        const aiReply = await aiService.askAgent(mentionedAgent.role, mentionedAgent.name, traits, prompt);
-        const reply = aiReply.content || `Hey! I'm ${mentionedAgent.name}. How can I help?`;
-        store.sendMessage(mentionedAgent.id, mentionedAgent.id, reply);
-        store.pushAgentActivity(mentionedAgent.id, {
-          id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          agentId: mentionedAgent.id,
-          type: 'communicating',
-          message: reply,
-          timestamp: Date.now(),
-        });
-        this.emit({
-          type: 'log',
-          data: { message: `@mention: ${mentionedAgent.name} responded to user.` },
-          timestamp: Date.now(),
-          streamId: `mention_${Date.now()}`,
-        });
+
+        // Classify the stripped message to decide chat vs task
+        const mentionIntent = await classifyIntent(messageText, history);
+        const canExecute = mentionedAgent.workerRole !== null; // ceo/pm/hr cannot execute
+
+        if (mentionIntent.type !== 'chat' && mentionIntent.type !== 'needs_credentials') {
+          // ── TASK intent ───────────────────────────────────────────────────
+          if (canExecute) {
+            // Agent can do this work — create task and force it to them
+            const ticketTitle = mentionIntent.ticketTitle || formatTicketTitle(messageText);
+            store.addTaskWithTitle(ticketTitle, undefined, messageText);
+            const newTask = [...useGameStore.getState().tasks].reverse().find((t) => t.title === ticketTitle);
+
+            // Acknowledge in chat
+            const ackPrompt = `${historyBlock}The user asked you directly: "${messageText}". You accepted the task. Respond briefly in character as ${mentionedAgent.name} (${mentionedAgent.role}), confirming you're on it. One sentence.`;
+            const ackReply = await aiService.askAgent(mentionedAgent.role, mentionedAgent.name, traits, ackPrompt);
+            store.sendMessage(mentionedAgent.id, mentionedAgent.id, ackReply.content || `On it! I'll get "${ticketTitle}" done right away.`);
+            store.pushAgentActivity(mentionedAgent.id, {
+              id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              agentId: mentionedAgent.id, type: 'thinking',
+              message: `Working on: ${ticketTitle}`, timestamp: Date.now(),
+            });
+
+            if (newTask) this.executeDirectTask(newTask, mentionedAgent.id);
+          } else {
+            // Agent cannot execute — delegate to the right worker
+            const ROLE_DELEGATES: Record<string, string> = {
+              ceo: 'engineer', pm: 'engineer', hr: 'engineer',
+            };
+            const delegateRole = ROLE_DELEGATES[mentionedAgent.role] || 'engineer';
+            const delegateAgent = store.agents.find((a) => a.role === delegateRole && a.online)
+              ?? store.agents.find((a) => a.workerRole !== null && a.online);
+
+            const ticketTitle = mentionIntent.ticketTitle || formatTicketTitle(messageText);
+            store.addTaskWithTitle(ticketTitle, undefined, messageText);
+            const newTask = [...useGameStore.getState().tasks].reverse().find((t) => t.title === ticketTitle);
+
+            // Mentioned agent acknowledges + delegates
+            const delegateName = delegateAgent?.name ?? 'the team';
+            const delegatePrompt = `${historyBlock}The user asked you: "${messageText}". That's outside your area (you are ${mentionedAgent.role}). Briefly acknowledge their request, explain you're delegating it to ${delegateName} who is better suited, and that it's been added to the task queue. Stay in character as ${mentionedAgent.name}. One to two sentences.`;
+            const delegateReply = await aiService.askAgent(mentionedAgent.role, mentionedAgent.name, traits, delegatePrompt);
+            store.sendMessage(mentionedAgent.id, mentionedAgent.id, delegateReply.content || `That's a bit outside my lane — routing "${ticketTitle}" to ${delegateName} who'll handle it!`);
+            store.pushAgentActivity(mentionedAgent.id, {
+              id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              agentId: mentionedAgent.id, type: 'communicating',
+              message: `Delegated: ${ticketTitle}`, timestamp: Date.now(),
+            });
+
+            if (newTask && delegateAgent) this.executeDirectTask(newTask, delegateAgent.id);
+            else if (newTask) this.executeDirectTask(newTask);
+          }
+          this.emit({
+            type: 'log',
+            data: { message: `@mention task: "${mentionedAgent.name}" ${canExecute ? 'executing' : 'delegating'}.` },
+            timestamp: Date.now(), streamId: `mention_${Date.now()}`,
+          });
+        } else {
+          // ── CHAT intent — agent replies conversationally ──────────────────
+          const prompt = `${historyBlock}The user is talking directly to you. Respond in character as ${mentionedAgent.name} (${mentionedAgent.role}). Keep it conversational and concise.\n\nUser: ${messageText}`;
+          const aiReply = await aiService.askAgent(mentionedAgent.role, mentionedAgent.name, traits, prompt);
+          const reply = aiReply.content || `Hey! I'm ${mentionedAgent.name}. How can I help?`;
+          store.sendMessage(mentionedAgent.id, mentionedAgent.id, reply);
+          store.pushAgentActivity(mentionedAgent.id, {
+            id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            agentId: mentionedAgent.id, type: 'communicating',
+            message: reply, timestamp: Date.now(),
+          });
+          this.emit({
+            type: 'log',
+            data: { message: `@mention chat: ${mentionedAgent.name} responded.` },
+            timestamp: Date.now(), streamId: `mention_${Date.now()}`,
+          });
+        }
         return;
       }
     }
-    // ─────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
 
     const intent = await classifyIntent(request, history);
     console.log('[AgentCorp] classified intent:', intent.type, intent.requiredKeys);
@@ -414,16 +470,18 @@ export class CentralOrchestrator {
    * Execute a task directly using AI, bypassing the full CEO/PM/Planner pipeline.
    * Used for user-created tasks that should be handled immediately.
    */
-  private async executeDirectTask(task: Task): Promise<void> {
+  private async executeDirectTask(task: Task, forcedWorkerId?: string): Promise<void> {
     console.log('[AgentCorp] executeDirectTask called for:', task.id, task.title);
     const store = useGameStore.getState();
 
-    // Find the best available worker agent for this task
-    const workerAgent = store.agents.find((a) =>
-      a.online &&
-      (a.workerRole === 'developer' || a.workerRole === 'research_worker' || a.workerRole === 'qa_worker'
-        || a.workerRole === 'sales_worker' || a.workerRole === 'finance_worker' || a.workerRole === 'ops_worker')
-    );
+    // Use the forced agent if provided, otherwise find best available worker
+    const workerAgent = forcedWorkerId
+      ? store.agents.find((a) => a.id === forcedWorkerId)
+      : store.agents.find((a) =>
+          a.online &&
+          (a.workerRole === 'developer' || a.workerRole === 'research_worker' || a.workerRole === 'qa_worker'
+            || a.workerRole === 'sales_worker' || a.workerRole === 'finance_worker' || a.workerRole === 'ops_worker')
+        );
 
     if (!workerAgent) {
       console.warn('[AgentCorp] No available worker agent for direct task');
