@@ -1,4 +1,5 @@
 import { configLoader } from '@/config/ConfigLoader';
+import { useGameStore } from '@/store/gameStore';
 
 export interface IntentResult {
   type: 'internal' | 'needs_credentials' | 'chat';
@@ -86,7 +87,15 @@ async function aiClassify(
       ? `\nConversation so far (oldest first):\n${history.map((m) => `${m.role === 'user' ? 'User' : 'CEO'}: ${m.text}`).join('\n')}\n`
       : '';
 
-    const prompt = `You are Alex, CEO of AgentCorp, an AI-powered virtual company. A user is chatting with you.
+    let companyBlock = '';
+    try {
+      const { companyName, companyProduct } = useGameStore.getState();
+      if (companyName || companyProduct) {
+        companyBlock = `\nCompany: ${companyName} | Building: ${companyProduct}\n`;
+      }
+    } catch { /* outside React context */ }
+
+    const prompt = `You are Alex, CEO of AgentCorp, an AI-powered virtual company.${companyBlock} A user is chatting with you.
 ${historyBlock}
 Your job:
 1. Decide if the LATEST message is a TASK INSTRUCTION your engineering/product team should execute, or a CONVERSATIONAL MESSAGE you should respond to personally as CEO.

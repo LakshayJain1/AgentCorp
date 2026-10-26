@@ -372,6 +372,10 @@ interface GameStore {
   // Persisted agent snapshots — role-indexed, merged back into agents on init
   _agentSnapshots: Array<{ role: AgentRole; performance: AgentPerformance; memory: AgentMemoryEntry[] }>;
 
+  // Hire / Fire agents
+  fireAgent: (agentId: string) => void;
+  hireAgent: (role: AgentRole) => void;
+
   // User Personalization & Connectors Tab
   isInitialized: boolean;
   companyName: string;
@@ -821,6 +825,40 @@ export const useGameStore = create<GameStore>()(
     set((state) => ({
       deliverableProjects: [project, ...state.deliverableProjects],
     }));
+  },
+
+  fireAgent: (agentId) => {
+    const agent = get().agents.find((a) => a.id === agentId);
+    set((state) => ({
+      agents: state.agents.map((a) =>
+        a.id === agentId ? { ...a, online: false, workStatus: 'idle' as AgentWorkStatus, currentTaskId: null } : a,
+      ),
+    }));
+    if (agent) {
+      const ev = createGameEvent('system', `${agent.emoji} ${agent.name} has left the team.`);
+      get().addEvent(ev);
+    }
+  },
+
+  hireAgent: (role) => {
+    const HIRE_NAMES: Partial<Record<AgentRole, string[]>> = {
+      engineer: ['Dave', 'Priya', 'Leo', 'Nour', 'Jamie'],
+      researcher: ['Pax', 'Zoe', 'Ravi'],
+      qa: ['Quinn', 'Harper'],
+      hr: ['Drew', 'Robin'],
+      sales: ['Taylor', 'Blake'],
+      finance: ['Spencer', 'Avery'],
+      ops: ['Reese', 'Logan'],
+    };
+    const existing = get().agents.filter((a) => a.role === role);
+    const pool = HIRE_NAMES[role] ?? ['Nova', 'Scout', 'Rex'];
+    const usedNames = new Set(existing.map((a) => a.name));
+    const name = pool.find((n) => !usedNames.has(n)) ?? `${pool[0] ?? role} ${existing.length + 1}`;
+    const newAgent = createAgent(role);
+    newAgent.name = name;
+    set((state) => ({ agents: [...state.agents, newAgent] }));
+    const ev = createGameEvent('system', `🎉 ${name} (${role}) joined the team!`);
+    get().addEvent(ev);
   },
 
   initializePersonalizedOffice: (companyName, companyProduct, developersCount, connectors, inviteEmails = []) => {

@@ -1,6 +1,17 @@
 import { AgentRole, AgentTrait, AIRequest, AIResponse } from '@/agents/AgentTypes';
 import { buildSystemPrompt, getTaskPrompt } from './AgentPersonalities';
 import { configLoader } from '@/config/ConfigLoader';
+import { useGameStore } from '@/store/gameStore';
+
+function getCompanyContext(): string {
+  try {
+    const { companyName, companyProduct } = useGameStore.getState();
+    if (!companyName && !companyProduct) return '';
+    return `\nCompany context: ${companyName} is building "${companyProduct}". Tailor all output to this product and domain.\n`;
+  } catch {
+    return '';
+  }
+}
 
 let cachedTemplateSections: Map<string, string> | null = null;
 
@@ -89,6 +100,7 @@ class AIService {
       return await this.getMockDeliverable(taskTitle, deliverableType, deliverableLang);
     }
 
+    const companyCtx = getCompanyContext();
     const langSpecific = deliverableLang === 'html'
       ? 'Generate a complete, self-contained HTML page with embedded CSS and JavaScript.'
       : deliverableLang === 'nextjs'
@@ -102,20 +114,20 @@ class AIService {
               : `Generate complete, production-ready ${deliverableLang || 'code'}`;
 
     const promptMap: Record<string, string> = {
-      code: `${langSpecific} for: "${taskTitle}".
+      code: `${companyCtx}${langSpecific} for: "${taskTitle}".
 IMPORTANT: Read the task title carefully. If it mentions a specific framework or technology (like Next.js, React, Vue, Node, Python), use that. Otherwise, choose the most appropriate technology.
 Return ONLY the raw code with NO explanation, NO markdown backticks.`,
-      doc: `Write comprehensive documentation for: "${taskTitle}".
+      doc: `${companyCtx}Write comprehensive documentation for: "${taskTitle}".
 Include: overview, setup, usage, API reference, and examples. Format in markdown. Keep it professional.`,
-      report: `Write a detailed professional report about: "${taskTitle}".
+      report: `${companyCtx}Write a detailed professional report about: "${taskTitle}".
 Include: executive summary, methodology, findings, recommendations. Format in markdown.`,
-      spec: `Write a technical specification for: "${taskTitle}".
+      spec: `${companyCtx}Write a technical specification for: "${taskTitle}".
 Include: overview, requirements, architecture, implementation details, acceptance criteria. Format in markdown.`,
-      config: `Generate a complete configuration${langHint} for: "${taskTitle}".
+      config: `${companyCtx}Generate a complete configuration${langHint} for: "${taskTitle}".
 Return ONLY the raw configuration content with NO explanation.`,
-      analysis: `Write a detailed analysis for: "${taskTitle}".
+      analysis: `${companyCtx}Write a detailed analysis for: "${taskTitle}".
 Include: context, data examination, key insights, actionable recommendations. Format in markdown.`,
-      design: `Write a design document for: "${taskTitle}".
+      design: `${companyCtx}Write a design document for: "${taskTitle}".
 Include: goals, user stories, wireframe description, component tree, data flow. Format in markdown.`,
     };
 

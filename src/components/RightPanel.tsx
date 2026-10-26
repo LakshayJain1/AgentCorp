@@ -5,10 +5,11 @@ import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Cpu, Database, Users, CheckSquare, FileText,
-  ChevronRight, ChevronDown, Folder, AlertTriangle, Copy, Download, Check, X,
-  LayoutDashboard, Plug
+  ChevronRight, Folder, Copy, Download, Check, X,
+  LayoutDashboard, Plug, PackageOpen, CalendarDays
 } from 'lucide-react';
 import ConnectorsTab from '@/components/ConnectorsTab';
+import { centralOrchestrator } from '@/orchestrator/CentralOrchestrator';
 
 export default function RightPanel() {
   const agents = useGameStore((s) => s.agents);
@@ -20,6 +21,7 @@ export default function RightPanel() {
   const [listCollapsed, setListCollapsed] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'integrations'>('overview');
+  const [sprintLoading, setSprintLoading] = useState(false);
 
   // Dynamic values
   const onlineAgents = agents.filter((a) => a.online).length;
@@ -46,6 +48,31 @@ export default function RightPanel() {
       setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 1500);
     } catch {
       // clipboard unavailable
+    }
+  };
+
+  const handleExportAll = () => {
+    if (displayDeliverables.length === 0) return;
+    const header = `AgentCorp Deliverables Export\nGenerated: ${new Date().toLocaleString()}\nFiles: ${displayDeliverables.length}\n${'='.repeat(60)}\n\n`;
+    const body = displayDeliverables.map((f) =>
+      `${'='.repeat(60)}\n# ${f.title}\n# Type: ${f.type}${f.lang ? ` | Lang: ${f.lang}` : ''} | ${new Date(f.createdAt).toLocaleDateString()}\n${'='.repeat(60)}\n\n${f.content}\n\n`
+    ).join('\n');
+    const blob = new Blob([header + body], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agentcorp-deliverables-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSprintPlanning = async () => {
+    if (sprintLoading) return;
+    setSprintLoading(true);
+    try {
+      await centralOrchestrator.runSprintPlanning();
+    } finally {
+      setSprintLoading(false);
     }
   };
 
@@ -164,7 +191,15 @@ export default function RightPanel() {
             </span>
             <h3 className="text-sm font-bold text-navy font-display tracking-tight">Live Activity</h3>
           </div>
-          <span className="text-[10px] text-navy/40 font-medium">Waiting for activity...</span>
+          <button
+            onClick={handleSprintPlanning}
+            disabled={sprintLoading}
+            title="PM-driven sprint: auto-generates and kicks off 4 tasks"
+            className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-full bg-ocean/10 text-ocean-600 hover:bg-ocean/20 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <CalendarDays className="w-3 h-3" />
+            {sprintLoading ? 'Planning…' : 'Plan Sprint'}
+          </button>
         </div>
 
         {/* 4 Stats Cards Grid */}
@@ -277,16 +312,27 @@ export default function RightPanel() {
             </span>
             <h3 className="text-sm font-bold text-navy font-display tracking-tight">Deliverables</h3>
           </div>
-          <button
-            onClick={() => setListCollapsed((v) => !v)}
-            title={listCollapsed ? 'Expand deliverables' : 'Collapse deliverables'}
-            className="text-[10px] text-navy/40 hover:text-navy/70 font-semibold flex items-center gap-0.5 cursor-pointer"
-          >
-            {displayDeliverables.length} files
-            <span className={`transition-transform ${listCollapsed ? '' : 'rotate-90'}`}>
-              <ChevronRight className="w-3 h-3" />
-            </span>
-          </button>
+          <div className="flex items-center gap-2">
+            {displayDeliverables.length > 0 && (
+              <button
+                onClick={handleExportAll}
+                title="Download all deliverables as a single text file"
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded-lg bg-navy/5 hover:bg-navy/10 text-navy/60 hover:text-navy transition-colors cursor-pointer"
+              >
+                <PackageOpen className="w-3 h-3" /> Export All
+              </button>
+            )}
+            <button
+              onClick={() => setListCollapsed((v) => !v)}
+              title={listCollapsed ? 'Expand deliverables' : 'Collapse deliverables'}
+              className="text-[10px] text-navy/40 hover:text-navy/70 font-semibold flex items-center gap-0.5 cursor-pointer"
+            >
+              {displayDeliverables.length} files
+              <span className={`transition-transform ${listCollapsed ? '' : 'rotate-90'}`}>
+                <ChevronRight className="w-3 h-3" />
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Files List */}

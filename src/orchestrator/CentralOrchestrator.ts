@@ -482,6 +482,88 @@ export class CentralOrchestrator {
   }
 
   /**
+   * Occasionally has PM push back on a task before execution (agent disagreement).
+   */
+  private async maybePushback(pm: Agent | undefined, worker: Agent, taskShort: string): Promise<void> {
+    if (!pm || Math.random() > 0.25) return;
+    const lines = [
+      `Heads up ${worker.name} — "${taskShort}" looks complex. Flag me if scope creeps.`,
+      `Quick note: "${taskShort}" is ambitious. Start lean and we'll iterate.`,
+      `${worker.name}, just checking — is "${taskShort}" scoped tightly enough? Ping me if you need to break it down.`,
+    ];
+    this.agentSay(pm.id, worker.id, lines[Math.floor(Math.random() * lines.length)], 'communicating');
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
+  /**
+   * PM-driven sprint planning: generates and kicks off 4 tasks based on company context.
+   */
+  async runSprintPlanning(): Promise<void> {
+    const store = useGameStore.getState();
+    const pm = store.agents.find((a) => a.role === 'pm');
+    const ceo = store.agents.find((a) => a.role === 'ceo');
+    if (!pm || !ceo) return;
+
+    const { companyName, companyProduct } = store;
+    this.agentSay(pm.id, ceo.id, `Starting sprint planning for ${companyName || 'the team'}! Generating this week's priorities… 📋`, 'thinking');
+
+    let sprintTasks: string[] = [];
+
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: `You are a Product Manager running sprint planning for ${companyName || 'a startup'}, building "${companyProduct || 'a product'}".
+Generate exactly 4 concrete sprint tasks that are specific, actionable, and realistic for one week.
+Return ONLY a JSON array of task title strings — no explanation, no markdown.
+Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboarding flow", "Fix login edge case"]`,
+          temperature: 0.7,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { content?: string };
+        if (data.content) {
+          const match = data.content.match(/\[[\s\S]*?\]/);
+          if (match) {
+            const parsed = JSON.parse(match[0]) as unknown[];
+            sprintTasks = parsed.filter((t): t is string => typeof t === 'string' && t.length > 5).slice(0, 5);
+          }
+        }
+      }
+    } catch { /* fall through to defaults */ }
+
+    if (sprintTasks.length === 0) {
+      const base = companyProduct || 'the product';
+      sprintTasks = [
+        `Analyze ${base} performance bottlenecks`,
+        `Document ${base} API endpoints`,
+        `Write ${base} user onboarding guide`,
+        `Review ${base} security and error handling`,
+      ];
+    }
+
+    for (const title of sprintTasks) {
+      store.addTaskWithTitle(title);
+    }
+
+    // Stagger execution so agents don't all race at once
+    const freshTasks = useGameStore.getState().tasks.slice(-sprintTasks.length);
+    for (let i = 0; i < freshTasks.length; i++) {
+      const t = freshTasks[i];
+      setTimeout(() => {
+        this.executeDirectTask(t).catch((err) => console.error('[AgentCorp] sprint task failed:', err));
+      }, i * 3000);
+    }
+
+    this.agentSay(
+      pm.id, ceo.id,
+      `Sprint kicked off! ${sprintTasks.length} tasks queued: ${sprintTasks.map((t) => `"${t.slice(0, 28)}"`).join(', ')}. Team is on it 🚀`,
+      'communicating',
+    );
+  }
+
+  /**
    * Execute a task directly using AI, bypassing the full CEO/PM/Planner pipeline.
    * Used for user-created tasks that should be handled immediately.
    */
@@ -529,6 +611,8 @@ export class CentralOrchestrator {
       this.agentSay(pm.id, workerAgent.id, `Hey ${workerAgent.name}, you're up! Working on: "${short}".`, 'communicating');
     }
     this.agentSay(workerAgent.id, pm?.id ?? workerAgent.id, `On it! Starting "${short}" now — I'll keep you posted.`, 'thinking');
+
+    await this.maybePushback(pm, workerAgent, short);
 
     const logId = `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const startTs = Date.now();
