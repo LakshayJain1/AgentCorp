@@ -67,7 +67,7 @@ export class LiveServer {
 export const liveServer = new LiveServer();
 
 export function createSSEResponse(): Response {
-  let clientId = `client_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const clientId = `client_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
   const stream = new ReadableStream({
     start(controller) {

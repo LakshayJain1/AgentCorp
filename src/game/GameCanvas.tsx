@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { pixiGame } from './pixi/PixiGameConfig';
+import { useGameStore } from '@/store/gameStore';
 
 export default function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const centerView = useGameStore((s) => s.centerView);
 
   // Initialize PixiJS once
   useEffect(() => {
@@ -39,18 +41,33 @@ export default function GameCanvas() {
 
     const ro = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
-      pixiGame.resize(width, height);
+      if (width > 0 && height > 0) {
+        pixiGame.resize(width, height);
+      }
     });
 
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
+  // When switching to 'office' tab, trigger resize on next animation frame to ensure correct bounds
+  useEffect(() => {
+    if (centerView === 'office' && containerRef.current) {
+      const el = containerRef.current;
+      requestAnimationFrame(() => {
+        const { clientWidth, clientHeight } = el;
+        if (clientWidth > 0 && clientHeight > 0) {
+          pixiGame.resize(clientWidth, clientHeight);
+        }
+      });
+    }
+  }, [centerView]);
+
   if (error) {
     return (
       <div
         ref={containerRef}
-        className="relative w-full h-full overflow-hidden rounded-xl border border-red-500/60 shadow-lg flex items-center justify-center bg-red-900/20 p-4"
+        className="relative w-full h-full overflow-hidden rounded-2xl border border-red-500/40 shadow-lg flex items-center justify-center bg-red-950/20 p-4"
         style={{ minHeight: 480 }}
       >
         <div className="text-center text-red-400">
@@ -64,7 +81,7 @@ export default function GameCanvas() {
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full overflow-hidden rounded-xl border border-border/60 shadow-lg"
+      className="relative w-full h-full overflow-hidden rounded-2xl border border-navy/10 bg-[#0a0a1e] shadow-md ring-1 ring-black/5"
       style={{ minHeight: 480 }}
     />
   );

@@ -7,17 +7,27 @@ export class UIOverlay {
   private app: Application;
   private agentManager: AgentManager;
   private hudContainer: Container;
+  private hudBg: Graphics;
   private hudText: Text;
   private selectedAgentPanel: Container | null = null;
   private selectedAgentId: string | null = null;
   private panelValueTexts: Map<string, Text> = new Map();
+  private currentWidth = CANVAS.width;
+  private currentHeight = CANVAS.height;
 
   constructor(app: Application, agentManager: AgentManager) {
     this.app = app;
     this.agentManager = agentManager;
+    this.currentWidth = app.screen.width || CANVAS.width;
+    this.currentHeight = app.screen.height || CANVAS.height;
+
     this.hudContainer = new Container();
     this.hudContainer.zIndex = 100;
     this.app.stage.addChild(this.hudContainer);
+
+    // HUD Background badge
+    this.hudBg = new Graphics();
+    this.hudContainer.addChild(this.hudBg);
 
     // HUD Text
     const hudStyle = new TextStyle({
@@ -27,12 +37,21 @@ export class UIOverlay {
       padding: 4,
     });
     this.hudText = new Text({ text: '', style: hudStyle });
-    this.hudText.position.x = 4;
-    this.hudText.position.y = 4;
+    this.hudText.position.set(16, 10);
     this.hudContainer.addChild(this.hudText);
 
     // Subscribe to selection changes
     this.subscribeToSelection();
+  }
+
+  public resize(width: number, height: number): void {
+    if (width <= 0 || height <= 0) return;
+    this.currentWidth = width;
+    this.currentHeight = height;
+    if (this.selectedAgentPanel) {
+      this.selectedAgentPanel.position.x = Math.max(8, width - 218);
+      this.selectedAgentPanel.position.y = 8;
+    }
   }
 
   private subscribeToSelection(): void {
@@ -45,6 +64,13 @@ export class UIOverlay {
 
     this.hudText.text = 
       `AGENTCORP | ${store.agents.length} AGENTS | ${activeAgents} ACTIVE | ${store.tasks.length} TASKS | ⚡${Math.round(store.simulation.efficiency)}%`;
+
+    this.hudBg.clear();
+    const tw = this.hudText.width;
+    this.hudBg.roundRect(8, 6, tw + 16, 22, 6);
+    this.hudBg.fill({ color: 0x0a0a1a, alpha: 0.85 });
+    this.hudBg.stroke({ width: 1, color: 0x00f5ff, alpha: 0.35 });
+    this.hudText.position.set(16, 10);
 
     // Update selected agent panel (if needed)
     this.updateSelectedAgentPanel(store);
@@ -83,8 +109,8 @@ export class UIOverlay {
   private createSelectedAgentPanel(agent: ReturnType<typeof useGameStore.getState>['agents'][0]): void {
     this.selectedAgentPanel = new Container();
     this.selectedAgentPanel.zIndex = 101;
-    this.selectedAgentPanel.position.x = CANVAS.width - 220;
-    this.selectedAgentPanel.position.y = 4;
+    this.selectedAgentPanel.position.x = Math.max(8, this.currentWidth - 218);
+    this.selectedAgentPanel.position.y = 8;
 
     const bg = new Graphics();
     bg.roundRect(0, 0, 210, 180, 8);

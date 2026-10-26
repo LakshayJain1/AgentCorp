@@ -242,13 +242,13 @@ function detectDeliverableType(title: string): { type: DeliverableType; lang?: s
   return { type: 'code', lang: 'typescript' };
 }
 
-function createTask(providedTitle?: string, contextFile?: string): Task {
+function createTask(providedTitle?: string, contextFile?: string, description?: string): Task {
   const title = providedTitle || TASK_TITLES()[Math.floor(Math.random() * TASK_TITLES().length)];
   const dt = detectDeliverableType(title);
   return {
     id: generateId('task'),
     title,
-    description: `${title} - Priority task #${taskIdCounter}`,
+    description: description || `${title} - Priority task #${taskIdCounter}`,
     priority: ['low', 'medium', 'high', 'critical'][Math.floor(Math.random() * 4)] as Task['priority'],
     status: 'pending',
     assignedTo: null,
@@ -267,7 +267,7 @@ function createTask(providedTitle?: string, contextFile?: string): Task {
     executionLogs: [],
     subtasks: [],
     parentTaskId: null,
-    aiContext: contextFile ? { contextFile } : undefined,
+    aiContext: contextFile ? { contextFile, prompt: description || title } : (description ? { prompt: description } : undefined),
   };
 }
 
@@ -320,7 +320,7 @@ interface GameStore {
 
   initAgents: () => void;
   addTask: () => void;
-  addTaskWithTitle: (title: string, contextFile?: string) => void;
+  addTaskWithTitle: (title: string, contextFile?: string, description?: string) => void;
   updateAgent: (id: string, updates: Partial<Agent>) => void;
   syncAgents: (updates: Array<{ id: string } & Record<string, unknown>>) => void;
   addEvent: (event: GameEvent) => void;
@@ -392,7 +392,7 @@ interface GameStore {
   updateConnectors: (connectors: Partial<GameStore['connectors']>) => void;
 }
 
-let projectIdCounter = 0;
+const projectIdCounter = 0;
 
 export const useGameStore = create<GameStore>()(
   persist(
@@ -459,9 +459,9 @@ export const useGameStore = create<GameStore>()(
     }));
   },
 
-  addTaskWithTitle: (title: string, contextFile?: string) => {
+  addTaskWithTitle: (title: string, contextFile?: string, description?: string) => {
     console.log('[AgentCorp] addTaskWithTitle called:', title);
-    const task = createTask(title, contextFile);
+    const task = createTask(title, contextFile, description);
     console.log('[AgentCorp] created task:', { id: task.id, title: task.title, status: task.status, assignedTo: task.assignedTo });
     const event = createGameEvent('task', `New task created: ${task.title}`);
     set((state) => ({

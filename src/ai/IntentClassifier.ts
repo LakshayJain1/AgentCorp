@@ -5,6 +5,7 @@ export interface IntentResult {
   requiredKeys: { key: string; label: string; reason: string }[];
   confidence: number;
   chatReply?: string;
+  ticketTitle?: string;
 }
 
 interface KeywordEntry {
@@ -55,11 +56,34 @@ async function getPatterns(): Promise<KeywordEntry[]> {
   return cachedPatterns;
 }
 
-async function aiClassify(text: string): Promise<{ isTask: boolean; reply?: string }> {
-  try {
-    const prompt = `You are the CEO agent of AgentCorp, an AI-powered virtual company. A user just sent you a message.
+export function formatTicketTitle(text: string): string {
+  // Strip code blocks and attached file annotations if present
+  let clean = text.replace(/\[Attached file:[\s\S]*?\]/gi, '').trim();
+  // Strip conversational leading filler
+  clean = clean.replace(/^(can\s+you\s+(please\s+)?|could\s+you\s+(please\s+)?|please\s+|i\s+want\s+(you\s+)?to\s+|i\s+need\s+(you\s+)?to\s+|help\s+me\s+(to\s+)?|build\s+me\s+|create\s+me\s+|make\s+me\s+|write\s+me\s+|hey\s+(there\s*)?,?\s*|let's\s+|lets\s+)/i, '').trim();
+  // Strip trailing punctuation
+  clean = clean.replace(/[.?!;:]+$/, '').trim();
 
-Your job: decide if this message is a TASK INSTRUCTION for your team to work on, or a CONVERSATIONAL MESSAGE (greeting, question, small talk, feedback, status check, etc.).
+  // If first line has words, take first sentence or line
+  const firstLine = clean.split('\n')[0].trim();
+  const words = firstLine.split(/\s+/).filter(Boolean);
+
+  if (words.length === 0) return 'Untitled Project Task';
+
+  // Take at most 8 words
+  const maxWords = words.slice(0, 8).join(' ');
+
+  // Convert to Title Case
+  return maxWords.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
+async function aiClassify(text: string): Promise<{ isTask: boolean; reply?: string; ticketTitle?: string }> {
+  try {
+    const prompt = `You are the executive team (CEO and Project Manager) of AgentCorp, an AI-powered virtual company. A user just sent you a message.
+
+Your job:
+1. Decide if this message is a TASK INSTRUCTION for your team to work on, or a CONVERSATIONAL MESSAGE (greeting, question, small talk, feedback, status check, etc.).
+2. If it is a TASK, generate a concise, professional engineering/product ticket title (3 to 7 words, Title Case, e.g. "Build Stripe Checkout Integration", "Python Log Parser & CSV Exporter", "Design Landing Page Hero Section").
 
 Message: "${text}"
 
@@ -69,7 +93,7 @@ Rules:
 - If genuinely ambiguous, lean toward CHAT and ask for clarification
 
 Respond with valid JSON only:
-{"isTask": true} if it's a task
+{"isTask": true, "ticketTitle": "Short Professional Ticket Title"} if it's a task
 {"isTask": false, "reply": "your short friendly response as CEO"} if it's chat
 
 Return ONLY the JSON, no markdown, no explanation.`;
@@ -87,8 +111,8 @@ Return ONLY the JSON, no markdown, no explanation.`;
     const jsonMatch = data.content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('no JSON in response');
 
-    const parsed = JSON.parse(jsonMatch[0]) as { isTask?: boolean; reply?: string };
-    return { isTask: parsed.isTask === true, reply: parsed.reply };
+    const parsed = JSON.parse(jsonMatch[0]) as { isTask?: boolean; reply?: string; ticketTitle?: string };
+    return { isTask: parsed.isTask === true, reply: parsed.reply, ticketTitle: parsed.ticketTitle };
   } catch {
     // If AI is unavailable, fall back to a simple heuristic:
     // very short messages (<= 4 words) with no verb of action = chat
@@ -97,15 +121,15 @@ Return ONLY the JSON, no markdown, no explanation.`;
     if (words.length <= 4 && !actionVerbs.test(text)) {
       return { isTask: false, reply: `Hey! 👋 I'm Alex, your CEO agent. Drop me a task — something to build, research, or plan — and I'll get the team on it.` };
     }
-    return { isTask: true };
+    return { isTask: true, ticketTitle: formatTicketTitle(text) };
   }
 }
 
 export async function classifyIntent(text: string): Promise<IntentResult> {
   console.log('[AgentCorp] classifyIntent called with:', text);
 
-  // Step 1: AI-powered chat vs task classification
-  const { isTask, reply } = await aiClassify(text);
+  // Step 1: AI-powered chat vs task classification + ticket title generation
+  const { isTask, reply, ticketTitle } = await aiClassify(text);
   if (!isTask) {
     console.log('[AgentCorp] intent = chat');
     return {
@@ -115,6 +139,10 @@ export async function classifyIntent(text: string): Promise<IntentResult> {
       chatReply: reply || `Got it! If you have a task for the team, just describe what you need built or done.`,
     };
   }
+
+  const resolvedTitle = (ticketTitle && ticketTitle.length >= 3 && ticketTitle.length <= 80)
+    ? ticketTitle.replace(/["""'']/g, '').trim()
+    : formatTicketTitle(text);
 
   // Step 2: credential detection for confirmed tasks
   const matchedKeys: { key: string; label: string; reason: string }[] = [];
@@ -135,18 +163,20 @@ export async function classifyIntent(text: string): Promise<IntentResult> {
     /\b(connect|integrate|deploy|push|send\s*to|post\s*to|upload|publish|host)\b/i.test(text);
 
   if (matchedKeys.length > 0 || hasExternalIndicators) {
-    console.log('[AgentCorp] intent = needs_credentials');
+    console.log('[AgentCorp] intent = needs_credentials, title =', resolvedTitle);
     return {
       type: 'needs_credentials',
       requiredKeys: matchedKeys,
       confidence: matchedKeys.length > 0 ? 0.9 : 0.5,
+      ticketTitle: resolvedTitle,
     };
   }
 
-  console.log('[AgentCorp] intent = internal');
+  console.log('[AgentCorp] intent = internal, title =', resolvedTitle);
   return {
     type: 'internal',
     requiredKeys: [],
     confidence: 0.95,
+    ticketTitle: resolvedTitle,
   };
 }

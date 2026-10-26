@@ -1,4 +1,4 @@
-import { Application, Container, Sprite, Texture, Assets, Graphics, Rectangle } from 'pixi.js';
+import { Application, Container, Sprite, Texture, Assets, Graphics, Rectangle, TilingSprite } from 'pixi.js';
 import { CANVAS, ZONES } from './PixiOfficeLayout';
 
 const ASSET_SHEET  = '/sprites/pixeloffice/PixelOfficeAssets.png';
@@ -32,11 +32,24 @@ export class OfficeRenderer {
   private bgLayer: Container;   // tiled floor / wall sprites
   private floorLayer: Graphics; // zone tints + wall dividers
   private spriteLayer: Container;
+  private wallTiling: TilingSprite | null = null;
+  private floorTiling: TilingSprite | null = null;
+  private fallbackBg: Graphics | null = null;
+  private wallTex: Texture | null = null;
+  private floorTex: Texture | null = null;
+  private currentScale = 1;
+  private currentWidth = CANVAS.width;
+  private currentHeight = CANVAS.height;
 
   constructor(app: Application) {
     this.app = app;
+    this.currentWidth = app.screen.width || CANVAS.width;
+    this.currentHeight = app.screen.height || CANVAS.height;
+    this.currentScale = Math.min(this.currentWidth / CANVAS.width, this.currentHeight / CANVAS.height);
+
     this.officeContainer = new Container();
     this.officeContainer.zIndex = 0;
+    this.officeContainer.scale.set(this.currentScale);
     this.app.stage.addChild(this.officeContainer);
 
     this.bgLayer     = new Container();
@@ -44,12 +57,13 @@ export class OfficeRenderer {
     this.spriteLayer = new Container();
     this.officeContainer.addChild(this.bgLayer, this.floorLayer, this.spriteLayer);
 
+    this.drawFallbackBg();
     this.drawZoneOverlays();
     this.loadBackground().catch(() => this.drawFallbackBg());
     this.loadSprites().catch(() => this.drawFallback());
   }
 
-  // ── Tiled background: wall_top × 2 rows, then floor_tile ────────────────
+  // ── Dynamic Tiled background: wall_top on top (full width), floor_tile below (full area) ──
   private async loadBackground(): Promise<void> {
     const [floorTex, wallTex] = await Promise.all([
       Assets.load<Texture>(FLOOR_TILE),
@@ -57,62 +71,147 @@ export class OfficeRenderer {
     ]);
     floorTex.source.scaleMode = 'nearest';
     wallTex.source.scaleMode  = 'nearest';
+    floorTex.source.addressMode = 'repeat';
+    wallTex.source.addressMode  = 'repeat';
+
+    this.floorTex = floorTex;
+    this.wallTex  = wallTex;
 
     const WALL_SCALE_Y  = 1.5;
     const FLOOR_SCALE_Y = 1.0;
-
-    const fw = wallTex.width;
     const fh = wallTex.height * WALL_SCALE_Y;
-    const tw = floorTex.width;
-    const th = floorTex.height * FLOOR_SCALE_Y;
     const wallStripH = WALL_ROWS * fh;
 
-    // Two rows of wall_top across the full canvas width
-    for (let row = 0; row < WALL_ROWS; row++) {
-      for (let col = 0; col * fw < CANVAS.width; col++) {
-        const sp = new Sprite(wallTex);
-        sp.scale.set(1, WALL_SCALE_Y);
-        sp.x = col * fw;
-        sp.y = row * fh;
-        this.bgLayer.addChild(sp);
-      }
+    const localW = Math.max(CANVAS.width, this.currentWidth / this.currentScale);
+    const localH = Math.max(CANVAS.height, this.currentHeight / this.currentScale);
+
+    // Wall tiling across full top width
+    this.wallTiling = new TilingSprite({
+      texture: wallTex,
+      width: localW,
+      height: wallStripH,
+      tileScale: { x: 1, y: WALL_SCALE_Y },
+    });
+    this.wallTiling.x = 0;
+    this.wallTiling.y = 0;
+    this.bgLayer.addChild(this.wallTiling);
+
+    // Floor tiling across remaining canvas area
+    this.floorTiling = new TilingSprite({
+      texture: floorTex,
+      width: localW,
+      height: Math.max(0, localH - wallStripH),
+      tileScale: { x: 1, y: FLOOR_SCALE_Y },
+    });
+    this.floorTiling.x = 0;
+    this.floorTiling.y = wallStripH;
+    this.bgLayer.addChild(this.floorTiling);
+
+    if (this.fallbackBg) {
+      this.bgLayer.removeChild(this.fallbackBg);
+      this.fallbackBg.destroy();
+      this.fallbackBg = null;
     }
 
-    // Floor tiles for the remaining area below the wall strip
-    for (let row = 0; wallStripH + row * th < CANVAS.height; row++) {
-      for (let col = 0; col * tw < CANVAS.width; col++) {
-        const sp = new Sprite(floorTex);
-        sp.scale.set(1, FLOOR_SCALE_Y);
-        sp.x = col * tw;
-        sp.y = wallStripH + row * th;
-        this.bgLayer.addChild(sp);
-      }
-    }
+    this.drawZoneOverlays();
   }
 
   private drawFallbackBg(): void {
-    const g = new Graphics();
-    g.rect(0, 0, CANVAS.width, CANVAS.height).fill(0x0e0e16);
-    this.bgLayer.addChild(g);
+    if (!this.fallbackBg) {
+      this.fallbackBg = new Graphics();
+      this.bgLayer.addChildAt(this.fallbackBg, 0);
+    }
+    const localW = Math.max(CANVAS.width, this.currentWidth / this.currentScale);
+    const localH = Math.max(CANVAS.height, this.currentHeight / this.currentScale);
+    this.fallbackBg.clear();
+    this.fallbackBg.rect(0, 0, localW, localH).fill(0x0e0e16);
   }
 
-  // ── Zone borders + wall dividers (drawn on top of tiles, no fills) ──────
+  // ── Responsive Resize: seamlessly adjusts wall, floor, and zone dividers ──
+  public resize(width: number, height: number): void {
+    if (width <= 0 || height <= 0) return;
+    this.currentWidth = width;
+    this.currentHeight = height;
+
+    const scale = Math.min(width / CANVAS.width, height / CANVAS.height);
+    this.currentScale = scale;
+    this.officeContainer.scale.set(scale);
+
+    const localW = Math.max(CANVAS.width, width / scale);
+    const localH = Math.max(CANVAS.height, height / scale);
+
+    const WALL_SCALE_Y = 1.5;
+    const fh = this.wallTex ? this.wallTex.height * WALL_SCALE_Y : 30;
+    const wallStripH = WALL_ROWS * fh;
+
+    if (this.wallTiling) {
+      this.wallTiling.width = localW;
+      this.wallTiling.height = wallStripH;
+    }
+
+    if (this.floorTiling) {
+      this.floorTiling.width = localW;
+      this.floorTiling.height = Math.max(0, localH - wallStripH);
+      this.floorTiling.y = wallStripH;
+    }
+
+    if (this.fallbackBg) {
+      this.drawFallbackBg();
+    }
+
+    this.drawZoneOverlays();
+  }
+
+  // ── Zone borders + wall dividers + baseboard depth trim ───────────────────
   private drawZoneOverlays(): void {
     const g = this.floorLayer;
+    g.clear();
 
-    for (const { x, y, width: w, height: h, wallColor } of ZONES) {
-      g.rect(x, y, w, h).stroke({ width: 1, color: wallColor, alpha: 0.6 });
+    const localW = Math.max(CANVAS.width, this.currentWidth / this.currentScale);
+    const localH = Math.max(CANVAS.height, this.currentHeight / this.currentScale);
+
+    // Subtle zone floor tints & outlines
+    for (const zone of ZONES) {
+      let zw = zone.width;
+      let zh = zone.height;
+
+      // Stretch right-column zones to right wall
+      if (zone.x + zone.width >= 715) {
+        zw = localW - zone.x;
+      }
+      // Stretch bottom-row zones to bottom wall
+      if (zone.y + zone.height >= 475) {
+        zh = localH - zone.y;
+      }
+
+      // Subtle room floor tint
+      g.rect(zone.x, zone.y, zw, zh).fill({ color: zone.floorColor, alpha: 0.2 });
+      // Zone border
+      g.rect(zone.x, zone.y, zw, zh).stroke({ width: 1, color: zone.wallColor, alpha: 0.45 });
     }
 
     // Primary wall dividers
     const ls = { width: 2 as number, color: 0x3a3a5a as number, alpha: 0.9 as number };
-    g.moveTo(170,   0).lineTo(170, 480).stroke(ls);
-    g.moveTo(480,   0).lineTo(480, 480).stroke(ls);
+    // Vertical divider between Left & Center (x = 170)
+    g.moveTo(170, 0).lineTo(170, localH).stroke(ls);
+    // Vertical divider between Center & Right (x = 480)
+    g.moveTo(480, 0).lineTo(480, localH).stroke(ls);
+
+    // Left column horizontal dividers
     g.moveTo(  0, 155).lineTo(170, 155).stroke(ls);
     g.moveTo(  0, 290).lineTo(170, 290).stroke(ls);
-    g.moveTo(480, 135).lineTo(720, 135).stroke(ls);
-    g.moveTo(480, 305).lineTo(720, 305).stroke(ls);
+
+    // Right column horizontal dividers (stretched all the way to localW)
+    g.moveTo(480, 135).lineTo(localW, 135).stroke(ls);
+    g.moveTo(480, 305).lineTo(localW, 305).stroke(ls);
+
+    // Center column divider (Dev Hub / PM)
     g.moveTo(175, 340).lineTo(475, 340).stroke(ls);
+
+    // Baseboard trim at bottom of top wall (y = 60) spanning left to right
+    g.moveTo(0, 60).lineTo(localW, 60).stroke({ width: 2, color: 0x1f1f2e, alpha: 0.95 });
+    // Soft drop shadow cast from wall onto floor
+    g.rect(0, 61, localW, 5).fill({ color: 0x000000, alpha: 0.25 });
   }
 
   // ── Sprite furniture ─────────────────────────────────────────────────────
@@ -219,6 +318,9 @@ export class OfficeRenderer {
   }
 
   destroy(): void {
+    this.wallTiling?.destroy();
+    this.floorTiling?.destroy();
+    this.fallbackBg?.destroy();
     this.spriteLayer.destroy({ children: true });
     this.officeContainer.destroy({ children: true });
   }

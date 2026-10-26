@@ -35,7 +35,15 @@ export class AgentManager {
     this.app = app;
     this.agentsContainer = new Container();
     this.agentsContainer.zIndex = 10;
+    const initialScale = Math.min((app.screen.width || CANVAS.width) / CANVAS.width, (app.screen.height || CANVAS.height) / CANVAS.height);
+    this.agentsContainer.scale.set(initialScale);
     this.app.stage.addChild(this.agentsContainer);
+  }
+
+  resize(width: number, height: number): void {
+    if (width <= 0 || height <= 0) return;
+    const scale = Math.min(width / CANVAS.width, height / CANVAS.height);
+    this.agentsContainer.scale.set(scale);
   }
 
   async loadSprites(): Promise<void> {
