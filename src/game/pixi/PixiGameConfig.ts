@@ -25,16 +25,26 @@ export class PixiGame {
     // Initialize Pixi Assets (required in v8)
     await Assets.init();
 
+    const rect = container.getBoundingClientRect();
+    const initialWidth = rect.width > 0 ? rect.width : (container.clientWidth > 0 ? container.clientWidth : CANVAS.width);
+    const initialHeight = rect.height > 0 ? rect.height : (container.clientHeight > 0 ? container.clientHeight : CANVAS.height);
+
     // Create Pixi Application
     this.app = new Application();
     await this.app.init({
-      width: CANVAS.width,
-      height: CANVAS.height,
+      width: initialWidth,
+      height: initialHeight,
       background: 0x0a0a1e,
-      resolution: window.devicePixelRatio || 1,
+      // Cap resolution at 2× — mobile devices at 3× DPR can exceed WebGL texture limits
+      resolution: Math.min(window.devicePixelRatio || 1, 2),
       autoDensity: true,
       antialias: false,
-      powerPreference: 'high-performance',
+      // 'high-performance' fails silently on iOS Safari / Android WebView, leaving
+      // renderer internals undefined and causing the "Cannot read .name" TypeError
+      powerPreference: 'default',
+      // Explicitly request WebGL; auto-detection tries WebGPU first on some mobile
+      // browsers where the API is partially implemented and throws during init
+      preference: 'webgl',
     });
 
 
@@ -49,6 +59,9 @@ export class PixiGame {
     this.agentManager = new AgentManager(this.app);
     this.uiOverlay = new UIOverlay(this.app, this.agentManager);
     this.simulationLoop = new SimulationLoop(this.app, this.agentManager, this.uiOverlay);
+
+    // Initial resize sync to guarantee all renderers match container dimensions
+    this.resize(initialWidth, initialHeight);
 
     // Preload configs
     await preloadAllConfigs();
@@ -78,13 +91,16 @@ export class PixiGame {
   resize(width: number, height: number): void {
     if (!this.app || width <= 0 || height <= 0) return;
     this.app.renderer.resize(width, height);
+    this.officeRenderer?.resize(width, height);
+    this.agentManager?.resize(width, height);
+    this.uiOverlay?.resize(width, height);
   }
 
   private handleResize(): void {
     if (!this.app || !this.container) return;
     const rect = this.container.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) {
-      this.app.renderer.resize(rect.width, rect.height);
+      this.resize(rect.width, rect.height);
     }
   }
 
