@@ -8,45 +8,34 @@ export class SalesAgent extends BaseWorkerAgent {
   }
 
   protected async generateDeliverable(subtask: SubTask): Promise<string> {
-    const isSalesPitch = /pitch|deck|proposal|outreach|email|prospect|lead|crm|pipeline/i.test(subtask.description);
-    const isPricingDoc = /pric|tier|plan|packaging|monetiz/i.test(subtask.description);
+    // deliverableType is set by AI classification at task creation — use it directly
+    const type = subtask.deliverableType || 'gtm';
 
-    let prompt: string;
+    const PROMPTS: Record<string, string> = {
+      pitch: `You are a senior sales strategist. Create a complete investor/customer pitch deck in markdown for: "${subtask.description}"
+Structure: Cover → Problem → Solution → Market Opportunity → Product → Business Model → Traction → Go-to-Market → Team → Ask.
+For each slide: full content, speaker notes, key talking points. Return ONLY markdown, no fences.`,
 
-    if (isSalesPitch) {
-      prompt = `You are a senior sales strategist at AgentCorp. Create a professional sales document for: "${subtask.description}"
+      outreach: `You are a sales strategist. Create a complete multi-touch outreach sequence in markdown for: "${subtask.description}"
+Include: cold email (pain-first, ≤120 words), 3-day follow-up, 10-day final bump, LinkedIn connection request (≤300 chars), LinkedIn DM, 30-second voicemail script.
+For each: full copy, best send time, psychological hook. Return ONLY markdown.`,
 
-Produce a complete pitch deck outline in markdown with the following slides:
-1. **Cover** — Company name, tagline, presenter
-2. **Problem** — The pain point being solved (3 bullet points)
-3. **Solution** — What we offer and how it works
-4. **Market Opportunity** — TAM/SAM/SOM with numbers
-5. **Product Demo** — Key features and screenshots description
-6. **Business Model** — How we make money
-7. **Traction** — Key metrics, customers, growth
-8. **Go-to-Market** — Channels, ICP, launch strategy
-9. **Team** — Key hires and backgrounds
-10. **Ask** — Funding amount, use of funds, timeline
+      gtm: `You are a sales strategist. Write a comprehensive go-to-market strategy document in markdown for: "${subtask.description}"
+Include: executive summary, ICP (3 segments), value prop per segment, channel strategy, 90-day launch timeline, competitive positioning, KPIs with targets, budget allocation. Use tables and bullets for scannability. Return ONLY markdown.`,
 
-For each slide include: speaker notes, key talking points, and data to gather.
-Return ONLY the markdown content, no fences.`;
-    } else if (isPricingDoc) {
-      prompt = `You are a sales strategist at AgentCorp. Create a detailed pricing strategy document for: "${subtask.description}"
+      proposal: `You are a sales strategist. Write a professional sales proposal in markdown for: "${subtask.description}"
+Structure: executive summary, understanding their situation, proposed solution + timeline, pricing options table (3 tiers), ROI analysis with payback period, why us (3 proof points), next steps with dates. Return ONLY markdown.`,
 
-Include:
-- Pricing philosophy and model (subscription/usage/hybrid)
-- 3 pricing tiers with feature matrices
-- Competitive pricing analysis framework
-- Discount and negotiation guidelines
-- Revenue projections per tier
+      icp: `You are a sales strategist. Define a detailed Ideal Customer Profile document in markdown for: "${subtask.description}"
+Include: company-level firmographics, contact-level personas (champion + buyer), pain point deep-dive (5 problems with cost of inaction), buying triggers, qualification criteria (BANT/MEDDIC), objection map (top 5), 5 sample accounts. Return ONLY markdown.`,
 
-Return ONLY the markdown content.`;
-    } else {
-      prompt = `You are a sales strategist at AgentCorp. Create a comprehensive sales document for: "${subtask.description}"
+      campaign: `You are a marketing strategist. Write a complete marketing campaign brief in markdown for: "${subtask.description}"
+Include: objective + success metrics, audience segments, messaging framework table, channel mix with budget %, 30-day content calendar, ad copy for 3 channels (full copy), A/B test plan (3 hypotheses), KPIs and reporting cadence. Return ONLY markdown.`,
+    };
 
-Include: executive summary, target customer profile (ICP), value proposition, objection handling guide, and recommended next steps.
-Format in professional markdown. Return ONLY the content.`;
-    }
+    const prompt = PROMPTS[type]
+      ?? `You are a sales strategist. Create a comprehensive sales document in markdown for: "${subtask.description}"
+Include: executive summary, ICP, value proposition, objection handling guide, and next steps. Return ONLY markdown.`;
 
     const result = await toolRegistry.executeTool('ask_agent', {
       agentRole: 'sales',

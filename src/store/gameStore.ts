@@ -230,10 +230,28 @@ function detectDeliverableType(title: string): { type: DeliverableType; lang?: s
   if (t.includes('feedback') || t.includes('review') || t.includes('audit') || t.includes('compliance')) {
     return { type: 'analysis', lang: 'markdown' };
   }
-  if (t.includes('pitch') || t.includes('deck') || t.includes('proposal') || t.includes('sales') || t.includes('outreach') || t.includes('prospect')) {
-    return { type: 'report', lang: 'markdown' };
+  if (t.includes('pitch') || t.includes('deck') || t.includes('investor')) {
+    return { type: 'pitch', lang: 'markdown' };
   }
-  if (t.includes('budget') || t.includes('forecast') || t.includes('projection') || t.includes('revenue') || t.includes('p&l') || t.includes('burn') || t.includes('runway') || t.includes('financ')) {
+  if (t.includes('outreach') || t.includes('cold email') || t.includes('cold outreach') || t.includes('prospect') || t.includes('lead gen')) {
+    return { type: 'outreach', lang: 'markdown' };
+  }
+  if (t.includes('go-to-market') || t.includes('go to market') || t.includes('gtm') || t.includes('launch strategy') || t.includes('market strategy')) {
+    return { type: 'gtm', lang: 'markdown' };
+  }
+  if (t.includes('proposal') || t.includes('sales proposal') || t.includes('sales deck')) {
+    return { type: 'proposal', lang: 'markdown' };
+  }
+  if (t.includes('icp') || t.includes('ideal customer') || t.includes('customer profile') || t.includes('buyer persona')) {
+    return { type: 'icp', lang: 'markdown' };
+  }
+  if (t.includes('campaign') || t.includes('marketing plan') || t.includes('marketing strategy') || t.includes('ad copy') || t.includes('marketing brief')) {
+    return { type: 'campaign', lang: 'markdown' };
+  }
+  if (t.includes('sales') || t.includes('sales strategy') || t.includes('pipeline') || t.includes('revenue')) {
+    return { type: 'gtm', lang: 'markdown' };
+  }
+  if (t.includes('budget') || t.includes('forecast') || t.includes('projection') || t.includes('p&l') || t.includes('burn') || t.includes('runway') || t.includes('financ')) {
     return { type: 'report', lang: 'markdown' };
   }
   if (t.includes('sop') || t.includes('runbook') || t.includes('playbook') || t.includes('checklist') || t.includes('onboard') || t.includes('workflow') || t.includes('process') || t.includes('okr') || t.includes('kpi')) {
@@ -242,9 +260,23 @@ function detectDeliverableType(title: string): { type: DeliverableType; lang?: s
   return { type: 'code', lang: 'typescript' };
 }
 
-function createTask(providedTitle?: string, contextFile?: string, description?: string): Task {
+interface TaskClassificationOverride {
+  agentRole?: AgentRole;
+  deliverableType?: DeliverableType;
+  deliverableLang?: string;
+}
+
+function createTask(
+  providedTitle?: string,
+  contextFile?: string,
+  description?: string,
+  classification?: TaskClassificationOverride,
+): Task {
   const title = providedTitle || TASK_TITLES()[Math.floor(Math.random() * TASK_TITLES().length)];
-  const dt = detectDeliverableType(title);
+  // Use AI classification when provided; fall back to keyword heuristic otherwise
+  const dt = classification?.deliverableType
+    ? { type: classification.deliverableType, lang: classification.deliverableLang }
+    : detectDeliverableType(title);
   return {
     id: generateId('task'),
     title,
@@ -264,6 +296,7 @@ function createTask(providedTitle?: string, contextFile?: string, description?: 
     ],
     deliverableType: dt.type,
     deliverableLang: dt.lang,
+    preferredAgentRole: classification?.agentRole,
     executionLogs: [],
     subtasks: [],
     parentTaskId: null,
@@ -320,7 +353,7 @@ interface GameStore {
 
   initAgents: () => void;
   addTask: () => void;
-  addTaskWithTitle: (title: string, contextFile?: string, description?: string) => void;
+  addTaskWithTitle: (title: string, contextFile?: string, description?: string, classification?: TaskClassificationOverride) => void;
   updateAgent: (id: string, updates: Partial<Agent>) => void;
   syncAgents: (updates: Array<{ id: string } & Record<string, unknown>>) => void;
   addEvent: (event: GameEvent) => void;
@@ -468,9 +501,9 @@ export const useGameStore = create<GameStore>()(
     }));
   },
 
-  addTaskWithTitle: (title: string, contextFile?: string, description?: string) => {
+  addTaskWithTitle: (title: string, contextFile?: string, description?: string, classification?: TaskClassificationOverride) => {
     console.log('[AgentCorp] addTaskWithTitle called:', title);
-    const task = createTask(title, contextFile, description);
+    const task = createTask(title, contextFile, description, classification);
     console.log('[AgentCorp] created task:', { id: task.id, title: task.title, status: task.status, assignedTo: task.assignedTo });
     const event = createGameEvent('task', `New task created: ${task.title}`);
     set((state) => ({

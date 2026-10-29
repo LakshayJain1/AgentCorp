@@ -15,6 +15,7 @@ import { SalesAgent } from '@/agents/SalesAgent';
 import { FinanceAgent } from '@/agents/FinanceAgent';
 import { OpsAgent } from '@/agents/OpsAgent';
 import { classifyIntent, formatTicketTitle } from '@/ai/IntentClassifier';
+import { classifyTask } from '@/ai/TaskClassifier';
 import { LoopOrchestrator } from './LoopOrchestrator';
 import { aiService } from '@/ai/AIService';
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
@@ -232,7 +233,8 @@ export class CentralOrchestrator {
     if (intent.type === 'needs_credentials') {
       // Add the task with clean ticket title and detailed user request in description
       console.log('[AgentCorp] PM creating task with title:', ticketTitle);
-      store.addTaskWithTitle(ticketTitle, undefined, request);
+      const credClassification = await classifyTask(ticketTitle, request);
+      store.addTaskWithTitle(ticketTitle, undefined, request, credClassification);
       const newTask = useGameStore.getState().tasks[useGameStore.getState().tasks.length - 1];
       const taskId = newTask?.id;
 
@@ -256,10 +258,11 @@ export class CentralOrchestrator {
       });
     } else {
       console.log('[AgentCorp] PM creating task with title:', ticketTitle);
-      store.addTaskWithTitle(ticketTitle, undefined, request);
+      const classification = await classifyTask(ticketTitle, request);
+      store.addTaskWithTitle(ticketTitle, undefined, request, classification);
 
       if (pm && ceo) {
-        store.sendMessage(pm.id, ceo.id, `Created ticket "${ticketTitle}". Assigning to development.`);
+        store.sendMessage(pm.id, ceo.id, `Created ticket "${ticketTitle}". Routing to ${classification.agentRole} (${classification.deliverableType}).`);
       }
 
       this.emit({
@@ -543,9 +546,10 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
       ];
     }
 
-    for (const title of sprintTasks) {
-      store.addTaskWithTitle(title);
-    }
+    const classifications = await Promise.all(sprintTasks.map((t) => classifyTask(t)));
+    sprintTasks.forEach((title, i) => {
+      store.addTaskWithTitle(title, undefined, undefined, classifications[i]);
+    });
 
     // Stagger execution so agents don't all race at once
     const freshTasks = useGameStore.getState().tasks.slice(-sprintTasks.length);
@@ -571,14 +575,27 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
     console.log('[AgentCorp] executeDirectTask called for:', task.id, task.title);
     const store = useGameStore.getState();
 
-    // Use the forced agent if provided, otherwise find best available worker
+    // Map agent role (stored by classifyTask at task creation) → workerRole field on Agent
+    const ROLE_TO_WORKER: Record<string, string> = {
+      engineer:   'developer',
+      researcher: 'research_worker',
+      qa:         'qa_worker',
+      sales:      'sales_worker',
+      finance:    'finance_worker',
+      ops:        'ops_worker',
+    };
+    const preferredWorkerRole = task.preferredAgentRole
+      ? ROLE_TO_WORKER[task.preferredAgentRole] ?? null
+      : null;
+    const allWorkerRoles = Object.values(ROLE_TO_WORKER);
+
+    // Use the forced agent if provided, otherwise route to domain-matched worker
     const workerAgent = forcedWorkerId
       ? store.agents.find((a) => a.id === forcedWorkerId)
-      : store.agents.find((a) =>
-          a.online &&
-          (a.workerRole === 'developer' || a.workerRole === 'research_worker' || a.workerRole === 'qa_worker'
-            || a.workerRole === 'sales_worker' || a.workerRole === 'finance_worker' || a.workerRole === 'ops_worker')
-        );
+      : preferredWorkerRole
+        ? (store.agents.find((a) => a.workerRole === preferredWorkerRole && a.online)
+            ?? store.agents.find((a) => allWorkerRoles.includes(a.workerRole ?? '') && a.online))
+        : store.agents.find((a) => allWorkerRoles.includes(a.workerRole ?? '') && a.online);
 
     if (!workerAgent) {
       console.warn('[AgentCorp] No available worker agent for direct task');

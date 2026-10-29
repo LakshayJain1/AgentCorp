@@ -47,6 +47,7 @@ export interface SubTask {
   estimatedEffort: number;
   dependencies: string[];
   deliverable?: string;
+  deliverableType?: DeliverableType;
   validationResult?: ValidationResult;
   // P3: opt-in link to a real repo ref (branch/sha). When present, the validator
   // folds live CI check-runs into the verdict; otherwise legacy length+AI scoring.
@@ -179,7 +180,7 @@ export interface Agent {
   lastGoalTime?: number;
 }
 
-export type DeliverableType = 'code' | 'doc' | 'report' | 'spec' | 'config' | 'analysis' | 'design' | 'research';
+export type DeliverableType = 'code' | 'doc' | 'report' | 'spec' | 'config' | 'analysis' | 'design' | 'research' | 'pitch' | 'outreach' | 'gtm' | 'proposal' | 'icp' | 'campaign';
 
 export interface TaskStep {
   description: string;
@@ -216,6 +217,7 @@ export interface Task {
   deliverableType?: DeliverableType;
   deliverable?: string;
   deliverableLang?: string;
+  preferredAgentRole?: AgentRole;
   executionLogs: TaskExecutionLog[];
   subtasks: SubTask[];
   parentTaskId: string | null;

@@ -129,6 +129,144 @@ Return ONLY the raw configuration content with NO explanation.`,
 Include: context, data examination, key insights, actionable recommendations. Format in markdown.`,
       design: `${companyCtx}Write a design document for: "${taskTitle}".
 Include: goals, user stories, wireframe description, component tree, data flow. Format in markdown.`,
+      pitch: `${companyCtx}Create a complete investor/customer pitch deck outline in markdown for: "${taskTitle}".
+Structure it as 10 slides with full content for each:
+1. **Cover** — company name, tagline, one-line problem statement
+2. **Problem** — 3 specific pain points with data or quotes, cost of the problem
+3. **Solution** — what you offer, how it works, key differentiator in one sentence
+4. **Market Opportunity** — TAM / SAM / SOM with realistic estimates and sources
+5. **Product** — 3–4 core features, screenshots description, unique value per feature
+6. **Business Model** — pricing tiers, revenue streams, unit economics (CAC / LTV)
+7. **Traction** — users/revenue metrics, growth rate, key logos, notable milestones
+8. **Go-to-Market** — ICP definition, acquisition channels, launch playbook
+9. **Team** — founders and key hires, relevant backgrounds, advisors
+10. **Ask** — funding amount, use of funds breakdown (%), milestones it buys
+For each slide: write the full content, include speaker notes, and flag any data to validate. Make all numbers and claims specific and believable.`,
+      outreach: `${companyCtx}Create a complete multi-touch outreach sequence in markdown for: "${taskTitle}".
+Include all copy, ready to send:
+
+**Email 1 — Cold intro (Day 1)**
+Subject line (A/B test two variants):
+Body (≤120 words, pain-first, no feature dump, one CTA):
+Psychological hook: [explain]
+
+**Email 2 — Follow-up (Day 4, value-add)**
+Subject: [reply thread subject]
+Body (≤80 words, add one concrete insight or resource):
+
+**Email 3 — Final bump (Day 10)**
+Subject:
+Body (≤60 words, soft close, leave door open):
+
+**LinkedIn Connection Request (≤300 chars):**
+
+**LinkedIn Follow-up DM (1 week after connect, ≤200 chars):**
+
+**Cold call opener script (30-second voicemail):**
+
+For each touch: write the full copy, note the best send time, and explain the specific trigger event that would make this prospect respond.`,
+      gtm: `${companyCtx}Write a comprehensive go-to-market strategy document in markdown for: "${taskTitle}".
+Include:
+## Executive Summary
+One-paragraph summary of the GTM approach and expected outcomes.
+
+## Ideal Customer Profile
+3 target segments with: company attributes (size, industry, stage), contact attributes (role, seniority), pain points, and trigger events.
+
+## Value Proposition by Segment
+Tailored one-liner and 3 supporting proof points per segment.
+
+## Channel Strategy
+Owned, paid, earned, and partnership channels. For each: why it fits, expected CAC, and first 90-day tactics.
+
+## Launch Timeline
+30 / 60 / 90-day milestones with owners and success criteria.
+
+## Competitive Positioning
+2x2 positioning map description, key differentiators, and how to win each head-to-head scenario.
+
+## KPIs and Success Metrics
+5–7 leading and lagging indicators with specific targets for 3 and 6 months.
+
+## Budget Allocation
+% breakdown across channels with rationale.
+
+Use tables and bullet points throughout for scannability.`,
+      proposal: `${companyCtx}Write a professional sales proposal in markdown for: "${taskTitle}".
+Structure:
+## Executive Summary
+The problem we solve, why now, and the expected ROI in 2–3 sentences.
+
+## Understanding Your Situation
+Show you understand their specific context, current pain, and the cost of inaction.
+
+## Proposed Solution
+What we deliver, the implementation timeline, and what success looks like at 30/60/90 days.
+
+## Pricing Options
+| Tier | What's included | Investment | ROI projection |
+Present 3 options (good / better / best) with clear upgrade rationale.
+
+## ROI Analysis
+Specific dollar savings or revenue uplift with methodology. Include a simple payback period calculation.
+
+## Why Us
+3 differentiators backed by proof (case study excerpt, metric, or testimonial).
+
+## Next Steps
+Specific action items with dates: proposal review call, contract signature, kickoff.
+
+Write persuasively but back every claim with a number or proof point.`,
+      icp: `${companyCtx}Define a detailed Ideal Customer Profile (ICP) document in markdown for: "${taskTitle}".
+## Company-Level Attributes
+Firmographic filters: industry, sub-vertical, employee count, revenue range, geography, funding stage, tech stack signals.
+
+## Contact-Level Attributes
+Champion persona and economic buyer persona — for each: title/seniority, goals, KPIs they own, day-to-day frustrations, how they buy.
+
+## Pain Point Deep-Dive
+5 specific problems, current workarounds (what they use today), quantified cost of each problem, and emotional drivers.
+
+## Buying Triggers
+Events that signal readiness: funding round, new hire, product launch, competitive pressure, regulatory change. How to detect each.
+
+## Qualification Criteria
+Must-haves (deal-breakers if missing), nice-to-haves, and automatic disqualifiers. BANT / MEDDIC framework applied.
+
+## Objection Map
+Top 5 objections with: root cause, ideal response, and proof point.
+
+## Sample Accounts
+5 hypothetical ideal accounts with company name (fictional), why they qualify, and the first conversation hook.`,
+      campaign: `${companyCtx}Write a complete marketing campaign brief in markdown for: "${taskTitle}".
+## Campaign Overview
+Objective (awareness / consideration / conversion), target audience, core message, and budget range.
+
+## Audience Segments
+Primary and secondary segments with persona sketch and where they spend attention.
+
+## Messaging Framework
+| Audience | Pain point | Value prop | Proof point | CTA |
+Fill in the table for each segment.
+
+## Channel Mix
+For each channel (paid search, paid social, email, content, influencer, events):
+- Rationale for inclusion
+- Budget allocation (%)
+- Specific tactics and formats
+- Expected reach / impressions / clicks
+
+## Content Calendar (30 days)
+Week-by-week plan: asset type, channel, copy angle, and owner.
+
+## Ad Copy
+For 3 channels — headline, body copy, and CTA (write the full copy, not a description).
+
+## A/B Test Plan
+3 hypotheses with: variable being tested, control vs. variant, success metric, and sample size needed.
+
+## KPIs and Reporting
+Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue), reporting cadence, and dashboard link placeholder.`,
     };
 
     const prompt = promptMap[deliverableType] || promptMap.code;

@@ -93,21 +93,12 @@ const taskActions: TaskAction[] = [
         timestamp: Date.now(),
       });
 
-      // Skill-based routing: match task type to the right specialist role
+      // Route using AI classification stored on the task at creation time
       const NON_WORKERS = new Set(['ceo', 'pm', 'qa', 'hr']);
       const workers = agents.filter((a) => !NON_WORKERS.has(a.role));
 
-      const tl = task.title.toLowerCase();
-      const isSalesTask = /pitch|deck|proposal|outreach|sales|prospect|lead|pricing/i.test(tl);
-      const isFinanceTask = /budget|forecast|projection|revenue|burn|runway|p&l|financ/i.test(tl);
-      const isOpsTask = /sop|runbook|playbook|checklist|onboard|workflow|process|okr|kpi/i.test(tl);
-      const isResearchTask = task.deliverableType === 'analysis' || /research|analys|investigat/i.test(tl);
-
-      const wantRole = isSalesTask ? 'sales'
-        : isFinanceTask ? 'finance'
-        : isOpsTask ? 'ops'
-        : isResearchTask ? 'researcher'
-        : 'engineer';
+      // preferredAgentRole is set by classifyTask (AI) when the task was created
+      const wantRole = task.preferredAgentRole ?? 'engineer';
 
       const loadOf = (id: string) => agents.filter((a) => a.currentTaskId && a.id === id).length;
       const ranked = [...workers].sort((x, y) => {
