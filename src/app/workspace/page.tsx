@@ -1,23 +1,32 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import TopBar from '@/components/TopBar';
 import LeftSidebar from '@/components/LeftSidebar';
 import CenterPanel from '@/components/CenterPanel';
 import RightPanel from '@/components/RightPanel';
 import CredentialDialog from '@/components/CredentialDialog';
-import { useEffect, useState } from 'react';
+import WorkspaceViewer from '@/components/WorkspaceViewer';
+import { useEffect, useState, Suspense } from 'react';
 import { useGameStore } from '@/store/gameStore';
+import { useOrgBroadcast } from '@/hooks/useOrgBroadcast';
 import { Users, MessageSquare, BarChart2 } from 'lucide-react';
 import { useUser } from '@auth0/nextjs-auth0/client';
 
-export default function WorkspacePage() {
+function WorkspacePageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteOrgId = searchParams.get('invite');
+
   const isInitialized = useGameStore((s) => s.isInitialized);
+  const myOrgId = useGameStore((s) => s.orgId);
   const showAgentRoster = useGameStore((s) => s.showAgentRoster);
   const [mobilePanel, setMobilePanel] = useState<'agents' | 'chat' | 'stats'>('chat');
   const [hydrated, setHydrated] = useState(false);
   const { user, isLoading: authLoading } = useUser();
+
+  // Always broadcast when the workspace is initialized (no-op if not)
+  useOrgBroadcast();
 
   useEffect(() => {
     const unsub = useGameStore.persist.onFinishHydration(() => setHydrated(true));
@@ -27,20 +36,28 @@ export default function WorkspacePage() {
 
   useEffect(() => {
     if (authLoading) return;
-    // Not authenticated — send to Auth0 login
     if (!user) {
       router.replace('/auth/login');
       return;
     }
+    // Viewer mode: skip the initialization check
+    if (inviteOrgId) return;
     // Authenticated but workspace not set up — send to onboarding
     if (hydrated && !isInitialized) {
       router.replace('/onboard');
     }
-  }, [hydrated, isInitialized, user, authLoading, router]);
+  }, [hydrated, isInitialized, user, authLoading, router, inviteOrgId]);
 
-  if (authLoading || !hydrated || !user || !isInitialized) {
-    return null;
+  if (authLoading) return null;
+  if (!user) return null;
+
+  // Viewer mode: someone opened the workspace via an invite link
+  // Show their workspace if it's a different org, or fall through if it's our own link
+  if (inviteOrgId && hydrated && inviteOrgId !== myOrgId) {
+    return <WorkspaceViewer orgId={inviteOrgId} />;
   }
+
+  if (!hydrated || !isInitialized) return null;
 
   return (
     <div className="h-screen w-screen flex flex-col ws-bg overflow-hidden">
@@ -89,5 +106,13 @@ export default function WorkspacePage() {
 
       <CredentialDialog />
     </div>
+  );
+}
+
+export default function WorkspacePage() {
+  return (
+    <Suspense>
+      <WorkspacePageInner />
+    </Suspense>
   );
 }

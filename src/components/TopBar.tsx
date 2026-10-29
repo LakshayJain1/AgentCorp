@@ -237,9 +237,17 @@ export default function TopBar() {
                     {inviteCopied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
                   </button>
                 </div>
-                <p className="text-[9px] text-navy/35 leading-relaxed">
-                  Collaborators who open this link see your workspace in real-time via live event stream.
-                </p>
+                {orgId && (
+                  <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-green-50 border border-green-100">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    <p className="text-[9px] text-green-700 font-medium">Broadcasting live — anyone with this link can view your workspace in real-time.</p>
+                  </div>
+                )}
+                {!orgId && (
+                  <p className="text-[9px] text-navy/35 leading-relaxed">
+                    Complete workspace setup to generate your invite link.
+                  </p>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
