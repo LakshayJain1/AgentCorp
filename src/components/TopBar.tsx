@@ -6,7 +6,7 @@ import { useUser } from '@auth0/nextjs-auth0/client';
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ScrumMeeting from '@/components/ScrumMeeting';
-import { Cpu, Play, Pause, Search, Command, X, UserPlus, Copy, Check } from 'lucide-react';
+import { Cpu, Play, Pause, Search, Command, X, UserPlus, Copy, Check, Send, Mail } from 'lucide-react';
 
 export default function TopBar() {
   const { user, isLoading } = useUser();
@@ -22,12 +22,28 @@ export default function TopBar() {
   const setCenterView = useGameStore((s) => s.setCenterView);
 
   const orgId = useGameStore((s) => s.orgId);
+  const companyName = useGameStore((s) => s.companyName);
+  const inviteEmails = useGameStore((s) => s.inviteEmails);
+  const invitesSent = useGameStore((s) => s.invitesSent);
+  const setAuth0OrgId = useGameStore((s) => s.setAuth0OrgId);
+  const markInvitesSent = useGameStore((s) => s.markInvitesSent);
+
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [emailDraft, setEmailDraft] = useState(['', '', '']);
+  const [sendingInvites, setSendingInvites] = useState(false);
+  const [inviteResult, setInviteResult] = useState<{ sent: string[]; failed: string[] } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const inviteRef = useRef<HTMLDivElement>(null);
+
+  // Pre-populate email draft from onboarding invites (only once, if not already sent)
+  useEffect(() => {
+    if (!invitesSent && inviteEmails.length > 0) {
+      setEmailDraft([inviteEmails[0] ?? '', inviteEmails[1] ?? '', inviteEmails[2] ?? '']);
+    }
+  }, [inviteEmails, invitesSent]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -215,8 +231,10 @@ export default function TopBar() {
               >
                 <div>
                   <p className="text-xs font-bold text-navy">Invite to workspace</p>
-                  <p className="text-[10px] text-navy/45 mt-0.5">Share this link — teammates will see live activity.</p>
+                  <p className="text-[10px] text-navy/45 mt-0.5">Send Auth0-signed invite emails or share the link directly.</p>
                 </div>
+
+                {/* Copy link row */}
                 <div className="flex items-center gap-2 bg-navy/3 border border-navy/8 rounded-xl px-3 py-2">
                   <span className="flex-1 text-[10px] font-mono text-navy/55 truncate">
                     {typeof window !== 'undefined' && orgId
@@ -237,17 +255,85 @@ export default function TopBar() {
                     {inviteCopied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
                   </button>
                 </div>
+
                 {orgId && (
-                  <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-green-50 border border-green-100">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                    <p className="text-[9px] text-green-700 font-medium">Broadcasting live — anyone with this link can view your workspace in real-time.</p>
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-green-50 border border-green-100">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
+                    <p className="text-[9px] text-green-700 font-medium">Broadcasting live to anyone with this link.</p>
                   </div>
                 )}
-                {!orgId && (
-                  <p className="text-[9px] text-navy/35 leading-relaxed">
-                    Complete workspace setup to generate your invite link.
+
+                {/* Email invite section */}
+                <div className="border-t border-navy/8 pt-3 space-y-2">
+                  <p className="text-[10px] font-semibold text-navy/55 flex items-center gap-1.5">
+                    <Mail className="w-3 h-3" /> Email invites via Auth0
                   </p>
-                )}
+                  <div className="space-y-1.5">
+                    {[0, 1, 2].map((i) => (
+                      <input
+                        key={i}
+                        type="email"
+                        placeholder={`teammate${i + 1}@company.com`}
+                        value={emailDraft[i]}
+                        onChange={(e) => {
+                          const next = [...emailDraft];
+                          next[i] = e.target.value;
+                          setEmailDraft(next);
+                        }}
+                        className="w-full px-2.5 py-1.5 text-[10px] rounded-lg border border-navy/10 bg-white/80 outline-none focus:ring-2 focus:ring-ocean-200 placeholder:text-navy/30 text-navy"
+                      />
+                    ))}
+                  </div>
+
+                  {inviteResult && (
+                    <div className="space-y-1">
+                      {inviteResult.sent.length > 0 && (
+                        <p className="text-[9px] text-green-600 font-medium flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Sent to: {inviteResult.sent.join(', ')}
+                        </p>
+                      )}
+                      {inviteResult.failed.length > 0 && (
+                        <p className="text-[9px] text-rose-500 font-medium">
+                          Failed: {inviteResult.failed.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    disabled={!orgId || sendingInvites || emailDraft.every((e) => !e.trim())}
+                    onClick={async () => {
+                      const emails = emailDraft.filter((e) => e.trim() && e.includes('@'));
+                      if (!emails.length || !orgId) return;
+                      setSendingInvites(true);
+                      setInviteResult(null);
+                      try {
+                        const res = await fetch('/api/invite', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ orgId, companyName, emails }),
+                        });
+                        const data = await res.json();
+                        if (data.auth0OrgId) setAuth0OrgId(data.auth0OrgId);
+                        setInviteResult({ sent: data.sent ?? [], failed: data.failed ?? [] });
+                        if ((data.sent ?? []).length > 0) markInvitesSent();
+                      } catch {
+                        setInviteResult({ sent: [], failed: emails });
+                      } finally {
+                        setSendingInvites(false);
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-ocean text-white text-[10px] font-semibold transition-colors hover:bg-ocean-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {sendingInvites
+                      ? 'Sending…'
+                      : <><Send className="w-3 h-3" /> Send invites</>
+                    }
+                  </button>
+                  <p className="text-[9px] text-navy/35 leading-relaxed">
+                    Auth0 emails each person a branded invite with a one-click login button. Link expires in 7 days.
+                  </p>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

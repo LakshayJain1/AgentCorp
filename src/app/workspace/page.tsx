@@ -34,17 +34,38 @@ function WorkspacePageInner() {
     return unsub;
   }, []);
 
+  // Handle post-invite-accept redirect:
+  // When someone accepts an Auth0 org invitation, they land here with user.org_id set.
+  // If they have no workspace of their own, look up the inviter's orgId and redirect.
+  useEffect(() => {
+    if (!hydrated || authLoading || !user) return;
+    if (inviteOrgId) return; // already in viewer mode via URL param
+
+    const auth0OrgId = (user as Record<string, unknown>).org_id as string | undefined;
+    if (!auth0OrgId || isInitialized) return; // not from an org invite, or already has workspace
+
+    fetch(`/api/invite?auth0OrgId=${encodeURIComponent(auth0OrgId)}`)
+      .then((r) => r.json())
+      .then((d: { found: boolean; orgId?: string }) => {
+        if (d.found && d.orgId) {
+          router.replace(`/workspace?invite=${d.orgId}`);
+        } else {
+          router.replace('/onboard');
+        }
+      })
+      .catch(() => router.replace('/onboard'));
+  }, [hydrated, authLoading, user, isInitialized, inviteOrgId, router]);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
       router.replace('/auth/login');
       return;
     }
-    // Viewer mode: skip the initialization check
     if (inviteOrgId) return;
-    // Authenticated but workspace not set up — send to onboarding
     if (hydrated && !isInitialized) {
-      router.replace('/onboard');
+      const auth0OrgId = (user as Record<string, unknown>).org_id as string | undefined;
+      if (!auth0OrgId) router.replace('/onboard'); // only redirect if not handling org invite above
     }
   }, [hydrated, isInitialized, user, authLoading, router, inviteOrgId]);
 
@@ -52,7 +73,6 @@ function WorkspacePageInner() {
   if (!user) return null;
 
   // Viewer mode: someone opened the workspace via an invite link
-  // Show their workspace if it's a different org, or fall through if it's our own link
   if (inviteOrgId && hydrated && inviteOrgId !== myOrgId) {
     return <WorkspaceViewer orgId={inviteOrgId} />;
   }

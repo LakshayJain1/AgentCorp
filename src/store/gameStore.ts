@@ -415,7 +415,9 @@ interface GameStore {
   companyProduct: string;
   developersCount: number;
   orgId: string;
+  auth0OrgId: string;
   inviteEmails: string[];
+  invitesSent: boolean;
   connectors: {
     github: { connected: boolean; repoUrl: string; token: string; autoCommit: boolean };
     vercel: { connected: boolean; token: string; autoDeploy: boolean };
@@ -430,6 +432,8 @@ interface GameStore {
     inviteEmails?: string[]
   ) => void;
   updateConnectors: (connectors: Partial<GameStore['connectors']>) => void;
+  setAuth0OrgId: (id: string) => void;
+  markInvitesSent: () => void;
 }
 
 const projectIdCounter = 0;
@@ -456,7 +460,9 @@ export const useGameStore = create<GameStore>()(
   companyProduct: 'Autonomous Developer Sandbox & OS',
   developersCount: 1,
   orgId: '',
+  auth0OrgId: '',
   inviteEmails: [],
+  invitesSent: false,
   connectors: {
     github: { connected: false, repoUrl: '', token: '', autoCommit: false },
     vercel: { connected: false, token: '', autoDeploy: false },
@@ -1042,6 +1048,9 @@ export const useGameStore = create<GameStore>()(
   toggleLibrary: () => {
     set((state) => ({ showLibrary: !state.showLibrary }));
   },
+
+  setAuth0OrgId: (id) => set({ auth0OrgId: id }),
+  markInvitesSent: () => set({ invitesSent: true }),
 
   updateConnectors: (updates) => {
     set((state) => ({
