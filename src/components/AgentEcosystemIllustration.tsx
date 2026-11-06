@@ -83,10 +83,7 @@ function ConsoleWindow({
     <div className="rounded-2xl overflow-hidden shadow-lg" style={{ background: '#151520' }}>
       <div className="flex items-center justify-between px-3 py-2" style={{ background: '#1c1c2e' }}>
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#FF5F57' }} />
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#FEBC2E' }} />
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#28C840' }} />
-          <span className="text-white/40 text-[10px] font-semibold ml-2 tracking-wide">System Console</span>
+          <span className="text-white/40 text-[10px] font-semibold tracking-wide">System Console</span>
         </div>
         <button onClick={onClear}
           className="text-[10px] text-white/30 hover:text-white/60 transition-colors cursor-pointer">
@@ -386,9 +383,7 @@ export default function AgentEcosystemIllustration() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-3.5 border-b border-gray-100">
         <div className="flex items-center gap-2.5 shrink-0">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm">
-            <Zap className="w-4 sm:w-[18px] h-4 sm:h-[18px] text-white" />
-          </div>
+          <Zap className="w-5 h-5 text-ocean-600" />
           <div>
             <h3 className="font-semibold text-gray-900 text-[13px] sm:text-[14px] leading-none">
               Ecosystem Simulator
