@@ -1,5 +1,5 @@
 import { useGameStore } from '@/store/gameStore';
-import { SubTask, WorkerRole } from '@/agents/AgentTypes';
+import { SubTask, Task, WorkerRole } from '@/agents/AgentTypes';
 import { BaseWorkerAgent } from '@/agents/BaseWorkerAgent';
 
 interface QueueItem {
@@ -25,8 +25,12 @@ export class TaskQueue {
     if (this.inProgress.has(subtask.id)) {
       this.inProgress.delete(subtask.id);
     }
+    // P0: carry the retry count across the round-trip. Previously reEnqueue
+    // ignored subtask.retryCount, so each re-queue looked like a first attempt
+    // and the legacy retryCount<3 gate in processCompletedItems never fired.
+    const nextRetry = (subtask.retryCount ?? 0) + 1;
     this.queue.push({
-      subtask,
+      subtask: { ...subtask, retryCount: nextRetry },
       priority: 5,
       enqueuedAt: Date.now(),
       retryDetails,
@@ -82,11 +86,28 @@ export class TaskQueue {
     const parentTask = store.tasks.find((t) => t.id === subtask.parentTaskId);
     if (!parentTask) return false;
 
-    for (const depIdx of subtask.dependencies) {
-      const depSub = parentTask.subtasks[parseInt(depIdx.split('_').pop() || '')];
+    for (const depRef of subtask.dependencies) {
+      const depSub = this.resolveDependency(parentTask, depRef);
       if (!depSub || depSub.status !== 'completed') return false;
     }
     return true;
+  }
+
+  /**
+   * Resolve a dependency reference to a real subtask. The planner emits logical
+   * indices like "sub_0", but subtask IDs are generated as
+   * `sub_<taskId>_<idx>_<timestamp>`, so the naive `parseInt(split('_').pop())`
+   * parsed the timestamp instead of the index and dependencies silently failed.
+   */
+  private resolveDependency(parentTask: Task, depRef: string): SubTask | undefined {
+    const byId = parentTask.subtasks.find((s) => s.id === depRef);
+    if (byId) return byId;
+    const m = depRef.match(/^sub_(\d+)$/);
+    if (m) {
+      const idx = parseInt(m[1], 10);
+      return parentTask.subtasks[idx];
+    }
+    return undefined;
   }
 
   private findWorker(

@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth0 } from '@/lib/auth0';
+import { getToken } from '@/lib/integrations/token-service';
+import { getServerTool, listServerToolsAsOpenAI } from '@/lib/integrations/tools';
+import { resolveWorkspace } from '@/lib/workspace';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
@@ -6,6 +10,8 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 const FALLBACK_MODEL = 'gemini-2.0-flash';
 const FALLBACK_URL = `https://generativelanguage.googleapis.com/v1beta/models/${FALLBACK_MODEL}:generateContent`;
+
+const MAX_TOOL_TURNS = 3;
 
 interface RequestBody {
   systemPrompt?: string;
@@ -16,8 +22,32 @@ interface RequestBody {
   model?: string;
 }
 
-async function callOpenRouter(body: RequestBody, apiKey: string = OPENROUTER_API_KEY): Promise<string | null> {
-  const messages: { role: string; content: string }[] = [];
+interface ToolCallResult {
+  id: string;
+  name: string;
+  args: Record<string, string>;
+  result: string;
+}
+
+interface OpenRouterMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content?: string | null;
+  tool_calls?: Array<{
+    id: string;
+    type: 'function';
+    function: { name: string; arguments: string };
+  }>;
+  tool_call_id?: string;
+}
+
+async function callOpenRouter(
+  body: RequestBody,
+  userId: string,
+  workspaceId: string | null,
+  apiKey: string = OPENROUTER_API_KEY,
+): Promise<{ content: string | null; toolCalls: ToolCallResult[] }> {
+  const messages: OpenRouterMessage[] = [];
+  const executed: ToolCallResult[] = [];
 
   if (body.systemPrompt) {
     const contextStr = body.context
@@ -28,28 +58,81 @@ async function callOpenRouter(body: RequestBody, apiKey: string = OPENROUTER_API
 
   messages.push({ role: 'user', content: body.prompt });
 
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: body.model || 'openai/gpt-4o-mini',
-      messages,
-      temperature: body.temperature ?? 0.3,
-      max_tokens: 4096,
-    }),
-  });
+  const tools = listServerToolsAsOpenAI();
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('OpenRouter API error:', response.status, errorText);
-    return null;
+  for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: body.model || 'openai/gpt-4o-mini',
+        messages,
+        temperature: body.temperature ?? 0.3,
+        max_tokens: 4096,
+        ...(tools.length > 0 ? { tools } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenRouter API error:', response.status, errorText);
+      return { content: null, toolCalls: executed };
+    }
+
+    const data = await response.json();
+    const choiceMessage = data?.choices?.[0]?.message as OpenRouterMessage | undefined;
+    if (!choiceMessage) return { content: null, toolCalls: executed };
+
+    messages.push(choiceMessage);
+
+    const toolCalls = choiceMessage.tool_calls;
+    if (!toolCalls || toolCalls.length === 0) {
+      return { content: choiceMessage.content || null, toolCalls: executed };
+    }
+
+    // Process tool calls in parallel using the caller's server-decrypted token
+    await Promise.all(
+      toolCalls.map(async (call) => {
+        const tool = getServerTool(call.function.name);
+        let result = '';
+        if (!tool) {
+          result = `Error: unknown tool ${call.function.name}`;
+        } else if (!workspaceId) {
+          result = `Error: workspace not available for tool execution`;
+        } else {
+          let args: Record<string, string> = {};
+          try {
+            args = JSON.parse(call.function.arguments || '{}') as Record<string, string>;
+          } catch {
+            args = {};
+          }
+          try {
+            const token = await getToken(userId, workspaceId, tool.provider);
+            if (!token) {
+              result = `Error: ${tool.provider} is not connected. Connect it in Integrations tab.`;
+            } else {
+              result = await tool.run(token, args);
+            }
+          } catch (e) {
+            result = `Error executing tool: ${e instanceof Error ? e.message : String(e)}`;
+          }
+        }
+
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: result,
+        });
+      }),
+    );
   }
 
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content || null;
+  // Fallback: return the latest assistant content if max turns reached
+  const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+  return { content: lastAssistant?.content || null, toolCalls: executed };
 }
 
 async function callGeminiFallback(body: RequestBody): Promise<string | null> {
@@ -104,6 +187,11 @@ async function callGeminiFallback(body: RequestBody): Promise<string | null> {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth0.getSession();
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const userId = session.user.sub;
+
   try {
     const body: RequestBody = await req.json();
 
@@ -140,10 +228,22 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Resolve the caller's workspace once so provider tools can fetch their
+    // decrypted token. Absent DB config is handled by getToken -> 503.
+    let workspaceId: string | null = null;
+    try {
+      workspaceId = await resolveWorkspace(userId);
+    } catch {
+      workspaceId = null;
+    }
+
     let content: string | null = null;
+    let toolCalls: ToolCallResult[] = [];
 
     if (hasOpenRouter) {
-      content = await callOpenRouter(body, effectiveOpenRouterKey);
+      const result = await callOpenRouter(body, userId, workspaceId, effectiveOpenRouterKey);
+      content = result.content;
+      toolCalls = result.toolCalls;
     }
 
     if (!content && hasGemini) {
@@ -158,7 +258,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ content: content.trim() });
+    return NextResponse.json({ content: content.trim(), toolCalls });
   } catch (error) {
     console.error('AI route error:', error);
     return NextResponse.json({

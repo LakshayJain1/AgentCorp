@@ -85,6 +85,9 @@ export class PlannerAgent {
       assignedRole: item.assignableRoles[0] || null,
       assignedAgentId: null,
       estimatedEffort: item.estimatedEffort,
+      // Dependencies from the LLM are logical indices like "sub_0". We'll
+      // store them as-is and have the TaskQueue look up the subtask by index
+      // within the parent's subtask list.
       dependencies: item.dependencies,
       acceptanceCriteria: item.acceptanceCriteria,
       verifyCommand: item.verifyCommand ?? (taskBranch && task.repoScope

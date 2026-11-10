@@ -1,23 +1,42 @@
 import { NextResponse } from 'next/server';
 
-// Reports which platform credentials are configured — WITHOUT exposing secret values.
-// End-user repo/key connections happen per user via OAuth/vault (P1-full); this only
-// tells the UI what is missing and exactly what to ask for.
+// Reports which platform capabilities are configured — WITHOUT exposing secret
+// values. Per-user provider credentials live in the encrypted integration
+// store, so this only tells the operator what the server still needs.
 export async function GET() {
-  const githubAppConfigured = !!(process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY);
-  const githubDevTokenConfigured = !!process.env.GITHUB_DEV_TOKEN;
-  const githubConfigured = githubAppConfigured || githubDevTokenConfigured;
-  const aiConfigured = !!(process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY);
+  const githubOAuthConfigured = Boolean(
+    process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET,
+  );
+  const slackOAuthConfigured = Boolean(
+    process.env.SLACK_CLIENT_ID && process.env.SLACK_CLIENT_SECRET,
+  );
+  const linearOAuthConfigured = Boolean(
+    process.env.LINEAR_CLIENT_ID && process.env.LINEAR_CLIENT_SECRET,
+  );
+  const integrationStorageConfigured = Boolean(
+    process.env.DATABASE_URL && process.env.TOKEN_ENCRYPTION_KEY,
+  );
+  const aiConfigured = Boolean(process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY);
 
   return NextResponse.json({
-    githubAppConfigured,
-    githubDevTokenConfigured,
-    githubConfigured,
+    githubOAuthConfigured,
+    slackOAuthConfigured,
+    linearOAuthConfigured,
+    integrationStorageConfigured,
+    // Retained for older clients; both legacy paths are retired.
+    githubAppConfigured: false,
+    githubDevTokenConfigured: false,
+    githubConfigured: githubOAuthConfigured && integrationStorageConfigured,
     aiConfigured,
     needed: [
-      ...(!githubConfigured
-        ? ['GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY + OAuth client ID/secret (so users can connect their own repos)']
+      ...(!integrationStorageConfigured
+        ? ['DATABASE_URL + TOKEN_ENCRYPTION_KEY (encrypted per-user integration storage)']
         : []),
+      ...(!githubOAuthConfigured
+        ? ['GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET (users connect their own repos via OAuth)']
+        : []),
+      ...(!slackOAuthConfigured ? ['SLACK_CLIENT_ID + SLACK_CLIENT_SECRET (Slack OAuth)'] : []),
+      ...(!linearOAuthConfigured ? ['LINEAR_CLIENT_ID + LINEAR_CLIENT_SECRET (Linear OAuth)'] : []),
       ...(!aiConfigured
         ? ['OPENROUTER_API_KEY and/or GEMINI_API_KEY (dev fallback until per-user BYOK vault lands)']
         : []),

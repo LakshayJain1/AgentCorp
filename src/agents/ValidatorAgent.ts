@@ -16,7 +16,7 @@ export class ValidatorAgent {
 
   enqueueValidation(subtask: SubTask): void {
     if (this.queue.some((q) => q.subtask.id === subtask.id)) return;
-    this.queue.push({ subtask, queuedAt: Date.now(), retryCount: 0 });
+    this.queue.push({ subtask, queuedAt: Date.now(), retryCount: subtask.retryCount ?? 0 });
   }
 
   async processQueuedValidations(): Promise<void> {

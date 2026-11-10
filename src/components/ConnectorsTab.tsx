@@ -1,239 +1,163 @@
 'use client';
 
-import { useGameStore } from '@/store/gameStore';
-import { motion, AnimatePresence } from 'framer-motion';
+import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  GitBranch, Bell, Key, ChevronDown, Check, AlertTriangle,
-  Zap, Database, MessageSquare, Cloud, Code2, Bot, Globe,
-  ExternalLink, Lock, RefreshCw
+  GitBranch,
+  Bell,
+  Zap,
+  ChevronDown,
+  Check,
+  AlertTriangle,
+  MessageSquare,
+  Cloud,
+  Code2,
+  Bot,
+  Globe,
+  Database,
+  RefreshCw,
+  ExternalLink,
+  Loader2,
+  Lock,
+  Unplug,
 } from 'lucide-react';
+import type { UseIntegrations } from '@/hooks/useIntegrations';
 
-type ConnectorId =
-  | 'github' | 'vercel' | 'slack' | 'ai'
-  | 'linear' | 'notion' | 'supabase' | 'railway'
-  | 'discord' | 'openai' | 'jira';
-
-interface ConnectorDef {
-  id: ConnectorId;
+interface OAuthConnectorDef {
+  id: 'github' | 'slack' | 'linear';
   label: string;
   desc: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   color: string;
-  badgeColor: string;
-  comingSoon?: boolean;
-  fields: {
-    key: string;
-    label: string;
-    placeholder: string;
-    type?: 'text' | 'password' | 'url';
-  }[];
+  accent: string;
+  scopes: string;
+  configuredKey: 'githubOAuthConfigured' | 'slackOAuthConfigured' | 'linearOAuthConfigured';
 }
 
-const CONNECTORS: ConnectorDef[] = [
+const OAUTH_CONNECTORS: OAuthConnectorDef[] = [
   {
     id: 'github',
     label: 'GitHub',
-    desc: 'Commit code, open PRs, push agent-generated code to your repo',
+    desc: 'Read files, create branches, and open pull requests on your repos.',
     icon: <GitBranch size={15} />,
     color: 'hover:border-gray-400',
-    badgeColor: 'bg-[rgba(23,23,31,0.05)] text-navy/80 border-navy/15',
-    fields: [
-      { key: 'repoUrl', label: 'Repository URL', placeholder: 'https://github.com/username/repo', type: 'url' },
-      { key: 'token', label: 'Personal Access Token', placeholder: 'ghp_xxxxxxxxxxxxxxxx', type: 'password' },
-    ],
-  },
-  {
-    id: 'vercel',
-    label: 'Vercel',
-    desc: 'Auto-deploy deliverables, trigger preview builds, monitor deployment status',
-    icon: <Cloud size={15} />,
-    color: 'hover:border-gray-800',
-    badgeColor: 'bg-gray-900 text-white border-gray-700',
-    fields: [
-      { key: 'token', label: 'Vercel API Token', placeholder: 'ver_xxxxxxxxxxxxxxxx', type: 'password' },
-      { key: 'projectId', label: 'Project ID (optional)', placeholder: 'prj_xxxxxxxx', type: 'text' },
-    ],
+    accent: 'bg-[rgba(23,23,31,0.05)] text-navy/80',
+    scopes: 'repo · read:user',
+    configuredKey: 'githubOAuthConfigured',
   },
   {
     id: 'slack',
     label: 'Slack',
-    desc: 'Broadcast task completions, agent activity, and daily summaries to your team',
+    desc: 'Post task completions and agent activity to a channel.',
     icon: <Bell size={15} />,
     color: 'hover:border-amber-400',
-    badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
-    fields: [
-      { key: 'webhookUrl', label: 'Incoming Webhook URL', placeholder: 'https://hooks.slack.com/services/...', type: 'url' },
-    ],
-  },
-  {
-    id: 'discord',
-    label: 'Discord',
-    desc: 'Post live agent updates and deployment alerts to a Discord channel',
-    icon: <MessageSquare size={15} />,
-    color: 'hover:border-indigo-400',
-    badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    fields: [
-      { key: 'webhookUrl', label: 'Discord Webhook URL', placeholder: 'https://discord.com/api/webhooks/...', type: 'url' },
-    ],
+    accent: 'bg-amber-50 text-amber-700',
+    scopes: 'chat:write · channels:read',
+    configuredKey: 'slackOAuthConfigured',
   },
   {
     id: 'linear',
     label: 'Linear',
-    desc: 'Sync tasks with Linear issues. Agents create tickets and update statuses automatically',
+    desc: 'Create issues and keep task status in sync with your team.',
     icon: <Zap size={15} />,
     color: 'hover:border-violet-400',
-    badgeColor: 'bg-violet-50 text-violet-700 border-violet-200',
-    fields: [
-      { key: 'apiKey', label: 'Linear API Key', placeholder: 'lin_api_xxxxxxxxxxxxxxxx', type: 'password' },
-      { key: 'teamId', label: 'Team ID', placeholder: 'e.g. TEAM-1 or UUID', type: 'text' },
-    ],
-  },
-  {
-    id: 'notion',
-    label: 'Notion',
-    desc: 'Write reports, specs, and meeting notes directly into your Notion workspace',
-    icon: <Globe size={15} />,
-    color: 'hover:border-gray-400',
-    badgeColor: 'bg-[rgba(23,23,31,0.05)] text-navy/80 border-navy/15',
-    fields: [
-      { key: 'token', label: 'Integration Token', placeholder: 'secret_xxxxxxxxxxxxxxxx', type: 'password' },
-      { key: 'databaseId', label: 'Database ID', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', type: 'text' },
-    ],
-  },
-  {
-    id: 'supabase',
-    label: 'Supabase',
-    desc: 'Read/write data, run migrations, and manage your Supabase project via agents',
-    icon: <Database size={15} />,
-    color: 'hover:border-emerald-400',
-    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    fields: [
-      { key: 'url', label: 'Project URL', placeholder: 'https://xxxx.supabase.co', type: 'url' },
-      { key: 'serviceKey', label: 'Service Role Key', placeholder: 'eyJhbGciOiJ...', type: 'password' },
-    ],
-  },
-  {
-    id: 'railway',
-    label: 'Railway',
-    desc: 'Deploy backend services, manage environments and trigger builds via Railway API',
-    icon: <RefreshCw size={15} />,
-    color: 'hover:border-purple-400',
-    badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
-    fields: [
-      { key: 'token', label: 'Railway API Token', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', type: 'password' },
-    ],
-  },
-  {
-    id: 'ai',
-    label: 'AI Model Provider',
-    desc: 'Override the default AI model used by all agents. Supports Gemini, OpenAI, Anthropic, OpenRouter',
-    icon: <Bot size={15} />,
-    color: 'hover:border-ocean-400',
-    badgeColor: 'bg-ocean-50 text-ocean-700 border-ocean-200',
-    fields: [
-      { key: 'provider', label: 'Provider', placeholder: 'gemini | openai | anthropic | openrouter', type: 'text' },
-      { key: 'apiKey', label: 'API Key', placeholder: 'sk-... / AIza...', type: 'password' },
-      { key: 'model', label: 'Model name (optional)', placeholder: 'e.g. gpt-4o / claude-3-5-sonnet-latest', type: 'text' },
-    ],
-  },
-  {
-    id: 'jira',
-    label: 'Jira',
-    desc: 'Sync sprint boards, auto-assign issues to agents, and post completion comments',
-    icon: <Code2 size={15} />,
-    color: 'hover:border-blue-400',
-    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
-    fields: [
-      { key: 'domain', label: 'Atlassian Domain', placeholder: 'yourorg.atlassian.net', type: 'url' },
-      { key: 'email', label: 'Account Email', placeholder: 'you@company.com', type: 'text' },
-      { key: 'apiToken', label: 'API Token', placeholder: 'ATATxxxxxxxxxxxxxxxx', type: 'password' },
-    ],
+    accent: 'bg-violet-50 text-violet-700',
+    scopes: 'read · write',
+    configuredKey: 'linearOAuthConfigured',
   },
 ];
 
-export default function ConnectorsTab() {
-  const { updateConnectors } = useGameStore();
-  const connectors = useGameStore((s) => s.connectors);
-  const [platformStatus, setPlatformStatus] = useState<{ githubAppConfigured: boolean; aiConfigured: boolean; needed: string[] } | null>(null);
-  const [activeAccordion, setActiveAccordion] = useState<ConnectorId | null>(null);
-  const [savedStates, setSavedStates] = useState<Record<string, boolean>>({});
-  // Pre-populate from persisted store so saved credentials show on reopen
-  const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>(() => ({
-    github: { repoUrl: connectors.github.repoUrl, token: connectors.github.token },
-    vercel:  { token: connectors.vercel.token },
-    slack:   { webhookUrl: connectors.slack.webhookUrl },
-    ai:      { provider: connectors.ai.provider, apiKey: connectors.ai.apiKey },
-  }));
+const COMING_SOON = [
+  { id: 'vercel', label: 'Vercel', icon: <Cloud size={15} /> },
+  { id: 'notion', label: 'Notion', icon: <Globe size={15} /> },
+  { id: 'supabase', label: 'Supabase', icon: <Database size={15} /> },
+  { id: 'railway', label: 'Railway', icon: <RefreshCw size={15} /> },
+  { id: 'discord', label: 'Discord', icon: <MessageSquare size={15} /> },
+  { id: 'jira', label: 'Jira', icon: <Code2 size={15} /> },
+];
 
-  const toggleAccordion = (id: ConnectorId) => {
-    setActiveAccordion(activeAccordion === id ? null : id);
-  };
+interface PlatformStatus {
+  githubOAuthConfigured: boolean;
+  slackOAuthConfigured: boolean;
+  linearOAuthConfigured: boolean;
+  integrationStorageConfigured: boolean;
+  aiConfigured: boolean;
+  needed: string[];
+}
 
+interface ConnectorsTabProps {
+  integrations: UseIntegrations;
+}
+
+export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
+  const [active, setActive] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [banner, setBanner] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [platform, setPlatform] = useState<PlatformStatus | null>(null);
+
+  // Platform status is fetched once; it only gates the Connect buttons.
   useEffect(() => {
+    let cancelled = false;
     fetch('/api/connectors/status')
       .then((r) => r.json())
-      .then(setPlatformStatus)
-      .catch(() => setPlatformStatus(null));
+      .then((d: PlatformStatus) => {
+        if (!cancelled) setPlatform(d);
+      })
+      .catch(() => {
+        if (!cancelled) setPlatform(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const getFieldValue = (connectorId: string, fieldKey: string) =>
-    fieldValues[connectorId]?.[fieldKey] ?? '';
+  // The OAuth callback returns to /workspace?integration=…&provider=…&reason=…
+  // Surface the outcome once, then strip the params so a reload cannot replay it.
+  const refresh = integrations.refresh;
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get('integration');
+    if (!outcome) return;
 
-  const setFieldValue = (connectorId: string, fieldKey: string, value: string) => {
-    setFieldValues((prev) => ({
-      ...prev,
-      [connectorId]: { ...(prev[connectorId] ?? {}), [fieldKey]: value },
-    }));
+    const provider = params.get('provider') ?? 'integration';
+    const reason = params.get('reason');
+    const timer = window.setTimeout(() => {
+      if (outcome === 'connected') {
+        setBanner({ kind: 'ok', text: `${provider} connected.` });
+        void refresh();
+      } else {
+        setBanner({
+          kind: 'error',
+          text: `${provider} connection failed${reason ? ` (${reason.replace(/_/g, ' ')})` : ''}.`,
+        });
+      }
+    }, 0);
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('integration');
+    url.searchParams.delete('provider');
+    url.searchParams.delete('reason');
+    window.history.replaceState({}, '', url.toString());
+
+    return () => window.clearTimeout(timer);
+  }, [refresh]);
+
+  const connectedByProvider = new Map(
+    integrations.connections.map((c) => [c.provider, c] as const),
+  );
+  const connectedCount = integrations.connections.length;
+
+  const handleDisconnect = async (id: string, label: string) => {
+    setBusy(id);
+    const ok = await integrations.disconnect(id);
+    setBusy(null);
+    setBanner(ok ? { kind: 'ok', text: `${label} disconnected and tokens revoked.` } : null);
+    if (ok) setTimeout(() => setBanner(null), 3000);
   };
-
-  const handleSave = (connector: ConnectorDef) => {
-    const vals = fieldValues[connector.id] ?? {};
-    // Persist known connectors to store
-    if (connector.id === 'github') {
-      updateConnectors({
-        github: {
-          connected: !!(vals.repoUrl && vals.token),
-          repoUrl: vals.repoUrl ?? '',
-          token: vals.token ?? '',
-          autoCommit: true,
-        },
-      });
-    } else if (connector.id === 'vercel') {
-      updateConnectors({
-        vercel: {
-          connected: !!(vals.token),
-          token: vals.token ?? '',
-          autoDeploy: true,
-        },
-      });
-    } else if (connector.id === 'slack') {
-      updateConnectors({
-        slack: {
-          connected: !!(vals.webhookUrl),
-          webhookUrl: vals.webhookUrl ?? '',
-          broadcastEvents: true,
-        },
-      });
-    } else if (connector.id === 'ai') {
-      updateConnectors({
-        ai: {
-          provider: (vals.provider as 'gemini' | 'openrouter') ?? 'gemini',
-          apiKey: vals.apiKey ?? '',
-        },
-      });
-    }
-    setSavedStates((prev) => ({ ...prev, [connector.id]: true }));
-    setTimeout(() => setSavedStates((prev) => ({ ...prev, [connector.id]: false })), 2000);
-  };
-
-  const connectedCount = Object.values(fieldValues).filter((v) =>
-    Object.values(v).some((val) => val.length > 0)
-  ).length;
 
   return (
     <div className="space-y-3 text-navy">
-      {/* Header */}
       <div className="p-4 rounded-xl bg-white border border-navy/5 soft-shadow relative overflow-hidden">
         <div className="absolute top-0 right-0 w-28 h-28 bg-violet-100/40 rounded-full blur-2xl pointer-events-none" />
         <div className="flex items-start justify-between">
@@ -242,7 +166,7 @@ export default function ConnectorsTab() {
               Integrations
             </h3>
             <p className="text-[10px] text-navy/40 mt-0.5">
-              {connectedCount} of {CONNECTORS.length} connected
+              {connectedCount} of {OAUTH_CONNECTORS.length} connected
             </p>
           </div>
           <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 border border-emerald-100">
@@ -251,66 +175,104 @@ export default function ConnectorsTab() {
           </div>
         </div>
 
-        {/* Platform credential gate: per-user OAuth/BYOK needs these platform secrets first */}
-        {platformStatus && (platformStatus.needed.length > 0) && (
+        {integrations.error && (
+          <div className="mt-3 p-2.5 rounded-lg bg-rose-50 border border-rose-200 flex items-start gap-2">
+            <AlertTriangle size={12} className="text-rose-500 shrink-0 mt-0.5" />
+            <div className="text-[10px] text-rose-700 leading-relaxed">
+              {integrations.error}
+              {integrations.code === 'server_not_configured' && (
+                <span className="block mt-1">
+                  Add the integration storage env vars, then reload.
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {banner && (
+          <div
+            className={`mt-3 p-2.5 rounded-lg border flex items-start gap-2 ${
+              banner.kind === 'ok'
+                ? 'bg-emerald-50 border-emerald-200'
+                : 'bg-rose-50 border-rose-200'
+            }`}
+          >
+            {banner.kind === 'ok' ? (
+              <Check size={12} className="text-emerald-600 shrink-0 mt-0.5" />
+            ) : (
+              <AlertTriangle size={12} className="text-rose-500 shrink-0 mt-0.5" />
+            )}
+            <span
+              className={`text-[10px] leading-relaxed ${
+                banner.kind === 'ok' ? 'text-emerald-700' : 'text-rose-700'
+              }`}
+            >
+              {banner.text}
+            </span>
+          </div>
+        )}
+
+        {platform && platform.needed.length > 0 && (
           <div className="mt-3 p-2.5 rounded-lg bg-sky-50 border border-sky-200 flex items-start gap-2">
             <AlertTriangle size={12} className="text-sky-500 shrink-0 mt-0.5" />
             <div className="text-[10px] text-sky-700 leading-relaxed">
               <strong>Setup needed (platform owner):</strong>
               <ul className="list-disc ml-3 mt-1 space-y-0.5">
-                {platformStatus.needed.map((n) => (
+                {platform.needed.map((n) => (
                   <li key={n}>{n}</li>
                 ))}
               </ul>
-              <p className="mt-1">GitHub OAuth for your own repos unlocks once these are configured.</p>
             </div>
           </div>
         )}
 
-        {/* Beta disclaimer */}
         <div className="mt-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
           <AlertTriangle size={12} className="text-amber-500 shrink-0 mt-0.5" />
           <p className="text-[10px] text-amber-700 leading-relaxed">
-            <strong>Beta:</strong> Integrations may behave unexpectedly. Agents can push commits, send messages, and trigger deploys. <strong>Use at your own risk</strong> on test environments only.
+            <strong>Beta:</strong> agents can push commits, send messages, and create issues.{' '}
+            <strong>Use at your own risk</strong> on test environments only.
           </p>
         </div>
       </div>
 
-      {/* Connector Cards */}
       <div className="space-y-2">
-        {CONNECTORS.map((connector) => {
-          const vals = fieldValues[connector.id] ?? {};
-          const isConnected = Object.values(vals).some((v) => v.length > 0);
-          const isOpen = activeAccordion === connector.id;
-          const isSaved = savedStates[connector.id];
+        {OAUTH_CONNECTORS.map((connector) => {
+          const connection = connectedByProvider.get(connector.id);
+          const isConnected = Boolean(connection);
+          const isOpen = active === connector.id;
+          const configured = platform ? platform[connector.configuredKey] : true;
+          const isBusy = busy === connector.id;
 
           return (
             <div
               key={connector.id}
-              className={`rounded-xl border bg-white soft-shadow overflow-hidden transition-all duration-200 ${connector.color} ${isConnected ? 'border-emerald-200' : 'border-navy/5'}`}
+              className={`rounded-xl border bg-white soft-shadow overflow-hidden transition-all duration-200 ${connector.color} ${
+                isConnected ? 'border-emerald-200' : 'border-navy/5'
+              }`}
             >
               <button
-                onClick={() => toggleAccordion(connector.id)}
+                onClick={() => setActive(isOpen ? null : connector.id)}
                 className="w-full flex items-center justify-between p-3 text-left focus:outline-none cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-navy/70 ${isConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-[rgba(23,23,31,0.05)]'}`}>
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                      isConnected ? 'bg-emerald-50 text-emerald-600' : connector.accent
+                    }`}
+                  >
                     {connector.icon}
                   </div>
                   <div>
-                    <h4 className="text-xs font-semibold text-navy flex items-center gap-1.5">
-                      {connector.label}
-                      {connector.comingSoon && (
-                        <span className="text-[8px] px-1 py-0.5 rounded bg-[rgba(23,23,31,0.05)] text-navy/40 font-medium uppercase">Soon</span>
-                      )}
-                    </h4>
-                    <p className="text-[9px] text-navy/40 mt-0.5 line-clamp-1 max-w-[180px]">{connector.desc}</p>
+                    <h4 className="text-xs font-semibold text-navy">{connector.label}</h4>
+                    <p className="text-[9px] text-navy/40 mt-0.5 line-clamp-1 max-w-[180px]">
+                      {connection?.accountId ?? connector.desc}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {isConnected ? (
                     <span className="px-2 py-0.5 rounded-full text-[8px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 uppercase">
-                      Set
+                      Connected
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded-full text-[8px] font-semibold bg-white/70 text-navy/40 border border-navy/10 uppercase">
@@ -336,45 +298,60 @@ export default function ConnectorsTab() {
                     <div className="p-3 space-y-2.5 bg-white/70">
                       <p className="text-[10px] text-navy/55 leading-relaxed">{connector.desc}</p>
 
-                      {connector.fields.map((field) => (
-                        <div key={field.key}>
-                          <label className="block text-[9px] font-semibold text-navy/55 uppercase tracking-wider mb-1">
-                            {field.label}
-                          </label>
-                          <div className="relative">
-                            {field.type === 'password' && (
-                              <Lock size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-navy/25" />
-                            )}
-                            <input
-                              type={field.type ?? 'text'}
-                              placeholder={field.placeholder}
-                              value={getFieldValue(connector.id, field.key)}
-                              onChange={(e) => setFieldValue(connector.id, field.key, e.target.value)}
-                              className={`w-full py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-[11px] outline-none focus:border-ocean-400/70 transition-all ${field.type === 'password' ? 'pl-7 pr-2.5' : 'px-2.5'}`}
-                            />
+                      {isConnected && connection ? (
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap gap-1">
+                            {connection.scopes.map((scope) => (
+                              <span
+                                key={scope}
+                                className="px-1.5 py-0.5 rounded bg-[rgba(23,23,31,0.04)] text-[8px] font-medium text-navy/50"
+                              >
+                                {scope}
+                              </span>
+                            ))}
                           </div>
+                          <p className="text-[9px] text-navy/35">
+                            Connected {new Date(connection.connectedAt).toLocaleDateString()}
+                            {connection.expiresAt
+                              ? ` · token refreshes before ${new Date(connection.expiresAt).toLocaleTimeString()}`
+                              : ' · token does not expire'}
+                          </p>
+                          <button
+                            onClick={() => handleDisconnect(connector.id, connector.label)}
+                            disabled={isBusy}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 font-semibold text-[10px] transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {isBusy ? (
+                              <><Loader2 size={11} className="animate-spin" /> Disconnecting…</>
+                            ) : (
+                              <><Unplug size={11} /> Disconnect</>
+                            )}
+                          </button>
                         </div>
-                      ))}
-
-                      <div className="flex gap-2 pt-1">
-                        <a
-                          href="#"
-                          className="flex items-center gap-1 text-[9px] text-ocean-600 hover:text-ocean-700 font-medium transition-colors"
-                          onClick={(e) => e.preventDefault()}
-                        >
-                          <ExternalLink size={9} /> Docs
-                        </a>
-                        <button
-                          onClick={() => handleSave(connector)}
-                          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ocean-50 hover:bg-ocean-100 border border-ocean-200 text-ocean-600 font-semibold text-[10px] transition-colors cursor-pointer"
-                        >
-                          {isSaved ? (
-                            <><Check size={11} /> Saved!</>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5 text-[9px] text-navy/40">
+                            <Lock size={9} />
+                            <span>Scopes: {connector.scopes}</span>
+                          </div>
+                          {configured ? (
+                            <a
+                              href={`/api/oauth/${connector.id}/start`}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ocean-50 hover:bg-ocean-100 border border-ocean-200 text-ocean-600 font-semibold text-[10px] transition-colors"
+                            >
+                              <ExternalLink size={11} /> Connect {connector.label}
+                            </a>
                           ) : (
-                            <><Check size={11} /> Save</>
+                            <p className="text-[9px] text-amber-600">
+                              Platform OAuth credentials are not configured yet.
+                            </p>
                           )}
-                        </button>
-                      </div>
+                          <p className="text-[9px] text-navy/35 leading-relaxed">
+                            You&apos;ll be redirected to {connector.label} to approve access. AgentCorp
+                            never sees your password.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -382,11 +359,43 @@ export default function ConnectorsTab() {
             </div>
           );
         })}
+
+        <div className="rounded-xl border border-navy/5 bg-white/60 p-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-ocean-50 text-ocean-600 flex items-center justify-center">
+              <Bot size={15} />
+            </div>
+            <div>
+              <h4 className="text-xs font-semibold text-navy">AI Model Provider</h4>
+              <p className="text-[9px] text-navy/40 mt-0.5">
+                {platform?.aiConfigured
+                  ? 'Server key configured'
+                  : 'No server key — mock responses'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-navy/5 bg-white/50 p-3">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-navy/35 mb-2">
+            Coming soon
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {COMING_SOON.map((c) => (
+              <span
+                key={c.id}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[rgba(23,23,31,0.03)] text-[9px] text-navy/40"
+              >
+                {c.icon}
+                {c.label}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Footer hint */}
       <p className="text-[9px] text-navy/40 text-center leading-relaxed px-2">
-        All credentials are stored locally in your browser session and never sent to external servers beyond the target integration.
+        OAuth tokens are encrypted server-side with AES-256-GCM and never stored in your browser.
       </p>
     </div>
   );

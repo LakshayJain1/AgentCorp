@@ -17,6 +17,7 @@ import { OpsAgent } from '@/agents/OpsAgent';
 import { classifyIntent, formatTicketTitle } from '@/ai/IntentClassifier';
 import { classifyTask } from '@/ai/TaskClassifier';
 import { LoopOrchestrator } from './LoopOrchestrator';
+import { MAX_VALIDATION_RETRIES } from './LoopTypes';
 import { aiService } from '@/ai/AIService';
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
 import { announceTaskHandoff } from '@/systems/ConversationSystem';
@@ -172,6 +173,7 @@ export class CentralOrchestrator {
           const prompt = `${historyBlock}The user is talking directly to you. Respond in character as ${mentionedAgent.name} (${mentionedAgent.role}). Keep it conversational and concise.\n\nUser: ${messageText}`;
           const aiReply = await aiService.askAgent(mentionedAgent.role, mentionedAgent.name, traits, prompt);
           const reply = aiReply.content || `Hey! I'm ${mentionedAgent.name}. How can I help?`;
+          this.reportToolCalls(mentionedAgent.id, aiReply.toolCalls ?? []);
           store.sendMessage(mentionedAgent.id, mentionedAgent.id, reply);
           store.pushAgentActivity(mentionedAgent.id, {
             id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -398,6 +400,17 @@ export class CentralOrchestrator {
         if (pm && pm.id !== agent.id) {
           announceTaskHandoff(agent.id, pm.id, parentTask.title, 'deliverable_ready');
         }
+        // P0: actually mark the parent task complete. Previously this branch only
+        // emitted a status event, so tasks with subtasks never left 'in_progress'
+        // and the UI showed them running forever.
+        if (parentTask.status !== 'completed' && parentTask.status !== 'failed') {
+          if (hasFailures) {
+            store.updateTask(parentTask.id, { status: 'failed' });
+            store.failTask(parentTask.id);
+          } else {
+            store.completeTask(parentTask.id);
+          }
+        }
         this.emit({
           type: 'status',
           data: { taskId: parentTask.id, status: hasFailures ? 'partial' : 'completed' },
@@ -424,6 +437,9 @@ export class CentralOrchestrator {
       if (!passed) {
         const storeNow = useGameStore.getState();
         const agent = storeNow.agents.find((a) => a.id === subtask.assignedAgentId);
+        // P0: retryCount is authoritative from the subtask (carried by TaskQueue),
+        // not the per-queue-item counter that reset to 0 on every re-enqueue.
+        const currentRetries = subtask.retryCount ?? 0;
         // Outer loop budget governs the inner QA-reject retry: escalate after 2 build-verify cycles
         // even if the legacy retryCount (<3) would allow another attempt.
         const verdict = this.loopOrchestrator.recordBuildVerifyCycle();
@@ -436,7 +452,7 @@ export class CentralOrchestrator {
           });
           continue;
         }
-        if (agent && validation.result.retryCount < 3) {
+        if (agent && currentRetries < MAX_VALIDATION_RETRIES) {
           store.updateAgent(agent.id, {
             currentSubTaskId: subtask.id,
           });
@@ -448,11 +464,50 @@ export class CentralOrchestrator {
           }
           this.emit({
             type: 'log',
-            data: { message: `Subtask "${subtask.description.slice(0, 40)}..." re-queued for retry #${validation.result.retryCount}` },
+            data: { message: `Subtask "${subtask.description.slice(0, 40)}..." re-queued for retry #${currentRetries}` },
             timestamp: Date.now(),
             streamId: `retry_${subtask.id}`,
           });
         }
+      } else {
+        // P0: a passing validation clears any build-verify block, otherwise
+        // the loop wedges after one bad slice and never processes the next task.
+        this.loopOrchestrator.clearBlock();
+      }
+    }
+  }
+
+  /**
+   * Surface tool calls the model chose (via the OpenRouter function-calling
+   * loop in /api/ai) as agent activity + execution logs so they show up in the
+   * UI. The actual tool execution happens server-side with the caller's
+   * decrypted token — this only reports the outcome.
+   */
+  private reportToolCalls(agentId: string, toolCalls: Array<{ name: string; args: Record<string, string>; result: string }>, taskId?: string | null): void {
+    if (!toolCalls || toolCalls.length === 0) return;
+    const store = useGameStore.getState();
+    for (const tc of toolCalls) {
+      store.pushAgentActivity(agentId, {
+        id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        agentId,
+        type: 'tool_call',
+        message: `${tc.name} → ${tc.result.slice(0, 120)}`,
+        timestamp: Date.now(),
+        details: JSON.stringify({ args: tc.args, result: tc.result }),
+      });
+      if (taskId) {
+        store.addTaskExecutionLog(taskId, {
+          id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          taskId,
+          agentId,
+          action: `tool ${tc.name}`,
+          tool: tc.name,
+          input: JSON.stringify(tc.args),
+          output: tc.result,
+          duration: 0,
+          timestamp: Date.now(),
+          status: 'success',
+        });
       }
     }
   }

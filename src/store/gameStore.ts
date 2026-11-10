@@ -403,7 +403,7 @@ interface GameStore {
   addDeliverableProject: (project: DeliverableProject) => void;
 
   // Persisted agent snapshots — role-indexed, merged back into agents on init
-  _agentSnapshots: Array<{ role: AgentRole; performance: AgentPerformance; memory: AgentMemoryEntry[] }>;
+  _agentSnapshots: Array<{ id: string } & Partial<Agent>>;
 
   // Hire / Fire agents
   fireAgent: (agentId: string) => void;
@@ -481,20 +481,20 @@ export const useGameStore = create<GameStore>()(
   _agentSnapshots: [],
 
   initAgents: () => {
-    const roles: AgentRole[] = ['ceo', 'pm', 'researcher', 'engineer', 'qa', 'hr', 'sales', 'finance', 'ops'];
     const snapshots = get()._agentSnapshots;
-    const agents = roles.map((role) => {
-      const a = createAgent(role);
-      const snap = snapshots.find((s) => s.role === role);
-      if (snap) {
-        a.performance = snap.performance;
-        a.memory = snap.memory;
-      }
-      return a;
-    });
+    if (snapshots && snapshots.length > 0) {
+      // Restore persisted agents if available
+      const restored = snapshots.map((snap) => {
+        const base = createAgent(snap.role ?? 'engineer');
+        return { ...base, ...snap };
+      });
+      const initialEvent = createGameEvent('system', 'AgentCorp systems initialized. Agent state restored.');
+      set({ agents: restored, events: [initialEvent] });
+      return;
+    }
+    const roles: AgentRole[] = ['ceo', 'pm', 'researcher', 'engineer', 'qa', 'hr', 'sales', 'finance', 'ops'];
+    const agents = roles.map((role) => createAgent(role));
     const initialEvent = createGameEvent('system', 'AgentCorp systems initialized. All agents ready.');
-    // Do NOT reset tasks/deliverableProjects here — persisted values from localStorage are authoritative.
-    // initializePersonalizedOffice resets them explicitly when starting fresh.
     set({ agents, events: [initialEvent] });
   },
 
@@ -1066,12 +1066,23 @@ export const useGameStore = create<GameStore>()(
 }),
     {
       name: 'agentcorp-storage',
-      version: 3,
+      version: 4,
       migrate: (persisted: unknown, fromVersion: number) => {
+        const s = persisted as Record<string, unknown>;
         // v2 → v3: sales/finance/ops agents added — drop stale agent list so initAgents rebuilds it
         if (fromVersion < 3) {
-          const s = persisted as Record<string, unknown>;
           delete s.agents;
+        }
+        // v3 → v4: OAuth moved server-side — scrub any credentials persisted by
+        // older builds so they cannot linger in localStorage.
+        if (fromVersion < 4) {
+          const connectors = s.connectors as
+            | Record<string, Record<string, unknown>>
+            | undefined;
+          if (connectors?.github) connectors.github.token = '';
+          if (connectors?.vercel) connectors.vercel.token = '';
+          if (connectors?.slack) connectors.slack.webhookUrl = '';
+          if (connectors?.ai) connectors.ai.apiKey = '';
         }
         return persisted;
       },
@@ -1081,6 +1092,7 @@ export const useGameStore = create<GameStore>()(
         companyProduct: state.companyProduct,
         developersCount: state.developersCount,
         connectors: state.connectors,
+        orgId: state.orgId,
 
         // Tasks: last 100 by recency, strip executionLogs (largest field)
         tasks: [...state.tasks]
@@ -1094,9 +1106,15 @@ export const useGameStore = create<GameStore>()(
           .slice(0, 20)
           .map((p) => ({ ...p, content: p.content?.slice(0, 8_000) ?? '' })),
 
-        // Agent snapshots: role-indexed, memory trimmed to last 20 entries
+        // Agent snapshots: id-indexed, persist runtime fields so reload doesn't
+        // reset currentTaskId/currentSubTaskId/workStatus/online. Memory trimmed to last 20.
         _agentSnapshots: state.agents.map((a) => ({
+          id: a.id,
           role: a.role,
+          currentTaskId: a.currentTaskId,
+          currentSubTaskId: a.currentSubTaskId,
+          workStatus: a.workStatus,
+          online: a.online,
           performance: a.performance,
           memory: a.memory.slice(-20),
         })),

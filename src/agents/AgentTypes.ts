@@ -58,6 +58,11 @@ export interface SubTask {
   verifyCommand?: string;
   createdAt: number;
   completedAt: number | null;
+  // P0: how many times this slice has been re-queued after a failed validation.
+  // Carried on the subtask so it survives the queue round-trip; the legacy
+  // retryCount on ValidationResult was reset to 0 on every re-enqueue, which
+  // let failed slices retry forever until the build-verify budget escalated.
+  retryCount?: number;
 }
 
 export interface WorkerAssignment {
@@ -315,6 +320,7 @@ export interface AIRequest {
 export type AIResponse = {
   content: string;
   error?: string;
+  toolCalls?: Array<{ name: string; args: Record<string, string>; result: string }>;
 };
 
 export interface StreamEvent {

@@ -422,7 +422,7 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
             }),
           });
           const data = await res.json();
-          item.resolve({ content: data.content || this.getMockResponse(item.request), error: data.error });
+          item.resolve({ content: data.content || this.getMockResponse(item.request), error: data.error, toolCalls: data.toolCalls });
         } catch {
           item.resolve({ content: this.getMockResponse(item.request), error: 'API call failed' });
         }
