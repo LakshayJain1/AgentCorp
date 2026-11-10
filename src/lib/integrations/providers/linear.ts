@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   ProviderError,
+  envCredential,
   type AuthorizeParams,
   type ExchangeParams,
   type OAuthTokens,
@@ -15,13 +16,13 @@ const GRAPHQL_URL = 'https://api.linear.app/graphql';
 const SCOPES = ['read', 'write'];
 
 function clientId(): string {
-  const id = process.env.LINEAR_CLIENT_ID;
+  const id = envCredential('LINEAR_CLIENT_ID');
   if (!id) throw new ProviderError('not_configured', 'LINEAR_CLIENT_ID is not set');
   return id;
 }
 
 function clientSecret(): string {
-  const secret = process.env.LINEAR_CLIENT_SECRET;
+  const secret = envCredential('LINEAR_CLIENT_SECRET');
   if (!secret) throw new ProviderError('not_configured', 'LINEAR_CLIENT_SECRET is not set');
   return secret;
 }

@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   ProviderError,
+  envCredential,
   type AuthorizeParams,
   type ExchangeParams,
   type OAuthTokens,
@@ -14,13 +15,13 @@ const REVOKE_URL = 'https://slack.com/api/auth.revoke';
 const SCOPES = ['chat:write', 'channels:read'];
 
 function clientId(): string {
-  const id = process.env.SLACK_CLIENT_ID;
+  const id = envCredential('SLACK_CLIENT_ID');
   if (!id) throw new ProviderError('not_configured', 'SLACK_CLIENT_ID is not set');
   return id;
 }
 
 function clientSecret(): string {
-  const secret = process.env.SLACK_CLIENT_SECRET;
+  const secret = envCredential('SLACK_CLIENT_SECRET');
   if (!secret) throw new ProviderError('not_configured', 'SLACK_CLIENT_SECRET is not set');
   return secret;
 }
