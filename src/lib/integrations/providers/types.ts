@@ -31,6 +31,20 @@ export class ProviderError extends Error {
   }
 }
 
+/**
+ * Read a credential from the environment, trimming surrounding whitespace.
+ *
+ * Vercel (and any env file) can carry a trailing newline on a value, and a
+ * client id with a trailing CRLF is rejected by GitHub/Linear as unknown.
+ * Stripping here is a cheap, universal defence that also makes local `.env`
+ * edits forgiving.
+ */
+export function envCredential(name: string): string {
+  const raw = process.env[name];
+  if (raw === undefined) return '';
+  return raw.trim();
+}
+
 export interface ProviderAdapter {
   readonly id: ProviderId;
   readonly label: string;

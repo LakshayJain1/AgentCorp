@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   ProviderError,
+  envCredential,
   type AuthorizeParams,
   type ExchangeParams,
   type OAuthTokens,
@@ -14,13 +15,13 @@ const API = 'https://api.github.com';
 const SCOPES = ['repo', 'read:user'];
 
 function clientId(): string {
-  const id = process.env.GITHUB_CLIENT_ID;
+  const id = envCredential('GITHUB_CLIENT_ID');
   if (!id) throw new ProviderError('not_configured', 'GITHUB_CLIENT_ID is not set');
   return id;
 }
 
 function clientSecret(): string {
-  const secret = process.env.GITHUB_CLIENT_SECRET;
+  const secret = envCredential('GITHUB_CLIENT_SECRET');
   if (!secret) throw new ProviderError('not_configured', 'GITHUB_CLIENT_SECRET is not set');
   return secret;
 }
