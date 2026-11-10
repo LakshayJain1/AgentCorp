@@ -422,6 +422,7 @@ interface GameStore {
     github: { connected: boolean; repoUrl: string; token: string; autoCommit: boolean };
     vercel: { connected: boolean; token: string; autoDeploy: boolean };
     slack: { connected: boolean; webhookUrl: string; broadcastEvents: boolean };
+    linear: { connected: boolean; workspaceId: string; workspaceName: string };
     ai: { provider: 'gemini' | 'openrouter'; apiKey: string };
   };
   initializePersonalizedOffice: (
@@ -432,6 +433,7 @@ interface GameStore {
     inviteEmails?: string[]
   ) => void;
   updateConnectors: (connectors: Partial<GameStore['connectors']>) => void;
+  syncOAuthConnections: (connections: Array<{ provider: string; accountId?: string | null }>) => void;
   setAuth0OrgId: (id: string) => void;
   markInvitesSent: () => void;
 }
@@ -467,6 +469,7 @@ export const useGameStore = create<GameStore>()(
     github: { connected: false, repoUrl: '', token: '', autoCommit: false },
     vercel: { connected: false, token: '', autoDeploy: false },
     slack: { connected: false, webhookUrl: '', broadcastEvents: false },
+    linear: { connected: false, workspaceId: '', workspaceName: '' },
     ai: { provider: 'gemini', apiKey: '' },
   },
   selectedAgentId: null,
@@ -1059,9 +1062,41 @@ export const useGameStore = create<GameStore>()(
         ...updates,
       },
     }));
-    
+
     const event = createGameEvent('system', `⚙️ Connected integration settings updated.`);
     get().addEvent(event);
+  },
+
+  /**
+   * Sync OAuth connection status from the server-side integration store
+   * into the game store's `connectors` flags. Called by the Integrations
+   * tab whenever connections change so the orchestrator and IntentClassifier
+   * can see which providers are actually connected.
+   */
+  syncOAuthConnections: (connections: Array<{ provider: string; accountId?: string | null }>) => {
+    const connectedProviders = new Set(connections.map((c) => c.provider));
+    set((state) => {
+      const connectors = { ...state.connectors };
+      const providerMap: Record<string, keyof GameStore['connectors']> = {
+        github: 'github',
+        slack: 'slack',
+        linear: 'linear',
+        vercel: 'vercel',
+      };
+      for (const [provider, key] of Object.entries(providerMap)) {
+        const conn = connectors[key] as Record<string, unknown> | undefined;
+        if (conn) {
+          conn.connected = connectedProviders.has(provider);
+          // Capture the account/workspace identity when available.
+          const account = connections.find((c) => c.provider === provider)?.accountId;
+          if (account && typeof account === 'string') {
+            if (key === 'github') conn.repoUrl = account;
+            if (key === 'linear') { conn.workspaceId = account; conn.workspaceName = account; }
+          }
+        }
+      }
+      return { connectors };
+    });
   },
 }),
     {

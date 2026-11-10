@@ -91,6 +91,52 @@ async function linearCreateIssue(token: string, args: Record<string, string>): P
   return `created ${issue.identifier ?? 'issue'} ${issue.url ?? ''}`.trim();
 }
 
+async function vercelListDeployments(token: string, args: Record<string, string>): Promise<string> {
+  const projectId = args.projectId?.trim();
+  const limit = args.limit?.trim() || '5';
+  const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const url = `https://api.vercel.com/v6/deployments${query}&limit=${encodeURIComponent(limit)}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
+  });
+  const json = (await res.json().catch(() => null)) as
+    | { deployments?: Array<{ name?: string; url?: string; state?: string; createdAt?: number }> }
+    | null;
+  if (!res.ok) {
+    throw new Error(`Vercel rejected the request (${res.status})`);
+  }
+  const list = json?.deployments ?? [];
+  if (list.length === 0) return 'No deployments found.';
+  return list
+    .map(
+      (d, i) =>
+        `${i + 1}. ${d.name ?? 'unknown'} — ${d.url ?? 'no url'} [${d.state ?? 'unknown'}] ${d.createdAt ? new Date(d.createdAt).toLocaleString() : ''}`,
+    )
+    .join('\n');
+}
+
+async function vercelGetUser(token: string): Promise<string> {
+  const res = await fetch('https://api.vercel.com/v2/user', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
+  });
+  const json = (await res.json().catch(() => null)) as
+    | { user?: { username?: string; email?: string; name?: string } }
+    | null;
+  if (!res.ok) {
+    throw new Error(`Vercel rejected the request (${res.status})`);
+  }
+  const u = json?.user;
+  return `Vercel user: ${u?.username ?? u?.email ?? 'unknown'} (${u?.name ?? 'no name'})`;
+}
+
 const TOOLS: ServerTool[] = [
   {
     name: 'slack_post_message',
@@ -105,6 +151,20 @@ const TOOLS: ServerTool[] = [
     description: 'Create a Linear issue in a team.',
     parameters: { teamId: 'string', title: 'string', description: 'string (optional)' },
     run: linearCreateIssue,
+  },
+  {
+    name: 'vercel_list_deployments',
+    provider: 'vercel',
+    description: 'List recent deployments, optionally filtered by project ID.',
+    parameters: { projectId: 'string (optional)', limit: 'string (optional, default 5)' },
+    run: vercelListDeployments,
+  },
+  {
+    name: 'vercel_get_user',
+    provider: 'vercel',
+    description: 'Return the authenticated Vercel account username and email.',
+    parameters: {},
+    run: vercelGetUser,
   },
 ];
 

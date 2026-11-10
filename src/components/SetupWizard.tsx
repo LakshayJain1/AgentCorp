@@ -33,20 +33,13 @@ export default function SetupWizard() {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
   const [ghConnected, setGhConnected] = useState(true);
-  const [ghRepo, setGhRepo] = useState('https://github.com/agentcorp/workspace');
-  const [ghToken, setGhToken] = useState('ghp_mocktoken1234567890abcdef');
   const [ghCommit, setGhCommit] = useState(true);
 
   const [vConnected, setVConnected] = useState(true);
-  const [vToken, setVToken] = useState('ver_mocktoken1234567890abcdef');
   const [vDeploy, setVDeploy] = useState(true);
 
   const [sConnected, setSConnected] = useState(false);
-  const [sUrl, setSUrl] = useState('');
   const [sBroadcast, setSBroadcast] = useState(true);
-
-  const [aiProvider, setAiProvider] = useState<'gemini' | 'openrouter'>('gemini');
-  const [aiKey, setAiKey] = useState('');
 
   const [inviteEmails, setInviteEmails] = useState<[string, string, string]>(['', '', '']);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -112,17 +105,11 @@ export default function SetupWizard() {
           setCompanyProduct(state.companyProduct);
           setDevCount(state.devCount);
           setGhConnected(state.ghConnected ?? true);
-          setGhRepo(state.ghRepo ?? '');
-          setGhToken(state.ghToken ?? '');
           setGhCommit(state.ghCommit ?? true);
           setVConnected(state.vConnected ?? true);
-          setVToken(state.vToken ?? '');
           setVDeploy(state.vDeploy ?? true);
           setSConnected(state.sConnected ?? false);
-          setSUrl(state.sUrl ?? '');
           setSBroadcast(state.sBroadcast ?? true);
-          setAiProvider(state.aiProvider ?? 'gemini');
-          setAiKey(state.aiKey ?? '');
         } catch {
           sessionStorage.removeItem('wizardState');
           setStep(2);
@@ -151,17 +138,11 @@ export default function SetupWizard() {
         setCompanyProduct(state.companyProduct);
         setDevCount(state.devCount);
         setGhConnected(state.ghConnected ?? true);
-        setGhRepo(state.ghRepo ?? '');
-        setGhToken(state.ghToken ?? '');
         setGhCommit(state.ghCommit ?? true);
         setVConnected(state.vConnected ?? true);
-        setVToken(state.vToken ?? '');
         setVDeploy(state.vDeploy ?? true);
         setSConnected(state.sConnected ?? false);
-        setSUrl(state.sUrl ?? '');
         setSBroadcast(state.sBroadcast ?? true);
-        setAiProvider(state.aiProvider ?? 'gemini');
-        setAiKey(state.aiKey ?? '');
       } catch {
         sessionStorage.removeItem('wizardState');
       }
@@ -181,16 +162,14 @@ export default function SetupWizard() {
     if (step >= 5) return;
     sessionStorage.setItem('wizardState', JSON.stringify({
       step, companyName, companyProduct, devCount,
-      ghConnected, ghRepo, ghToken, ghCommit,
-      vConnected, vToken, vDeploy,
-      sConnected, sUrl, sBroadcast,
-      aiProvider, aiKey,
+      ghConnected, ghCommit,
+      vConnected, vDeploy,
+      sConnected, sBroadcast,
     }));
   }, [step, companyName, companyProduct, devCount,
-      ghConnected, ghRepo, ghToken, ghCommit,
-      vConnected, vToken, vDeploy,
-      sConnected, sUrl, sBroadcast,
-      aiProvider, aiKey, isRestoring]);
+      ghConnected, ghCommit,
+      vConnected, vDeploy,
+      sConnected, sBroadcast, isRestoring]);
 
   const handlePaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -254,10 +233,11 @@ export default function SetupWizard() {
 
     // 4. Initialize the in-memory game store.
     initializePersonalizedOffice(companyName, companyProduct, devCount, {
-      github: { connected: ghConnected, repoUrl: ghRepo, token: ghToken, autoCommit: ghCommit },
-      vercel: { connected: vConnected, token: vToken, autoDeploy: vDeploy },
-      slack: { connected: sConnected, webhookUrl: sUrl, broadcastEvents: sBroadcast },
-      ai: { provider: aiProvider, apiKey: aiKey },
+      github: { connected: ghConnected, repoUrl: '', token: '', autoCommit: ghCommit },
+      vercel: { connected: vConnected, token: '', autoDeploy: vDeploy },
+      slack: { connected: sConnected, webhookUrl: '', broadcastEvents: sBroadcast },
+      linear: { connected: false, workspaceId: '', workspaceName: '' },
+      ai: { provider: 'gemini', apiKey: '' },
     }, inviteEmails.filter(Boolean));
 
     // 5. Explicitly navigate to /workspace — don't rely on the useEffect in onboard/page.tsx
@@ -830,9 +810,10 @@ export default function SetupWizard() {
                     </label>
                   </div>
                   {ghConnected && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 pt-2 border-t border-navy/5">
-                      <input type="text" placeholder="Repository URL (e.g. https://github.com/user/repo)" value={ghRepo} onChange={(e) => setGhRepo(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none focus:border-ocean-400/60" />
-                      <input type="password" placeholder="Personal Access Token (ghp_...)" value={ghToken} onChange={(e) => setGhToken(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none focus:border-ocean-400/60" />
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-2 border-t border-navy/5">
+                      <p className="text-[10px] text-navy/45 leading-relaxed">
+                        Connect GitHub with OAuth from the Integrations panel after setup. No personal access token is entered here.
+                      </p>
                     </motion.div>
                   )}
                 </div>
@@ -849,8 +830,10 @@ export default function SetupWizard() {
                     </label>
                   </div>
                   {vConnected && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 pt-2 border-t border-navy/5">
-                      <input type="password" placeholder="Vercel API Access Token (ver_...)" value={vToken} onChange={(e) => setVToken(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none focus:border-ocean-400/60" />
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-2 border-t border-navy/5">
+                      <p className="text-[10px] text-navy/45 leading-relaxed">
+                        Vercel deploys connect from the Integrations panel. Nothing is stored in your browser.
+                      </p>
                     </motion.div>
                   )}
                 </div>
@@ -867,8 +850,10 @@ export default function SetupWizard() {
                     </label>
                   </div>
                   {sConnected && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 pt-2 border-t border-navy/5">
-                      <input type="text" placeholder="Incoming Webhook URL (https://hooks.slack.com/...)" value={sUrl} onChange={(e) => setSUrl(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none focus:border-amber-400/50" />
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-2 border-t border-navy/5">
+                      <p className="text-[10px] text-navy/45 leading-relaxed">
+                        Connect Slack with OAuth from the Integrations panel after setup — no webhook URL needed.
+                      </p>
                     </motion.div>
                   )}
                 </div>
@@ -881,23 +866,9 @@ export default function SetupWizard() {
                     </div>
                     <span className="text-[10px] text-navy/40 uppercase">OPTIONAL</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <select
-                      value={aiProvider}
-                      onChange={(e) => setAiProvider(e.target.value as 'gemini' | 'openrouter')}
-                      className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none col-span-1"
-                    >
-                      <option value="gemini">Gemini API</option>
-                      <option value="openrouter">OpenRouter</option>
-                    </select>
-                    <input
-                      type="password"
-                      placeholder="Enter API Key to override default"
-                      value={aiKey}
-                      onChange={(e) => setAiKey(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-white border border-navy/10 rounded-lg text-navy text-xs outline-none focus:border-ocean-400/60 col-span-2"
-                    />
-                  </div>
+                  <p className="text-[10px] text-navy/45 leading-relaxed">
+                    AI runs on the server-configured key. Desktop users can add a BYOK key in Settings; no key is stored in the browser.
+                  </p>
                 </div>
               </div>
 

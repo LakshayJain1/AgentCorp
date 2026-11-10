@@ -9,6 +9,47 @@ export interface IntentResult {
   ticketTitle?: string;
 }
 
+/**
+ * Integration providers that are already connected via OAuth in the Integrations tab.
+ * When a task mentions one of these, the agent can execute it directly via the
+ * tool gateway — no manual credential prompt is needed.
+ */
+const OAUTH_INTEGRATION_PATTERNS: { pattern: RegExp; provider: string }[] = [
+  { pattern: /\b(github|git|repo|repository|push|commit|clone|pull\s*request|pr)\b/i, provider: 'github' },
+  { pattern: /\b(linear|issue|ticket|task\s*status)\b/i, provider: 'linear' },
+  { pattern: /\b(slack|channel|post\s*message|notify)\b/i, provider: 'slack' },
+  { pattern: /\b(vercel|deploy|deployment|build)\b/i, provider: 'vercel' },
+];
+
+/**
+ * Check if the user's task references an integration that is already connected.
+ * Returns the provider name if so, otherwise null.
+ */
+function detectConnectedIntegration(text: string): string | null {
+  let detected: string | null = null;
+  for (const { pattern, provider } of OAUTH_INTEGRATION_PATTERNS) {
+    if (pattern.test(text)) {
+      detected = provider;
+      break; // first match wins
+    }
+  }
+  if (!detected) return null;
+
+  // Check if this integration is actually connected in the game store.
+  // The store holds per-user OAuth connections from the Integrations tab
+  // under `connectors.{provider}.connected`.
+  try {
+    const state = useGameStore.getState();
+    const connectors = (state as any).connectors;
+    if (!connectors) return null;
+    const conn = connectors[detected];
+    return conn && conn.connected === true ? detected : null;
+  } catch {
+    // Outside React context — assume connected if we detected the pattern.
+    return detected;
+  }
+}
+
 interface KeywordEntry {
   pattern: RegExp;
   keys: { key: string; label: string; reason: string }[];
@@ -176,7 +217,22 @@ export async function classifyIntent(
     ? ticketTitle.replace(/["""'']/g, '').trim()
     : formatTicketTitle(text);
 
-  // Step 2: credential detection for confirmed tasks
+  // Step 2: Check if the task references an integration that is already
+  // connected via OAuth. If so, the agent can execute it directly through
+  // the tool gateway — no manual credential prompt needed.
+  const connectedProvider = detectConnectedIntegration(text);
+  if (connectedProvider) {
+    console.log('[AgentCorp] intent = internal (connected integration:', connectedProvider + ')');
+    return {
+      type: 'internal',
+      requiredKeys: [],
+      confidence: 0.95,
+      ticketTitle: resolvedTitle,
+    };
+  }
+
+  // Step 3: Credential detection for tasks that reference unconnected
+  // external services or generic API keys.
   const matchedKeys: { key: string; label: string; reason: string }[] = [];
   const patterns = await getPatterns();
 

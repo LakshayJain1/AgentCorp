@@ -22,17 +22,18 @@ import {
   Lock,
   Unplug,
 } from 'lucide-react';
+import { useGameStore } from '@/store/gameStore';
 import type { UseIntegrations } from '@/hooks/useIntegrations';
 
 interface OAuthConnectorDef {
-  id: 'github' | 'slack' | 'linear';
+  id: 'github' | 'slack' | 'linear' | 'vercel';
   label: string;
   desc: string;
   icon: ReactNode;
   color: string;
   accent: string;
   scopes: string;
-  configuredKey: 'githubOAuthConfigured' | 'slackOAuthConfigured' | 'linearOAuthConfigured';
+  configuredKey: 'githubOAuthConfigured' | 'slackOAuthConfigured' | 'linearOAuthConfigured' | 'vercelOAuthConfigured';
 }
 
 const OAUTH_CONNECTORS: OAuthConnectorDef[] = [
@@ -66,10 +67,19 @@ const OAUTH_CONNECTORS: OAuthConnectorDef[] = [
     scopes: 'read · write',
     configuredKey: 'linearOAuthConfigured',
   },
+  {
+    id: 'vercel',
+    label: 'Vercel',
+    desc: 'View deployments, check project status, and trigger builds.',
+    icon: <Cloud size={15} />,
+    color: 'hover:border-slate-400',
+    accent: 'bg-slate-50 text-slate-700',
+    scopes: 'read · write · deploy',
+    configuredKey: 'vercelOAuthConfigured',
+  },
 ];
 
 const COMING_SOON = [
-  { id: 'vercel', label: 'Vercel', icon: <Cloud size={15} /> },
   { id: 'notion', label: 'Notion', icon: <Globe size={15} /> },
   { id: 'supabase', label: 'Supabase', icon: <Database size={15} /> },
   { id: 'railway', label: 'Railway', icon: <RefreshCw size={15} /> },
@@ -81,6 +91,7 @@ interface PlatformStatus {
   githubOAuthConfigured: boolean;
   slackOAuthConfigured: boolean;
   linearOAuthConfigured: boolean;
+  vercelOAuthConfigured: boolean;
   integrationStorageConfigured: boolean;
   aiConfigured: boolean;
   needed: string[];
@@ -111,6 +122,15 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
       cancelled = true;
     };
   }, []);
+
+  // Sync OAuth connection status into the game store so the orchestrator
+  // and IntentClassifier can see which providers are actually connected.
+  // This is what allows agents to execute integration tasks directly
+  // without being blocked by a credential prompt.
+  useEffect(() => {
+    const { syncOAuthConnections } = useGameStore.getState();
+    syncOAuthConnections(integrations.connections);
+  }, [integrations.connections]);
 
   // The OAuth callback returns to /workspace?integration=…&provider=…&reason=…
   // Surface the outcome once, then strip the params so a reload cannot replay it.

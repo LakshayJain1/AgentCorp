@@ -3,6 +3,7 @@ import 'server-only';
 import { githubProvider } from './providers/github';
 import { linearProvider } from './providers/linear';
 import { slackProvider } from './providers/slack';
+import { vercelProvider } from './providers/vercel';
 import type { ProviderAdapter, ProviderId } from './providers/types';
 
 /**
@@ -13,6 +14,7 @@ const ADAPTERS: Partial<Record<ProviderId, ProviderAdapter>> = {
   github: githubProvider,
   slack: slackProvider,
   linear: linearProvider,
+  vercel: vercelProvider,
 };
 
 export function getProvider(id: string): ProviderAdapter | null {
