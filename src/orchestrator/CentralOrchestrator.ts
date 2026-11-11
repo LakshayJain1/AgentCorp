@@ -117,7 +117,21 @@ export class CentralOrchestrator {
         const mentionIntent = await classifyIntent(messageText, history);
         const canExecute = mentionedAgent.workerRole !== null; // ceo/pm/hr cannot execute
 
-        if (mentionIntent.type !== 'chat' && mentionIntent.type !== 'needs_credentials') {
+        if (mentionIntent.type === 'action') {
+          // ── ACTION intent — invoke tool directly, no deliverable pipeline ──
+          const ackPrompt = `The user asked you directly: "${messageText}". You are about to execute this action using your integration tools. Respond briefly in character as ${mentionedAgent.name} confirming you're on it. One sentence.`;
+          const ackReply = await aiService.askAgent(mentionedAgent.role, mentionedAgent.name, traits, ackPrompt);
+          store.sendMessage(mentionedAgent.id, mentionedAgent.id, ackReply.content || `On it!`);
+          this.executeActionDirect(messageText, mentionedAgent.id).catch((err) =>
+            console.error('[AgentCorp] executeActionDirect (@mention) failed:', err),
+          );
+          this.emit({
+            type: 'log',
+            data: { message: `@mention action: "${mentionedAgent.name}" executing via tool gateway.` },
+            timestamp: Date.now(),
+            streamId: `mention_${Date.now()}`,
+          });
+        } else if (mentionIntent.type !== 'chat' && mentionIntent.type !== 'needs_credentials') {
           // ── TASK intent ───────────────────────────────────────────────────
           if (canExecute) {
             // Agent can do this work — create task and force it to them
@@ -230,6 +244,24 @@ export class CentralOrchestrator {
         message: `Triaging ticket: "${ticketTitle}" (${intent.type})`,
         timestamp: Date.now(),
       });
+    }
+
+    if (intent.type === 'action') {
+      const opsAgent = store.agents.find((a) => a.role === 'ops' && a.online)
+        ?? store.agents.find((a) => a.workerRole !== null && a.online);
+      if (opsAgent) {
+        store.sendMessage(opsAgent.id, opsAgent.id, `On it — executing your request now.`);
+      }
+      this.emit({
+        type: 'log',
+        data: { message: `Action request detected — executing directly via tool gateway.` },
+        timestamp: Date.now(),
+        streamId: `action_${Date.now()}`,
+      });
+      this.executeActionDirect(request, opsAgent?.id).catch((err) =>
+        console.error('[AgentCorp] executeActionDirect failed:', err),
+      );
+      return;
     }
 
     if (intent.type === 'needs_credentials') {
@@ -620,6 +652,67 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
       `Sprint kicked off! ${sprintTasks.length} tasks queued: ${sprintTasks.map((t) => `"${t.slice(0, 28)}"`).join(', ')}. Team is on it 🚀`,
       'communicating',
     );
+  }
+
+  /**
+   * Execute a direct integration action (create ticket, post message, etc.)
+   * using the agent's tool-calling capability — bypasses the deliverable pipeline.
+   */
+  private async executeActionDirect(description: string, agentId?: string): Promise<void> {
+    const store = useGameStore.getState();
+    const agent = agentId
+      ? store.agents.find((a) => a.id === agentId)
+      : store.agents.find((a) => a.role === 'ops' && a.online)
+        ?? store.agents.find((a) => a.workerRole !== null && a.online)
+        ?? store.agents.find((a) => a.workerRole !== null);
+    if (!agent) return;
+
+    store.updateAgent(agent.id, { fsmState: 'thinking' });
+    store.pushAgentActivity(agent.id, {
+      id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      agentId: agent.id,
+      type: 'thinking',
+      message: `Executing: ${description.slice(0, 80)}`,
+      timestamp: Date.now(),
+    });
+
+    try {
+      const systemPrompt = `You are ${agent.name}, an AI agent at AgentCorp with access to integration tools.\nThe user has asked you to perform an action. Use your tools to do it immediately.\nAfter completing it, reply with a brief confirmation including specific details (ticket URL, message timestamp, etc.).\nDo not describe what you plan to do — just do it.`;
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemPrompt, prompt: description }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        content?: string | null;
+        toolCalls?: { name: string; args: Record<string, string>; result: string }[];
+        error?: string;
+      } | null;
+
+      const toolCalls = data?.toolCalls ?? [];
+      const reply = data?.content
+        || (toolCalls.length > 0 ? `Done. ${toolCalls.map((t) => t.result).join(' ')}` : 'Could not complete the action — check your integrations are connected.');
+
+      store.sendMessage(agent.id, agent.id, reply);
+      this.reportToolCalls(agent.id, toolCalls);
+      store.updateAgent(agent.id, { fsmState: 'completed' });
+      store.pushAgentActivity(agent.id, {
+        id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        agentId: agent.id,
+        type: 'communicating',
+        message: reply.slice(0, 120),
+        timestamp: Date.now(),
+      });
+    } catch (err) {
+      store.updateAgent(agent.id, { fsmState: 'blocked' });
+      store.pushAgentActivity(agent.id, {
+        id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        agentId: agent.id,
+        type: 'blocked',
+        message: `Action failed: ${err instanceof Error ? err.message : String(err)}`,
+        timestamp: Date.now(),
+      });
+    }
   }
 
   /**

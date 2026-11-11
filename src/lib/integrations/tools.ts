@@ -50,8 +50,34 @@ async function slackPostMessage(token: string, args: Record<string, string>): Pr
   return `posted to ${json.channel ?? args.channel} (ts=${json.ts ?? 'unknown'})`;
 }
 
+async function linearListTeams(token: string): Promise<string> {
+  const res = await fetch('https://api.linear.app/graphql', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: `{ teams { nodes { id name key } } }` }),
+    cache: 'no-store',
+  });
+  const json = (await res.json().catch(() => null)) as
+    | { data?: { teams?: { nodes?: { id: string; name: string; key: string }[] } }; errors?: { message?: string }[] }
+    | null;
+  if (!res.ok || json?.errors?.length) {
+    throw new Error(`Linear team fetch failed (${json?.errors?.[0]?.message ?? res.status})`);
+  }
+  const teams = json?.data?.teams?.nodes ?? [];
+  if (teams.length === 0) return 'No Linear teams found.';
+  return teams.map((t) => `${t.name} — id: ${t.id} (key: ${t.key})`).join('\n');
+}
+
 async function linearCreateIssue(token: string, args: Record<string, string>): Promise<string> {
-  assertParams(args, 'teamId', 'title');
+  assertParams(args, 'title');
+  // If teamId not provided, auto-pick the first team
+  let teamId = args.teamId?.trim();
+  if (!teamId) {
+    const teamsText = await linearListTeams(token);
+    const match = teamsText.match(/id:\s*([a-f0-9-]{36})/i);
+    if (!match) throw new ToolInputError('No Linear teams found — connect a workspace first.');
+    teamId = match[1];
+  }
   const res = await fetch('https://api.linear.app/graphql', {
     method: 'POST',
     headers: {
@@ -67,7 +93,7 @@ async function linearCreateIssue(token: string, args: Record<string, string>): P
       }`,
       variables: {
         input: {
-          teamId: args.teamId,
+          teamId,
           title: args.title,
           ...(args.description ? { description: args.description } : {}),
         },
@@ -146,10 +172,17 @@ const TOOLS: ServerTool[] = [
     run: slackPostMessage,
   },
   {
+    name: 'linear_list_teams',
+    provider: 'linear',
+    description: 'List all Linear teams in the connected workspace, returning each team name and id.',
+    parameters: {},
+    run: linearListTeams,
+  },
+  {
     name: 'linear_create_issue',
     provider: 'linear',
-    description: 'Create a Linear issue in a team.',
-    parameters: { teamId: 'string', title: 'string', description: 'string (optional)' },
+    description: 'Create a Linear issue. Call linear_list_teams first if you do not know the teamId — or omit teamId to auto-pick the first team.',
+    parameters: { title: 'string', description: 'string (optional)', teamId: 'string (optional — auto-picked if omitted)' },
     run: linearCreateIssue,
   },
   {

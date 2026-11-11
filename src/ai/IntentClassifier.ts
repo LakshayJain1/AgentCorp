@@ -2,7 +2,7 @@ import { configLoader } from '@/config/ConfigLoader';
 import { useGameStore } from '@/store/gameStore';
 
 export interface IntentResult {
-  type: 'internal' | 'needs_credentials' | 'chat';
+  type: 'internal' | 'needs_credentials' | 'chat' | 'action';
   requiredKeys: { key: string; label: string; reason: string }[];
   confidence: number;
   chatReply?: string;
@@ -20,6 +20,14 @@ const OAUTH_INTEGRATION_PATTERNS: { pattern: RegExp; provider: string }[] = [
   { pattern: /\b(slack|channel|post\s*message|notify)\b/i, provider: 'slack' },
   { pattern: /\b(vercel|deploy|deployment|build)\b/i, provider: 'vercel' },
 ];
+
+// Patterns that indicate the user wants to directly INVOKE a tool action
+// (create/post/send) rather than build something that uses an integration.
+const ACTION_PATTERNS = /\b(create\s+(a\s+)?(ticket|issue|bug|task|card)|open\s+(a\s+)?(ticket|issue|bug)|file\s+(a\s+)?(bug|ticket|issue)|post\s+(a\s+)?message|send\s+(a\s+)?(message|notification|alert)|notify\s+(via|on|in|the\s+)?slack|log\s+(a\s+)?(ticket|issue|bug)|add\s+(a\s+)?(ticket|issue|task|card))\b/i;
+
+function isActionRequest(text: string): boolean {
+  return ACTION_PATTERNS.test(text);
+}
 
 /**
  * Check if the user's task references an integration that is already connected.
@@ -222,6 +230,15 @@ export async function classifyIntent(
   // the tool gateway — no manual credential prompt needed.
   const connectedProvider = detectConnectedIntegration(text);
   if (connectedProvider) {
+    if (isActionRequest(text)) {
+      console.log('[AgentCorp] intent = action (connected integration:', connectedProvider + ')');
+      return {
+        type: 'action',
+        requiredKeys: [],
+        confidence: 0.95,
+        ticketTitle: resolvedTitle,
+      };
+    }
     console.log('[AgentCorp] intent = internal (connected integration:', connectedProvider + ')');
     return {
       type: 'internal',
