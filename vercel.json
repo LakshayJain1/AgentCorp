@@ -1,4 +1,4 @@
 {
-  "installCommand": "pnpm install --node-linker=hoisted",
+  "installCommand": "pnpm install",
   "buildCommand": "pnpm run build"
 }
