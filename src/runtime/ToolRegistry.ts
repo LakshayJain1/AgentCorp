@@ -73,6 +73,59 @@ class ToolRegistry {
     if (detectExecutorEnv() === 'desktop') {
       this.registerDesktopTools();
     }
+
+    this.registerServerProviderTools();
+  }
+
+  // Provider tools run server-side through /api/tools/execute, where the
+  // caller's OAuth token is decrypted. The browser only sends the arguments.
+  private registerServerProviderTools(): void {
+    const serverTools: Array<{
+      name: string;
+      description: string;
+      parameters: Record<string, string>;
+    }> = [
+      {
+        name: 'slack_post_message',
+        description: 'Post a message to a connected Slack channel as the workspace bot.',
+        parameters: { channel: 'string', text: 'string' },
+      },
+      {
+        name: 'linear_create_issue',
+        description: 'Create an issue in a connected Linear team.',
+        parameters: { teamId: 'string', title: 'string', description: 'string (optional)' },
+      },
+    ];
+
+    for (const def of serverTools) {
+      this.register({
+        definition: def,
+        execute: async (params) => {
+          const start = performance.now();
+          try {
+            const res = await fetch('/api/tools/execute', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tool: def.name, params }),
+            });
+            const data = (await res.json().catch(() => null)) as
+              | { success?: boolean; output?: string; error?: string }
+              | null;
+            if (!res.ok || !data?.success) {
+              return {
+                success: false,
+                output: '',
+                error: data?.error ?? `${def.name} failed (${res.status})`,
+                duration: performance.now() - start,
+              };
+            }
+            return { success: true, output: data.output ?? '', duration: performance.now() - start };
+          } catch (e) {
+            return { success: false, output: '', error: String(e), duration: performance.now() - start };
+          }
+        },
+      });
+    }
   }
 
   private registerDesktopTools(): void {

@@ -1,19 +1,11 @@
-// Server-only GitHub client. Uses GITHUB_DEV_TOKEN from server env —
-// NEVER import this from client components. Token never leaves the server.
+// Server-only GitHub client. The caller passes a per-user OAuth token that was
+// decrypted from the integration store — this module never reads env secrets
+// and must NEVER be imported from client components.
 const API = 'https://api.github.com';
 
-function devToken(): string | null {
-  return process.env.GITHUB_DEV_TOKEN || null;
-}
-
-export function githubUnconfiguredReason(): string | null {
-  if (!devToken()) return 'GITHUB_DEV_TOKEN is not set (server env). Save a fine-grained PAT and retry.';
-  return null;
-}
-
-function headers(): Record<string, string> {
+function headers(token: string): Record<string, string> {
   return {
-    Authorization: `Bearer ${devToken()}`,
+    Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
   };
@@ -36,18 +28,17 @@ export function isPathAllowed(path: string): boolean {
 }
 
 export async function readRepoFile(
+  token: string,
   repoInput: string,
   path: string,
   ref?: string,
 ): Promise<{ content: string; sha: string } | { error: string; status: number }> {
-  const unconf = githubUnconfiguredReason();
-  if (unconf) return { error: unconf, status: 503 };
   const parsed = parseRepo(repoInput);
   if (!parsed) return { error: `invalid repo '${repoInput}' (want owner/name or github url)`, status: 400 };
   if (!isPathAllowed(path)) return { error: `denied path '${path}'`, status: 403 };
   const clean = path.replace(/^\/+/, '');
   const url = `${API}/repos/${parsed.owner}/${parsed.repo}/contents/${clean}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`;
-  const r = await fetch(url, { headers: headers() });
+  const r = await fetch(url, { headers: headers(token), cache: 'no-store' });
   if (!r.ok) {
     const body = await r.text().catch(() => '');
     return { error: `github read failed (${r.status}): ${body.slice(0, 300)}`, status: r.status };
@@ -62,16 +53,15 @@ export async function readRepoFile(
 
 // P4: idempotent per-task branch. Returns existing branch info if already present.
 export async function ensureBranch(
+  token: string,
   repoInput: string,
   branch: string,
   base = 'main',
 ): Promise<{ branch: string; created: boolean } | { error: string; status: number }> {
-  const token = devToken();
-  if (!token) return { error: 'GITHUB_DEV_TOKEN is not set (server env).', status: 503 };
   const parsed = parseRepo(repoInput);
   if (!parsed) return { error: `invalid repo '${repoInput}'`, status: 400 };
   if (!/^agentcorp\/[A-Za-z0-9_.-]+$/.test(branch)) return { error: `denied branch '${branch}'`, status: 403 };
-  const h = headers();
+  const h = headers(token);
   const { owner, repo } = parsed;
   const exists = await fetch(`${API}/repos/${owner}/${repo}/git/ref/heads/${branch.replace('agentcorp/', 'agentcorp%2F')}`, { headers: h });
   // GitHub ref API: branch names with slashes must be matched fully; fall back to listing
@@ -95,20 +85,19 @@ export async function ensureBranch(
 }
 
 export async function proposeRepoFile(
+  token: string,
   repoInput: string,
   path: string,
   content: string,
   message: string,
   base = 'main',
 ): Promise<{ branch: string; prUrl: string | null } | { error: string; status: number }> {
-  const unconf = githubUnconfiguredReason();
-  if (unconf) return { error: unconf, status: 503 };
   const parsed = parseRepo(repoInput);
   if (!parsed) return { error: `invalid repo '${repoInput}'`, status: 400 };
   if (!isPathAllowed(path)) return { error: `denied path '${path}'`, status: 403 };
   if (!message.trim()) return { error: 'commit message required', status: 400 };
   const { owner, repo } = parsed;
-  const h = headers();
+  const h = headers(token);
   const clean = path.replace(/^\/+/, '');
 
   // 1. base ref sha

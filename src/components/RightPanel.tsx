@@ -9,6 +9,7 @@ import {
   LayoutDashboard, Plug, PackageOpen, CalendarDays
 } from 'lucide-react';
 import ConnectorsTab from '@/components/ConnectorsTab';
+import { useIntegrations } from '@/hooks/useIntegrations';
 import { centralOrchestrator } from '@/orchestrator/CentralOrchestrator';
 
 export default function RightPanel() {
@@ -131,10 +132,8 @@ export default function RightPanel() {
     }
   };
 
-  const connectors = useGameStore((s) => s.connectors);
-  const connectedCount = Object.values(connectors).filter(
-    (c) => c && 'connected' in c && (c as { connected: boolean }).connected
-  ).length;
+  const integrations = useIntegrations();
+  const connectedCount = integrations.connections.length;
 
   return (
     <div className="w-full lg:w-1/4 shrink-0 h-full min-h-0 flex flex-col glass-panel bg-[#FAFBFD]/30 border-l">
@@ -173,7 +172,7 @@ export default function RightPanel() {
       {/* Integrations tab */}
       {activeTab === 'integrations' && (
         <div className="flex-1 overflow-y-auto p-4 glass-scrollbar">
-          <ConnectorsTab />
+          <ConnectorsTab integrations={integrations} />
         </div>
       )}
 

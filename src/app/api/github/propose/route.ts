@@ -1,9 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { proposeRepoFile } from '@/connectors/GitHubClient';
+import { requireIntegration } from '@/lib/integrations/require';
+
+export const runtime = 'nodejs';
 
 // POST /api/github/propose { repo, path, content, message, base? }
-// Creates branch + commit + PR on the USER's repo. Token stays server-side.
+// Creates branch + commit + PR on the caller's repo with their stored token.
 export async function POST(req: NextRequest) {
+  const ctx = await requireIntegration('github');
+  if (!ctx.ok) return ctx.response;
+
   const body = (await req.json().catch(() => null)) as {
     repo?: string;
     path?: string;
@@ -20,7 +26,15 @@ export async function POST(req: NextRequest) {
   if (body.content.length > 500_000) {
     return NextResponse.json({ success: false, error: 'content too large (500kb max)' }, { status: 413 });
   }
-  const out = await proposeRepoFile(body.repo, body.path, body.content, body.message, body.base ?? 'main');
+
+  const out = await proposeRepoFile(
+    ctx.token,
+    body.repo,
+    body.path,
+    body.content,
+    body.message,
+    body.base ?? 'main',
+  );
   if ('error' in out) {
     return NextResponse.json({ success: false, error: out.error }, { status: out.status });
   }

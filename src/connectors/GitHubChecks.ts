@@ -1,6 +1,5 @@
-// Server-only CI checks reader. Uses GITHUB_DEV_TOKEN from server env —
-// NEVER import from client components. Summarizes GitHub check-runs for a ref
-// (branch, sha, or PR head) into a deterministic pass/fail/pending verdict.
+// Server-only CI checks reader. The caller supplies a per-user OAuth token
+// decrypted from the integration store. NEVER import from client components.
 import { parseRepo } from './GitHubClient';
 
 const API = 'https://api.github.com';
@@ -16,27 +15,25 @@ export interface RepoChecksSummary {
   details: string[];
 }
 
-function headers(): Record<string, string> {
+function headers(token: string): Record<string, string> {
   return {
-    Authorization: `Bearer ${process.env.GITHUB_DEV_TOKEN}`,
+    Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
   };
 }
 
 export async function getRepoChecks(
+  token: string,
   repoInput: string,
   ref: string,
 ): Promise<RepoChecksSummary | { error: string; status: number }> {
-  if (!process.env.GITHUB_DEV_TOKEN) {
-    return { error: 'GITHUB_DEV_TOKEN is not set (server env).', status: 503 };
-  }
   const parsed = parseRepo(repoInput);
   if (!parsed) return { error: `invalid repo '${repoInput}'`, status: 400 };
   if (!ref.trim() || ref.includes('..')) return { error: `invalid ref '${ref}'`, status: 400 };
 
   const url = `${API}/repos/${parsed.owner}/${parsed.repo}/commits/${encodeURIComponent(ref)}/check-runs?per_page=50`;
-  const r = await fetch(url, { headers: headers() });
+  const r = await fetch(url, { headers: headers(token) });
   if (!r.ok) {
     const body = await r.text().catch(() => '');
     return { error: `checks read failed (${r.status}): ${body.slice(0, 200)}`, status: r.status };
