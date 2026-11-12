@@ -23,7 +23,8 @@ const OAUTH_INTEGRATION_PATTERNS: { pattern: RegExp; provider: string }[] = [
 
 // Patterns that indicate the user wants to directly INVOKE a tool action
 // (create/post/send) rather than build something that uses an integration.
-const ACTION_PATTERNS = /\b(create\s+(a\s+)?(ticket|issue|bug|task|card)|open\s+(a\s+)?(ticket|issue|bug)|file\s+(a\s+)?(bug|ticket|issue)|post\s+(a\s+)?message|send\s+(a\s+)?(message|notification|alert)|notify\s+(via|on|in|the\s+)?slack|log\s+(a\s+)?(ticket|issue|bug)|add\s+(a\s+)?(ticket|issue|task|card))\b/i;
+// Allow optional words between the verb and the noun (e.g. "create a Linear ticket").
+const ACTION_PATTERNS = /\b(create\s+(a\s+)?(\w+\s+)?(ticket|issue|bug|task|card)|open\s+(a\s+)?(\w+\s+)?(ticket|issue|bug)|file\s+(a\s+)?(\w+\s+)?(bug|ticket|issue)|post\s+(a\s+)?(\w+\s+)?message|send\s+(a\s+)?(message|notification|alert)|notify\s+(via|on|in|the\s+)?\w*\s*slack|log\s+(a\s+)?(\w+\s+)?(ticket|issue|bug)|add\s+(a\s+)?(\w+\s+)?(ticket|issue|task|card))\b/i;
 
 function isActionRequest(text: string): boolean {
   return ACTION_PATTERNS.test(text);
