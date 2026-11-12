@@ -141,7 +141,8 @@ A user is chatting with you.${integrationsBlock}${historyBlock}
 Classify the LATEST user message into exactly one of these types:
 
 "action"  — The user wants to immediately EXECUTE an operation using a connected integration right now.
-            Examples: "create a Linear ticket", "post a message to Slack", "list my Vercel deployments".
+            Examples: "create a Linear ticket", "post a message to Slack", "list my Vercel deployments",
+            "search my Notion pages", "find a Notion page about X", "create a Notion page".
             Only valid if the relevant integration is listed as connected above.
 
 "task"    — The user wants the team to BUILD, CREATE, CODE, WRITE, or PRODUCE a software or document deliverable.
@@ -158,6 +159,7 @@ Rules:
 - If the user says "build me an app that uses Linear" or "integrate with Slack" → "task" (they want software built).
 - Observations like "X has dropped" are always "chat".
 - When in doubt between "action" and "task": if it's a one-shot operation (not building software) and a connected tool covers it → "action".
+- "search/find/look up [provider] pages/issues/messages" when that provider IS connected → always "action".
 
 Latest message: "${text}"
 
