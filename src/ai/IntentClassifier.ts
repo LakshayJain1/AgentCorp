@@ -9,53 +9,27 @@ export interface IntentResult {
   ticketTitle?: string;
 }
 
-/**
- * Integration providers that are already connected via OAuth in the Integrations tab.
- * When a task mentions one of these, the agent can execute it directly via the
- * tool gateway — no manual credential prompt is needed.
- */
-const OAUTH_INTEGRATION_PATTERNS: { pattern: RegExp; provider: string }[] = [
-  { pattern: /\b(github|git|repo|repository|push|commit|clone|pull\s*request|pr)\b/i, provider: 'github' },
-  { pattern: /\b(linear|issue|ticket|task\s*status)\b/i, provider: 'linear' },
-  { pattern: /\b(slack|channel|post\s*message|notify)\b/i, provider: 'slack' },
-  { pattern: /\b(vercel|deploy|deployment|build)\b/i, provider: 'vercel' },
-];
-
-// Patterns that indicate the user wants to directly INVOKE a tool action
-// (create/post/send) rather than build something that uses an integration.
-// Allow optional words between the verb and the noun (e.g. "create a Linear ticket").
-const ACTION_PATTERNS = /\b(create\s+(a\s+)?(\w+\s+)?(ticket|issue|bug|task|card)|open\s+(a\s+)?(\w+\s+)?(ticket|issue|bug)|file\s+(a\s+)?(\w+\s+)?(bug|ticket|issue)|post\s+(a\s+)?(\w+\s+)?message|send\s+(a\s+)?(message|notification|alert)|notify\s+(via|on|in|the\s+)?\w*\s*slack|log\s+(a\s+)?(\w+\s+)?(ticket|issue|bug)|add\s+(a\s+)?(\w+\s+)?(ticket|issue|task|card))\b/i;
-
-function isActionRequest(text: string): boolean {
-  return ACTION_PATTERNS.test(text);
-}
+/** Tools available per connected provider, shown to the LLM classifier. */
+const PROVIDER_TOOLS: Record<string, string[]> = {
+  linear: ['create_issue', 'list_teams'],
+  slack: ['post_message'],
+  vercel: ['list_deployments', 'get_user'],
+  github: ['read_file', 'propose_file', 'list_checks', 'ensure_branch'],
+};
 
 /**
- * Check if the user's task references an integration that is already connected.
- * Returns the provider name if so, otherwise null.
+ * Returns all provider names that are currently connected in the game store.
  */
-function detectConnectedIntegration(text: string): string | null {
-  let detected: string | null = null;
-  for (const { pattern, provider } of OAUTH_INTEGRATION_PATTERNS) {
-    if (pattern.test(text)) {
-      detected = provider;
-      break; // first match wins
-    }
-  }
-  if (!detected) return null;
-
-  // Check if this integration is actually connected in the game store.
-  // The store holds per-user OAuth connections from the Integrations tab
-  // under `connectors.{provider}.connected`.
+function getConnectedProviders(): string[] {
   try {
     const state = useGameStore.getState();
     const connectors = (state as any).connectors;
-    if (!connectors) return null;
-    const conn = connectors[detected];
-    return conn && conn.connected === true ? detected : null;
+    if (!connectors) return [];
+    return Object.entries(connectors)
+      .filter(([, v]) => (v as any)?.connected === true)
+      .map(([k]) => k);
   } catch {
-    // Outside React context — assume connected if we detected the pattern.
-    return detected;
+    return [];
   }
 }
 
@@ -128,10 +102,19 @@ export function formatTicketTitle(text: string): string {
   return maxWords.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
-async function aiClassify(
+type LLMIntentType = 'action' | 'task' | 'chat' | 'needs_credentials';
+
+interface LLMClassifyResult {
+  type: LLMIntentType;
+  ticketTitle?: string;
+  chatReply?: string;
+}
+
+async function aiClassifyIntent(
   text: string,
+  connectedProviders: string[],
   history?: { role: 'user' | 'agent'; text: string }[],
-): Promise<{ isTask: boolean; reply?: string; ticketTitle?: string }> {
+): Promise<LLMClassifyResult> {
   try {
     const historyBlock = history && history.length > 0
       ? `\nConversation so far (oldest first):\n${history.map((m) => `${m.role === 'user' ? 'User' : 'CEO'}: ${m.text}`).join('\n')}\n`
@@ -145,35 +128,43 @@ async function aiClassify(
       }
     } catch { /* outside React context */ }
 
-    const prompt = `You are Alex, CEO of AgentCorp, an AI-powered virtual company.${companyBlock} A user is chatting with you.
-${historyBlock}
-Your job:
-1. Decide if the LATEST message is a TASK INSTRUCTION your engineering/product team should execute, or a CONVERSATIONAL MESSAGE you should respond to personally as CEO.
-2. If it IS a task, generate a concise ticket title (3–7 words, Title Case).
+    const integrationsBlock = connectedProviders.length > 0
+      ? `\nConnected integrations (OAuth tokens on file — can execute immediately):\n${connectedProviders.map((p) => {
+          const tools = PROVIDER_TOOLS[p] ?? [];
+          return `  - ${p}${tools.length > 0 ? `: ${tools.join(', ')}` : ''}`;
+        }).join('\n')}\n`
+      : '\nNo integrations currently connected.\n';
+
+    const prompt = `You are Alex, CEO of AgentCorp, an AI-powered virtual company.${companyBlock}
+A user is chatting with you.${integrationsBlock}${historyBlock}
+Classify the LATEST user message into exactly one of these types:
+
+"action"  — The user wants to immediately EXECUTE an operation using a connected integration right now.
+            Examples: "create a Linear ticket", "post a message to Slack", "list my Vercel deployments".
+            Only valid if the relevant integration is listed as connected above.
+
+"task"    — The user wants the team to BUILD, CREATE, CODE, WRITE, or PRODUCE a software or document deliverable.
+            Examples: "build a Stripe checkout page", "write a Python script", "design a landing page".
+
+"chat"    — Everything else: greetings, questions, status checks, opinions, observations, concerns, follow-ups.
+            Examples: "hi", "how's the team?", "morale seems low", "what should we do next?".
+
+"needs_credentials" — The user wants to use an external service or integration that is NOT currently connected.
+            Only use this if the message clearly references an unconnected external service.
+
+Rules:
+- If the user says "create a [provider] ticket/issue/message/deploy" and that provider IS connected → "action".
+- If the user says "build me an app that uses Linear" or "integrate with Slack" → "task" (they want software built).
+- Observations like "X has dropped" are always "chat".
+- When in doubt between "action" and "task": if it's a one-shot operation (not building software) and a connected tool covers it → "action".
 
 Latest message: "${text}"
 
-TASK — only if the user is explicitly asking the team to BUILD, CREATE, WRITE, CODE, DEPLOY, or PRODUCE something concrete. Examples:
-  ✅ "Build a Stripe checkout page"
-  ✅ "Write a Python script to parse logs"
-  ✅ "Create a landing page for the product"
-
-CHAT — everything else, including:
-  ✅ Greetings and small talk ("hi", "how are you")
-  ✅ Questions about the team, company, agents, or status
-  ✅ Observations, concerns, or feedback ("morale has dropped", "the team seems stressed")
-  ✅ Asking for opinions, plans, or advice ("what should we do?", "what's your plan?")
-  ✅ Follow-ups referencing prior conversation ("tell me more", "what about that?")
-  ✅ Emotional or managerial discussions ("employees seem burnt out", "the sprint went badly")
-  ✅ Anything that does NOT require the team to produce a software or document deliverable
-
-Important: observations like "X has dropped" or "X is low" are CHAT — the user is sharing information, not assigning work. Respond as CEO with empathy, context, and a conversational reply.
-
-Respond with valid JSON only:
-{"isTask": true, "ticketTitle": "Short Ticket Title"} if it truly is a build/create/deploy request
-{"isTask": false, "reply": "your short, warm CEO response — reference conversation history where relevant"} for everything else
-
-Return ONLY the JSON, no markdown, no explanation.`;
+Respond with valid JSON only — no markdown, no explanation:
+{"type": "action", "ticketTitle": "Short Title"}
+{"type": "task", "ticketTitle": "Short Title (3–7 words, Title Case)"}
+{"type": "chat", "chatReply": "your short warm CEO reply"}
+{"type": "needs_credentials", "ticketTitle": "Short Title"}`;
 
     const res = await fetch('/api/ai', {
       method: 'POST',
@@ -188,19 +179,19 @@ Return ONLY the JSON, no markdown, no explanation.`;
     const jsonMatch = data.content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('no JSON in response');
 
-    const parsed = JSON.parse(jsonMatch[0]) as { isTask?: boolean; reply?: string; ticketTitle?: string };
-    return { isTask: parsed.isTask === true, reply: parsed.reply, ticketTitle: parsed.ticketTitle };
+    const parsed = JSON.parse(jsonMatch[0]) as { type?: string; ticketTitle?: string; chatReply?: string };
+    const validTypes: LLMIntentType[] = ['action', 'task', 'chat', 'needs_credentials'];
+    const type = validTypes.includes(parsed.type as LLMIntentType) ? (parsed.type as LLMIntentType) : 'chat';
+    return { type, ticketTitle: parsed.ticketTitle, chatReply: parsed.chatReply };
   } catch {
-    // Fallback heuristic when AI is unavailable.
-    // A message is only a TASK if it contains an explicit build/create/deploy verb
-    // AND no conversational signal. Observations, concerns, and questions are CHAT.
-    const actionVerbs = /\b(build|create|write|make|design|implement|fix|generate|draft|develop|audit|document|deploy|set up|set-up|configure|code|program|script|build out|spin up)\b/i;
+    // Fallback heuristics when AI is unavailable.
+    const actionVerbs = /\b(build|create|write|make|design|implement|fix|generate|draft|develop|audit|document|deploy|set up|set-up|configure|code|program|script|spin up)\b/i;
     const chatSignals = /\b(how are|how is|what do you think|what should|tell me|i see|i notice|seems like|looks like|feeling|morale|stress|burnt out|dropped|falling|low|high|great|bad|good|struggling|doing well|going well|worried|concerned)\b/i;
 
     if (!actionVerbs.test(text) || chatSignals.test(text)) {
-      return { isTask: false, reply: `Hey! 👋 I'm Alex, your CEO. Happy to chat — or drop me a task (something to build, research, or plan) and I'll get the team on it.` };
+      return { type: 'chat', chatReply: `Hey! I'm Alex, your CEO. Happy to chat — or drop me a task (something to build, research, or plan) and I'll get the team on it.` };
     }
-    return { isTask: true, ticketTitle: formatTicketTitle(text) };
+    return { type: 'task', ticketTitle: formatTicketTitle(text) };
   }
 }
 
@@ -210,79 +201,81 @@ export async function classifyIntent(
 ): Promise<IntentResult> {
   console.log('[AgentCorp] classifyIntent called with:', text);
 
-  // Step 1: AI-powered chat vs task classification + ticket title generation
-  const { isTask, reply, ticketTitle } = await aiClassify(text, history);
-  if (!isTask) {
+  const connectedProviders = getConnectedProviders();
+  console.log('[AgentCorp] connected providers:', connectedProviders);
+
+  // Single LLM call: model sees integration context and decides intent type.
+  const { type: llmType, ticketTitle, chatReply } = await aiClassifyIntent(text, connectedProviders, history);
+
+  if (llmType === 'chat') {
     console.log('[AgentCorp] intent = chat');
     return {
       type: 'chat',
       requiredKeys: [],
       confidence: 0.95,
-      chatReply: reply || `Got it! If you have a task for the team, just describe what you need built or done.`,
+      chatReply: chatReply || `Got it! If you have a task for the team, just describe what you need built or done.`,
     };
   }
 
-  const resolvedTitle = (ticketTitle && ticketTitle.length >= 3 && ticketTitle.length <= 80)
-    ? ticketTitle.replace(/["""'']/g, '').trim()
-    : formatTicketTitle(text);
-
-  // Step 2: Check if the task references an integration that is already
-  // connected via OAuth. If so, the agent can execute it directly through
-  // the tool gateway — no manual credential prompt needed.
-  const connectedProvider = detectConnectedIntegration(text);
-  if (connectedProvider) {
-    if (isActionRequest(text)) {
-      console.log('[AgentCorp] intent = action (connected integration:', connectedProvider + ')');
-      return {
-        type: 'action',
-        requiredKeys: [],
-        confidence: 0.95,
-        ticketTitle: resolvedTitle,
-      };
-    }
-    console.log('[AgentCorp] intent = internal (connected integration:', connectedProvider + ')');
-    return {
-      type: 'internal',
-      requiredKeys: [],
-      confidence: 0.95,
-      ticketTitle: resolvedTitle,
-    };
+  if (llmType === 'action') {
+    console.log('[AgentCorp] intent = action (LLM decision)');
+    const resolvedTitle = resolveTitle(ticketTitle, text);
+    return { type: 'action', requiredKeys: [], confidence: 0.95, ticketTitle: resolvedTitle };
   }
 
-  // Step 3: Credential detection for tasks that reference unconnected
-  // external services or generic API keys.
-  const matchedKeys: { key: string; label: string; reason: string }[] = [];
-  const patterns = await getPatterns();
+  const resolvedTitle = resolveTitle(ticketTitle, text);
 
-  for (const entry of patterns) {
-    if (entry.pattern.test(text)) {
-      console.log('[AgentCorp] matched pattern:', entry.pattern, '→ keys:', entry.keys.map(k => k.key));
-      for (const k of entry.keys) {
-        if (!matchedKeys.find((m) => m.key === k.key)) {
-          matchedKeys.push(k);
-        }
-      }
-    }
-  }
-
-  const hasExternalIndicators =
-    /\b(connect|integrate|deploy|push|send\s*to|post\s*to|upload|publish|host)\b/i.test(text);
-
-  if (matchedKeys.length > 0 || hasExternalIndicators) {
+  if (llmType === 'needs_credentials') {
+    // Still run credential detection to populate requiredKeys for the UI prompt.
+    const matchedKeys = await detectRequiredKeys(text);
     console.log('[AgentCorp] intent = needs_credentials, title =', resolvedTitle);
     return {
       type: 'needs_credentials',
       requiredKeys: matchedKeys,
-      confidence: matchedKeys.length > 0 ? 0.9 : 0.5,
+      confidence: matchedKeys.length > 0 ? 0.9 : 0.7,
       ticketTitle: resolvedTitle,
     };
   }
 
+  // llmType === 'task' — check if it references unconnected services needing creds.
+  const matchedKeys = await detectRequiredKeys(text);
+  const hasExternalIndicators =
+    /\b(connect|integrate|push|send\s*to|post\s*to|upload|publish|host)\b/i.test(text);
+
+  // Only escalate to needs_credentials when the referenced service is not already connected.
+  if (matchedKeys.length > 0 || hasExternalIndicators) {
+    const keyProviders = matchedKeys.map((k) => k.key.split('_')[0]);
+    const allConnected = keyProviders.every((p) => connectedProviders.includes(p));
+    if (!allConnected) {
+      console.log('[AgentCorp] intent = needs_credentials (task with unconnected service), title =', resolvedTitle);
+      return {
+        type: 'needs_credentials',
+        requiredKeys: matchedKeys,
+        confidence: matchedKeys.length > 0 ? 0.9 : 0.5,
+        ticketTitle: resolvedTitle,
+      };
+    }
+  }
+
   console.log('[AgentCorp] intent = internal, title =', resolvedTitle);
-  return {
-    type: 'internal',
-    requiredKeys: [],
-    confidence: 0.95,
-    ticketTitle: resolvedTitle,
-  };
+  return { type: 'internal', requiredKeys: [], confidence: 0.95, ticketTitle: resolvedTitle };
+}
+
+function resolveTitle(ticketTitle: string | undefined, text: string): string {
+  return (ticketTitle && ticketTitle.length >= 3 && ticketTitle.length <= 80)
+    ? ticketTitle.replace(/["""'']/g, '').trim()
+    : formatTicketTitle(text);
+}
+
+async function detectRequiredKeys(text: string): Promise<{ key: string; label: string; reason: string }[]> {
+  const matchedKeys: { key: string; label: string; reason: string }[] = [];
+  const patterns = await getPatterns();
+  for (const entry of patterns) {
+    if (entry.pattern.test(text)) {
+      for (const k of entry.keys) {
+        if (!matchedKeys.find((m) => m.key === k.key)) matchedKeys.push(k);
+      }
+    }
+  }
+  return matchedKeys;
 }
