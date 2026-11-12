@@ -214,12 +214,20 @@ export class CentralOrchestrator {
       const pm = store.agents.find((a) => a.role === 'pm');
       if (ceo) {
         const replyTarget = pm?.id ?? ceo.id;
-        store.sendMessage(ceo.id, replyTarget, intent.chatReply || `Hey! I'm Alex, your CEO. Tell me what you need built and I'll get the team on it.`);
+        const personalities = AGENT_PERSONALITIES();
+        const traits = personalities['ceo'] || personalities['engineer'];
+        const historyBlock = history && history.length > 0
+          ? `\nRecent conversation:\n${history.map((m) => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.text}`).join('\n')}\n`
+          : '';
+        const chatPrompt = `${historyBlock}The user just said: "${request}"\n\nRespond in character as ${ceo.name}, CEO. You have full context of the conversation above including any agent results. Be concise and conversational. If the user is referencing something an agent just found or did, engage with that content directly.`;
+        const aiReply = await aiService.askAgent('ceo', ceo.name, traits, chatPrompt);
+        const replyText = aiReply.content || intent.chatReply || `Hey! I'm Alex, your CEO. Tell me what you need built and I'll get the team on it.`;
+        store.sendMessage(ceo.id, replyTarget, replyText);
         store.pushAgentActivity(ceo.id, {
           id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           agentId: ceo.id,
           type: 'communicating',
-          message: intent.chatReply || 'Chatting with user',
+          message: replyText.slice(0, 80),
           timestamp: Date.now(),
         });
       }
