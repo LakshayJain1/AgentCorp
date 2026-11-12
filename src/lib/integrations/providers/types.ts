@@ -1,4 +1,4 @@
-export type ProviderId = 'github' | 'slack' | 'linear' | 'vercel';
+export type ProviderId = 'github' | 'slack' | 'linear' | 'vercel' | 'notion';
 
 export interface OAuthTokens {
   accessToken: string;

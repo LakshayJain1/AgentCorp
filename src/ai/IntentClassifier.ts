@@ -15,6 +15,7 @@ const PROVIDER_TOOLS: Record<string, string[]> = {
   slack: ['post_message'],
   vercel: ['list_deployments', 'get_user'],
   github: ['read_file', 'propose_file', 'list_checks', 'ensure_branch'],
+  notion: ['search_pages', 'create_page', 'append_block'],
 };
 
 /**

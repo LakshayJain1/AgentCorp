@@ -237,6 +237,7 @@ export default function SetupWizard() {
       vercel: { connected: vConnected, token: '', autoDeploy: vDeploy },
       slack: { connected: sConnected, webhookUrl: '', broadcastEvents: sBroadcast },
       linear: { connected: false, workspaceId: '', workspaceName: '' },
+      notion: { connected: false, workspaceName: '' },
       ai: { provider: 'gemini', apiKey: '' },
     }, inviteEmails.filter(Boolean));
 

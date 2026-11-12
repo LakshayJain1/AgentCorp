@@ -423,6 +423,7 @@ interface GameStore {
     vercel: { connected: boolean; token: string; autoDeploy: boolean };
     slack: { connected: boolean; webhookUrl: string; broadcastEvents: boolean };
     linear: { connected: boolean; workspaceId: string; workspaceName: string };
+    notion: { connected: boolean; workspaceName: string };
     ai: { provider: 'gemini' | 'openrouter'; apiKey: string };
   };
   initializePersonalizedOffice: (
@@ -470,6 +471,7 @@ export const useGameStore = create<GameStore>()(
     vercel: { connected: false, token: '', autoDeploy: false },
     slack: { connected: false, webhookUrl: '', broadcastEvents: false },
     linear: { connected: false, workspaceId: '', workspaceName: '' },
+    notion: { connected: false, workspaceName: '' },
     ai: { provider: 'gemini', apiKey: '' },
   },
   selectedAgentId: null,
@@ -1082,6 +1084,7 @@ export const useGameStore = create<GameStore>()(
         slack: 'slack',
         linear: 'linear',
         vercel: 'vercel',
+        notion: 'notion',
       };
       for (const [provider, key] of Object.entries(providerMap)) {
         const conn = connectors[key] as Record<string, unknown> | undefined;
@@ -1092,6 +1095,7 @@ export const useGameStore = create<GameStore>()(
           if (account && typeof account === 'string') {
             if (key === 'github') conn.repoUrl = account;
             if (key === 'linear') { conn.workspaceId = account; conn.workspaceName = account; }
+            if (key === 'notion') conn.workspaceName = account;
           }
         }
       }

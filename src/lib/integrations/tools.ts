@@ -163,6 +163,95 @@ async function vercelGetUser(token: string): Promise<string> {
   return `Vercel user: ${u?.username ?? u?.email ?? 'unknown'} (${u?.name ?? 'no name'})`;
 }
 
+async function notionSearchPages(token: string, args: Record<string, string>): Promise<string> {
+  assertParams(args, 'query');
+  const res = await fetch('https://api.notion.com/v1/search', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Notion-Version': '2022-06-28',
+    },
+    body: JSON.stringify({ query: args.query, page_size: 10 }),
+    cache: 'no-store',
+  });
+  const json = (await res.json().catch(() => null)) as
+    | { results?: Array<{ id?: string; object?: string; url?: string; properties?: Record<string, { title?: Array<{ plain_text?: string }> }> }>; message?: string }
+    | null;
+  if (!res.ok) throw new Error(`Notion search failed (${json?.message ?? res.status})`);
+  const results = json?.results ?? [];
+  if (results.length === 0) return 'No pages found matching that query.';
+  return results.map((r) => {
+    const titleProp = r.properties ? Object.values(r.properties).find((p) => p.title) : null;
+    const title = titleProp?.title?.[0]?.plain_text ?? r.id ?? 'Untitled';
+    return `• ${title} [${r.object}] — ${r.url}`;
+  }).join('\n');
+}
+
+async function notionCreatePage(token: string, args: Record<string, string>): Promise<string> {
+  assertParams(args, 'title');
+  // parent must be a page_id or database_id passed as parentId
+  const parentId = args.parentId?.trim();
+  const parent = parentId
+    ? { type: 'page_id', page_id: parentId }
+    : null;
+  if (!parent) throw new ToolInputError('parentId is required — pass the ID of a parent page or database.');
+
+  const body: Record<string, unknown> = {
+    parent,
+    properties: {
+      title: { title: [{ type: 'text', text: { content: args.title } }] },
+    },
+  };
+  if (args.content) {
+    body.children = [
+      {
+        object: 'block',
+        type: 'paragraph',
+        paragraph: { rich_text: [{ type: 'text', text: { content: args.content } }] },
+      },
+    ];
+  }
+  const res = await fetch('https://api.notion.com/v1/pages', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Notion-Version': '2022-06-28',
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
+  const json = (await res.json().catch(() => null)) as { id?: string; url?: string; message?: string } | null;
+  if (!res.ok) throw new Error(`Notion create page failed (${json?.message ?? res.status})`);
+  return `created page ${json?.url ?? json?.id ?? ''}`.trim();
+}
+
+async function notionAppendBlock(token: string, args: Record<string, string>): Promise<string> {
+  assertParams(args, 'pageId', 'content');
+  const res = await fetch(`https://api.notion.com/v1/blocks/${args.pageId}/children`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Notion-Version': '2022-06-28',
+    },
+    body: JSON.stringify({
+      children: [
+        {
+          object: 'block',
+          type: 'paragraph',
+          paragraph: { rich_text: [{ type: 'text', text: { content: args.content } }] },
+        },
+      ],
+    }),
+    cache: 'no-store',
+  });
+  const json = (await res.json().catch(() => null)) as { message?: string } | null;
+  if (!res.ok) throw new Error(`Notion append block failed (${json?.message ?? res.status})`);
+  return `appended content to page ${args.pageId}`;
+}
+
 const TOOLS: ServerTool[] = [
   {
     name: 'slack_post_message',
@@ -198,6 +287,31 @@ const TOOLS: ServerTool[] = [
     description: 'Return the authenticated Vercel account username and email.',
     parameters: {},
     run: vercelGetUser,
+  },
+  {
+    name: 'notion_search_pages',
+    provider: 'notion',
+    description: 'Search for pages and databases in the connected Notion workspace.',
+    parameters: { query: 'string' },
+    run: notionSearchPages,
+  },
+  {
+    name: 'notion_create_page',
+    provider: 'notion',
+    description: 'Create a new Notion page inside a parent page or database. Call notion_search_pages first to find the parentId if needed.',
+    parameters: {
+      title: 'string',
+      parentId: 'string (ID of the parent page or database)',
+      content: 'string (optional — initial paragraph text)',
+    },
+    run: notionCreatePage,
+  },
+  {
+    name: 'notion_append_block',
+    provider: 'notion',
+    description: 'Append a paragraph block to an existing Notion page.',
+    parameters: { pageId: 'string', content: 'string' },
+    run: notionAppendBlock,
   },
 ];
 

@@ -16,6 +16,9 @@ export async function GET() {
   const vercelOAuthConfigured = Boolean(
     process.env.VERCEL_CLIENT_ID && process.env.VERCEL_CLIENT_SECRET,
   );
+  const notionOAuthConfigured = Boolean(
+    process.env.NOTION_CLIENT_ID && process.env.NOTION_CLIENT_SECRET,
+  );
   const integrationStorageConfigured = Boolean(
     process.env.DATABASE_URL && process.env.TOKEN_ENCRYPTION_KEY,
   );
@@ -26,6 +29,7 @@ export async function GET() {
     slackOAuthConfigured,
     linearOAuthConfigured,
     vercelOAuthConfigured,
+    notionOAuthConfigured,
     integrationStorageConfigured,
     // Retained for older clients; both legacy paths are retired.
     githubAppConfigured: false,
@@ -42,6 +46,7 @@ export async function GET() {
       ...(!slackOAuthConfigured ? ['SLACK_CLIENT_ID + SLACK_CLIENT_SECRET (Slack OAuth)'] : []),
       ...(!linearOAuthConfigured ? ['LINEAR_CLIENT_ID + LINEAR_CLIENT_SECRET (Linear OAuth)'] : []),
       ...(!vercelOAuthConfigured ? ['VERCEL_CLIENT_ID + Vercel_CLIENT_SECRET (Vercel OAuth)'] : []),
+      ...(!notionOAuthConfigured ? ['NOTION_CLIENT_ID + NOTION_CLIENT_SECRET (Notion OAuth)'] : []),
       ...(!aiConfigured
         ? ['OPENROUTER_API_KEY and/or GEMINI_API_KEY (dev fallback until per-user BYOK vault lands)']
         : []),

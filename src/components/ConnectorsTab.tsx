@@ -26,14 +26,14 @@ import { useGameStore } from '@/store/gameStore';
 import type { UseIntegrations } from '@/hooks/useIntegrations';
 
 interface OAuthConnectorDef {
-  id: 'github' | 'slack' | 'linear' | 'vercel';
+  id: 'github' | 'slack' | 'linear' | 'vercel' | 'notion';
   label: string;
   desc: string;
   icon: ReactNode;
   color: string;
   accent: string;
   scopes: string;
-  configuredKey: 'githubOAuthConfigured' | 'slackOAuthConfigured' | 'linearOAuthConfigured' | 'vercelOAuthConfigured';
+  configuredKey: 'githubOAuthConfigured' | 'slackOAuthConfigured' | 'linearOAuthConfigured' | 'vercelOAuthConfigured' | 'notionOAuthConfigured';
 }
 
 const OAUTH_CONNECTORS: OAuthConnectorDef[] = [
@@ -77,10 +77,19 @@ const OAUTH_CONNECTORS: OAuthConnectorDef[] = [
     scopes: 'read · write · deploy',
     configuredKey: 'vercelOAuthConfigured',
   },
+  {
+    id: 'notion',
+    label: 'Notion',
+    desc: 'Search pages, create notes, and append content to your workspace.',
+    icon: <Globe size={15} />,
+    color: 'hover:border-stone-400',
+    accent: 'bg-stone-50 text-stone-700',
+    scopes: 'read · insert content',
+    configuredKey: 'notionOAuthConfigured',
+  },
 ];
 
 const COMING_SOON = [
-  { id: 'notion', label: 'Notion', icon: <Globe size={15} /> },
   { id: 'supabase', label: 'Supabase', icon: <Database size={15} /> },
   { id: 'railway', label: 'Railway', icon: <RefreshCw size={15} /> },
   { id: 'discord', label: 'Discord', icon: <MessageSquare size={15} /> },
@@ -92,6 +101,7 @@ interface PlatformStatus {
   slackOAuthConfigured: boolean;
   linearOAuthConfigured: boolean;
   vercelOAuthConfigured: boolean;
+  notionOAuthConfigured: boolean;
   integrationStorageConfigured: boolean;
   aiConfigured: boolean;
   needed: string[];
