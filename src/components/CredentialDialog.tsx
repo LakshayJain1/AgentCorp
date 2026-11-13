@@ -29,7 +29,7 @@ export default function CredentialDialog() {
         exit={{ opacity: 0 }}
       >
         <motion.div
-          className="bg-white border border-navy/10 rounded-2xl card-shadow w-full max-w-md mx-4 overflow-hidden"
+          className="bg-surface border border-navy/10 rounded-2xl card-shadow w-full max-w-md mx-4 overflow-hidden"
           initial={{ scale: 0.9, y: 20 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.9, y: 20 }}
@@ -37,12 +37,12 @@ export default function CredentialDialog() {
           <div className="p-5">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400/20 to-orange-400/20 flex items-center justify-center">
-                <Key className="w-4 h-4 text-amber-500" />
+                <Key className="w-4 h-4 text-amber-400" />
               </div>
               <h2 className="text-base font-semibold text-navy">Credentials Required</h2>
             </div>
 
-            <div className="bg-white/70 rounded-xl p-3 mb-4 text-sm text-navy/70 space-y-1">
+            <div className="bg-white/[0.06] rounded-xl p-3 mb-4 text-sm text-navy/70 space-y-1">
               <p>
                 <span className="font-semibold text-navy">Task:</span> {credentialRequest.taskTitle}
               </p>
@@ -62,7 +62,7 @@ export default function CredentialDialog() {
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 placeholder={`Enter ${credentialRequest.credentialLabel}...`}
-                className="w-full px-3 py-2 pr-10 text-sm bg-white/70 border border-navy/10 rounded-xl text-navy placeholder:text-navy/35 outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100 transition-all"
+                className="w-full px-3 py-2 pr-10 text-sm bg-white/[0.06] border border-navy/10 rounded-xl text-navy placeholder:text-navy/35 outline-none focus:border-sky-500/25 focus:ring-2 focus:ring-sky-500/25 transition-all"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSubmit();
@@ -83,14 +83,14 @@ export default function CredentialDialog() {
                 dismissCredentialRequest();
                 setValue('');
               }}
-              className="px-3 py-1.5 text-xs font-medium text-navy/55 hover:text-navy/80 border border-navy/10 rounded-xl hover:bg-white/70 transition-all cursor-pointer"
+              className="px-3 py-1.5 text-xs font-medium text-navy/55 hover:text-navy/80 border border-navy/10 rounded-xl hover:bg-white/10 transition-all cursor-pointer"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
               disabled={!value.trim()}
-              className="px-4 py-1.5 text-xs font-medium bg-gradient-to-r from-ocean to-teal text-white rounded-xl hover:from-ocean-600 hover:to-teal disabled:opacity-40 transition-all shadow-sm cursor-pointer"
+              className="px-4 py-1.5 text-xs font-medium bg-black text-white rounded-full hover:bg-[#121212] disabled:opacity-40 transition-all shadow-sm cursor-pointer"
             >
               Provide & Resume
             </button>

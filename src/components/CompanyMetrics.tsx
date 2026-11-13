@@ -25,7 +25,7 @@ const MetricCard = ({
     <div className="glass-card rounded-2xl p-3.5 flex flex-col justify-between min-h-[85px]">
       <div className="flex items-center gap-1.5 mb-1 shrink-0">
         <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: accentColors[status] }} />
-        <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'rgba(23,23,31,0.5)' }}>
+        <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.5)' }}>
           {label}
         </span>
       </div>

@@ -87,11 +87,11 @@ export default function TopBar() {
     <div className="glass-topbar px-5 py-2.5 flex items-center gap-3 z-30 shrink-0">
       {/* Left: Logo & Brand */}
       <div className="flex items-center gap-3 shrink-0">
-        <BrandLogo size={36} className="shadow-[0_4px_14px_rgba(10,132,255,0.3)]" />
+        <BrandLogo size={36} className="shadow-none" />
         <div>
           <h1 className="text-sm font-bold text-navy flex items-center gap-2 font-display tracking-tight">
             AgentCorp
-            <span className="text-[9px] bg-white/80 text-navy/50 px-1.5 py-0.5 rounded-md font-medium border border-navy/5">v2.0</span>
+            <span className="text-[9px] bg-white/[0.06] text-navy/50 px-1.5 py-0.5 rounded-md font-medium border border-navy/5">v2.0</span>
           </h1>
           <p className="hidden md:block text-[10px] text-navy/50 font-medium">Autonomous Multi-Agent Workspace</p>
         </div>
@@ -108,14 +108,14 @@ export default function TopBar() {
             onFocus={() => setFocused(true)}
             onBlur={() => setTimeout(() => setFocused(false), 150)}
             placeholder="Search agents, deliverables, or conversations..."
-            className="w-full pl-10 pr-16 py-2 text-sm glass-input text-navy rounded-full outline-none placeholder:text-navy/35 focus:ring-2 focus:ring-ocean-200 transition-all"
+            className="w-full pl-10 pr-16 py-2 text-sm glass-input text-navy rounded-full outline-none placeholder:text-navy/35 focus:ring-2 focus:ring-white/20 transition-all"
           />
           {query ? (
-            <button onClick={() => setQuery('')} className="absolute right-10 top-1/2 -translate-y-1/2 p-1 hover:bg-navy/5 rounded-full cursor-pointer">
+            <button onClick={() => setQuery('')} className="absolute right-10 top-1/2 -translate-y-1/2 p-1 hover:bg-white/5 rounded-full cursor-pointer">
               <X className="w-3.5 h-3.5 text-navy/40" />
             </button>
           ) : null}
-          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/80 border border-navy/5">
+          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/[0.06] border border-navy/5">
             <Command className="w-2.5 h-2.5 text-navy/40" />
             <span className="text-[8px] text-navy/40 font-medium">K</span>
           </div>
@@ -126,7 +126,7 @@ export default function TopBar() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.15 }}
-                className="absolute top-full mt-2 left-0 right-0 bg-white border border-navy/10 rounded-2xl shadow-xl p-2 z-50 max-h-80 overflow-y-auto"
+                className="absolute top-full mt-2 left-0 right-0 bg-surface border border-navy/10 rounded-2xl shadow-xl p-2 z-50 max-h-80 overflow-y-auto"
               >
                 {!hasResults && (
                   <p className="text-xs text-navy/40 px-3 py-2">No matches for “{query}”.</p>
@@ -138,7 +138,7 @@ export default function TopBar() {
                       <button
                         key={a.id}
                         onMouseDown={() => { setSelectedAgent(a.id); setCenterView('chat'); setQuery(''); }}
-                        className="w-full text-left px-3 py-2 hover:bg-navy/5 rounded-xl cursor-pointer"
+                        className="w-full text-left px-3 py-2 hover:bg-white/5 rounded-xl cursor-pointer"
                       >
                         <span className="text-xs font-bold text-navy">{a.emoji} {a.name}</span>
                         <span className="text-[10px] text-navy/40 ml-2 uppercase">{a.role} · {a.workStatus}</span>
@@ -153,7 +153,7 @@ export default function TopBar() {
                       <button
                         key={t.id}
                         onMouseDown={() => { setSelectedTask(t.id); setQuery(''); }}
-                        className="w-full text-left px-3 py-2 hover:bg-navy/5 rounded-xl cursor-pointer"
+                        className="w-full text-left px-3 py-2 hover:bg-white/5 rounded-xl cursor-pointer"
                       >
                         <span className="text-xs font-bold text-navy truncate block">{t.title}</span>
                         <span className="text-[10px] text-navy/40 capitalize">{t.status}</span>
@@ -188,7 +188,7 @@ export default function TopBar() {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={user.picture} alt="avatar" className="w-6 h-6 rounded-full border border-navy/10" />
               ) : (
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-ocean to-teal flex items-center justify-center text-white text-[9px] font-bold">
+                <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[#1A1A1A] text-[9px] font-bold">
                   {(user?.name?.[0] || user?.email?.[0] || 'A').toUpperCase()}
                 </div>
               )}
@@ -201,7 +201,7 @@ export default function TopBar() {
                   useGameStore.persist.clearStorage();
                   router.replace('/onboard');
                 }}
-                className="hidden md:inline text-[9px] text-navy/40 hover:text-rose-500 font-medium transition-colors cursor-pointer"
+                className="hidden md:inline text-[9px] text-navy/40 hover:text-rose-400 font-medium transition-colors cursor-pointer"
                 title="Clear workspace and restart onboarding"
               >
                 Reset
@@ -232,7 +232,7 @@ export default function TopBar() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 top-10 z-50 w-80 bg-white border border-navy/10 rounded-2xl shadow-xl p-4 space-y-3"
+                className="absolute right-0 top-10 z-50 w-80 bg-surface border border-navy/10 rounded-2xl shadow-xl p-4 space-y-3"
               >
                 <div>
                   <p className="text-xs font-bold text-navy">Invite to workspace</p>
@@ -240,7 +240,7 @@ export default function TopBar() {
                 </div>
 
                 {/* Copy link row */}
-                <div className="flex items-center gap-2 bg-navy/3 border border-navy/8 rounded-xl px-3 py-2">
+                <div className="flex items-center gap-2 bg-white/3 border border-navy/8 rounded-xl px-3 py-2">
                   <span className="flex-1 text-[10px] font-mono text-navy/55 truncate">
                     {typeof window !== 'undefined' && orgId
                       ? `${window.location.origin}/workspace?invite=${orgId}`
@@ -255,16 +255,16 @@ export default function TopBar() {
                       setInviteCopied(true);
                       setTimeout(() => setInviteCopied(false), 2000);
                     }}
-                    className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-ocean-50 hover:bg-ocean-100 text-ocean-600 text-[10px] font-semibold transition-colors cursor-pointer disabled:opacity-40"
+                    className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-full bg-ocean-50 hover:bg-ocean-100 text-white text-[10px] font-semibold transition-colors cursor-pointer disabled:opacity-40"
                   >
                     {inviteCopied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
                   </button>
                 </div>
 
                 {orgId && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-green-50 border border-green-100">
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-green-500/10 border border-green-500/25">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
-                    <p className="text-[9px] text-green-700 font-medium">Broadcasting live to anyone with this link.</p>
+                    <p className="text-[9px] text-green-400 font-medium">Broadcasting live to anyone with this link.</p>
                   </div>
                 )}
 
@@ -285,7 +285,7 @@ export default function TopBar() {
                           next[i] = e.target.value;
                           setEmailDraft(next);
                         }}
-                        className="w-full px-2.5 py-1.5 text-[10px] rounded-lg border border-navy/10 bg-white/80 outline-none focus:ring-2 focus:ring-ocean-200 placeholder:text-navy/30 text-navy"
+                        className="w-full px-2.5 py-1.5 text-[10px] rounded-lg border border-navy/10 bg-white/[0.06] outline-none focus:ring-2 focus:ring-white/20 placeholder:text-navy/30 text-navy"
                       />
                     ))}
                   </div>
@@ -293,15 +293,15 @@ export default function TopBar() {
                   {inviteResult && (
                     <div className="space-y-1">
                       {inviteResult.sent.length > 0 && (
-                        <p className="text-[9px] text-green-600 font-medium flex items-center gap-1">
+                        <p className="text-[9px] text-green-400 font-medium flex items-center gap-1">
                           <Check className="w-3 h-3" /> Sent to: {inviteResult.sent.join(', ')}
                         </p>
                       )}
                       {inviteResult.error && (
-                        <p className="text-[9px] text-rose-500 font-medium">{inviteResult.error}</p>
+                        <p className="text-[9px] text-rose-400 font-medium">{inviteResult.error}</p>
                       )}
                       {inviteResult.failed.length > 0 && (
-                        <p className="text-[9px] text-rose-500 font-medium">
+                        <p className="text-[9px] text-rose-400 font-medium">
                           Failed: {inviteResult.failed.join(', ')}
                         </p>
                       )}
@@ -335,7 +335,7 @@ export default function TopBar() {
                         setSendingInvites(false);
                       }
                     }}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-ocean text-white text-[10px] font-semibold transition-colors hover:bg-ocean-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-full bg-ocean text-white text-[10px] font-semibold transition-colors hover:bg-ocean-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   >
                     {sendingInvites
                       ? 'Sending…'
@@ -358,7 +358,7 @@ export default function TopBar() {
           onClick={() => setPaused(!simulation.paused)}
           className={`px-3 py-1.5 text-[10px] font-semibold rounded-full transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
             simulation.paused
-              ? 'bg-rose-50 text-rose-500 hover:bg-rose-100'
+              ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/15'
               : 'glass-card text-navy/60 hover:text-navy'
           }`}
         >
@@ -370,7 +370,7 @@ export default function TopBar() {
           <span className="text-navy/50 text-[9px] font-semibold uppercase">Efficiency</span>
           <div className="relative w-9 h-9 flex items-center justify-center">
             <svg className="w-full h-full transform -rotate-90">
-              <circle cx="18" cy="18" r="15" className="stroke-[rgba(23,23,31,0.08)]" strokeWidth="2.5" fill="transparent" />
+              <circle cx="18" cy="18" r="15" className="stroke-[rgba(255,255,255,0.08)]" strokeWidth="2.5" fill="transparent" />
               <motion.circle
                 cx="18" cy="18" r="15"
                 stroke={simulation.efficiency > 70 ? '#34C759' : simulation.efficiency > 40 ? '#FF9F0A' : '#FF3B30'}

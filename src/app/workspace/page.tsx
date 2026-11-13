@@ -77,24 +77,24 @@ function WorkspacePageInner() {
       </div>
 
       {/* Mobile / tablet bottom navigation — hidden on lg+ */}
-      <nav className="lg:hidden shrink-0 flex border-t border-navy/10 bg-white/90 backdrop-blur-md">
+      <nav className="lg:hidden shrink-0 flex border-t border-navy/10 bg-surface backdrop-blur-md">
         <button
           onClick={() => setMobilePanel('agents')}
-          className={`flex-1 py-3 flex flex-col items-center gap-1 text-[10px] font-semibold transition-colors cursor-pointer ${mobilePanel === 'agents' ? 'text-[#0A84FF]' : 'text-navy/40'}`}
+          className={`flex-1 py-3 flex flex-col items-center gap-1 text-[10px] font-semibold transition-colors cursor-pointer ${mobilePanel === 'agents' ? 'text-white' : 'text-navy/40'}`}
         >
           <Users className="w-5 h-5" />
           Agents
         </button>
         <button
           onClick={() => setMobilePanel('chat')}
-          className={`flex-1 py-3 flex flex-col items-center gap-1 text-[10px] font-semibold transition-colors cursor-pointer ${mobilePanel === 'chat' ? 'text-[#0A84FF]' : 'text-navy/40'}`}
+          className={`flex-1 py-3 flex flex-col items-center gap-1 text-[10px] font-semibold transition-colors cursor-pointer ${mobilePanel === 'chat' ? 'text-white' : 'text-navy/40'}`}
         >
           <MessageSquare className="w-5 h-5" />
           Chat
         </button>
         <button
           onClick={() => setMobilePanel('stats')}
-          className={`flex-1 py-3 flex flex-col items-center gap-1 text-[10px] font-semibold transition-colors cursor-pointer ${mobilePanel === 'stats' ? 'text-[#0A84FF]' : 'text-navy/40'}`}
+          className={`flex-1 py-3 flex flex-col items-center gap-1 text-[10px] font-semibold transition-colors cursor-pointer ${mobilePanel === 'stats' ? 'text-white' : 'text-navy/40'}`}
         >
           <BarChart2 className="w-5 h-5" />
           Stats

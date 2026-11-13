@@ -16,7 +16,7 @@ const GameCanvas = dynamic(() => import('@/game/GameCanvas'), {
   loading: () => (
     <div className="w-full h-full glass-card rounded-3xl flex items-center justify-center">
       <div className="text-center">
-        <div className="text-ocean-600 font-mono text-sm animate-pulse mb-3">INITIALIZING OFFICE...</div>
+        <div className="text-white font-mono text-sm animate-pulse mb-3">INITIALIZING OFFICE...</div>
         <div className="flex gap-1.5 justify-center">
           {[0, 1, 2].map((i) => (
             <div key={i} className="w-2 h-2 bg-ocean-500 rounded-full" style={{ animation: `float 1.5s ease-in-out ${i * 0.2}s infinite` }} />
@@ -202,36 +202,36 @@ export default function CenterPanel() {
       case 'engineer':
         return {
           wrapper: 'bg-[#FFE6E6]/70 border border-[#FFE6E6]',
-          text: 'text-rose-950/90',
+          text: 'text-rose-400/90',
         };
       case 'sales':
         return {
           wrapper: 'bg-[#FFF3E0]/70 border border-[#FFD580]/30',
-          text: 'text-amber-950/90',
+          text: 'text-amber-400/90',
         };
       case 'finance':
         return {
           wrapper: 'bg-[#E6FBF0]/70 border border-[#26de81]/20',
-          text: 'text-emerald-950/90',
+          text: 'text-emerald-400/90',
         };
       case 'ops':
         return {
           wrapper: 'bg-[#EAF0FF]/70 border border-[#4b7bec]/20',
-          text: 'text-blue-950/90',
+          text: 'text-blue-400/90',
         };
       default:
         return {
-          wrapper: 'bg-white/70 border border-navy/5',
+          wrapper: 'bg-white/[0.06] border border-navy/5',
           text: 'text-navy/90',
         };
     }
   };
 
   return (
-    <div className="flex-1 lg:w-1/2 lg:flex-none flex flex-col min-w-0 h-full lg:border-r lg:border-l glass-divider bg-[#FAFBFD]/50">
+    <div className="flex-1 lg:w-1/2 lg:flex-none flex flex-col min-w-0 h-full lg:border-r lg:border-l glass-divider bg-black/20">
       {/* Top Toggle & Control Bar */}
-      <div className="shrink-0 flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 border-b glass-divider bg-white/40">
-        <div className="flex gap-1.5 p-1 bg-[rgba(23,23,31,0.03)] rounded-full">
+      <div className="shrink-0 flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 border-b glass-divider bg-white/[0.06]">
+        <div className="flex gap-1.5 p-1 bg-white/[0.03] rounded-full">
           <button
             onClick={() => setCenterView('chat')}
             className={`relative px-3 sm:px-5 py-1.5 text-xs font-bold rounded-full transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
@@ -272,7 +272,7 @@ export default function CenterPanel() {
             <button
               onClick={() => setSelectedAgent(null)}
               title="Clear agent filter"
-              className="text-[10px] bg-navy/5 hover:bg-navy/10 text-navy/60 px-2.5 py-1 rounded-full font-semibold cursor-pointer flex items-center gap-1"
+              className="text-[10px] bg-white/5 hover:bg-white/10 text-navy/60 px-2.5 py-1 rounded-full font-semibold cursor-pointer flex items-center gap-1"
             >
               Filtered: {agents.find((a) => a.id === selectedAgentId)?.name} <X className="w-3 h-3" />
             </button>
@@ -280,7 +280,7 @@ export default function CenterPanel() {
           <button
             onClick={toggleAgentRoster}
             title={showAgentRoster ? 'Hide agent roster' : 'Show agent roster'}
-            className="flex items-center gap-1 bg-[rgba(23,23,31,0.03)] hover:bg-[rgba(23,23,31,0.08)] px-2.5 py-1.5 rounded-xl cursor-pointer transition-colors"
+            className="flex items-center gap-1 bg-white/[0.03] hover:bg-white/[0.08] px-2.5 py-1.5 rounded-xl cursor-pointer transition-colors"
           >
             <Users className="w-3.5 h-3.5 text-navy/60" />
             <span className="text-xs font-bold text-navy/70">{agents.filter(a => a.online).length}</span>
@@ -289,14 +289,14 @@ export default function CenterPanel() {
             onClick={handleSuggestTask}
             disabled={suggesting}
             title="AI-suggest a task"
-            className="p-1.5 hover:bg-[rgba(23,23,31,0.05)] rounded-xl text-navy/50 hover:text-navy/80 transition-colors cursor-pointer disabled:opacity-40"
+            className="p-1.5 hover:bg-white/[0.05] rounded-xl text-navy/50 hover:text-navy/80 transition-colors cursor-pointer disabled:opacity-40"
           >
             <Sparkles className={`w-4 h-4 ${suggesting ? 'animate-pulse' : ''}`} />
           </button>
           <button
             onClick={() => setShowMenu((v) => !v)}
             title="Chat options"
-            className="p-1.5 hover:bg-[rgba(23,23,31,0.05)] rounded-xl text-navy/50 hover:text-navy/80 transition-colors cursor-pointer"
+            className="p-1.5 hover:bg-white/[0.05] rounded-xl text-navy/50 hover:text-navy/80 transition-colors cursor-pointer"
           >
             <MoreHorizontal className="w-4 h-4" />
           </button>
@@ -307,18 +307,18 @@ export default function CenterPanel() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 top-10 z-50 w-52 bg-white border border-navy/10 rounded-2xl shadow-lg p-1.5"
+                className="absolute right-0 top-10 z-50 w-52 bg-surface border border-navy/10 rounded-2xl shadow-lg p-1.5"
               >
-                <button onClick={handleNewChat} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-navy/70 hover:bg-navy/5 rounded-xl cursor-pointer">
+                <button onClick={handleNewChat} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-navy/70 hover:bg-white/5 rounded-xl cursor-pointer">
                   <Plus className="w-3.5 h-3.5" /> New chat
                 </button>
-                <button onClick={handleExportChat} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-navy/70 hover:bg-navy/5 rounded-xl cursor-pointer">
+                <button onClick={handleExportChat} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-navy/70 hover:bg-white/5 rounded-xl cursor-pointer">
                   <Download className="w-3.5 h-3.5" /> Export transcript
                 </button>
-                <button onClick={() => { setPaused(!simulation.paused); setShowMenu(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-navy/70 hover:bg-navy/5 rounded-xl cursor-pointer">
+                <button onClick={() => { setPaused(!simulation.paused); setShowMenu(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-navy/70 hover:bg-white/5 rounded-xl cursor-pointer">
                   {simulation.paused ? '▶ Resume simulation' : '⏸ Pause simulation'}
                 </button>
-                <button onClick={handleNewChat} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-50 rounded-xl cursor-pointer">
+                <button onClick={handleNewChat} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 rounded-xl cursor-pointer">
                   <Trash2 className="w-3.5 h-3.5" /> Clear chat
                 </button>
               </motion.div>
@@ -372,7 +372,7 @@ export default function CenterPanel() {
                 className="flex gap-3"
               >
                 {/* Avatar with Emoji background */}
-                <div className="shrink-0 w-8 h-8 rounded-full bg-white shadow-sm border border-navy/5 flex items-center justify-center text-sm">
+                <div className="shrink-0 w-8 h-8 rounded-full bg-surface shadow-sm border border-navy/5 flex items-center justify-center text-sm">
                   {msg.fromEmoji}
                 </div>
                 
@@ -398,13 +398,13 @@ export default function CenterPanel() {
         </div>
 
         {/* Input Bar */}
-        <div className="shrink-0 px-3 sm:px-5 py-3 sm:py-4 border-t glass-divider bg-white/40 relative">
+        <div className="shrink-0 px-3 sm:px-5 py-3 sm:py-4 border-t glass-divider bg-white/[0.06] relative">
           {attachedFile && (
-            <div className="mb-2 flex items-center gap-2 bg-ocean-50 border border-ocean-200 rounded-xl px-3 py-1.5 text-xs">
-              <FileText className="w-3.5 h-3.5 text-ocean-600" />
+            <div className="mb-2 flex items-center gap-2 bg-ocean-50 border border-white/25 rounded-full px-3 py-1.5 text-xs">
+              <FileText className="w-3.5 h-3.5 text-white" />
               <span className="font-semibold text-navy/70 truncate">{attachedFile.name}</span>
               <span className="text-navy/40">({Math.round(attachedFile.content.length / 1024 * 10) / 10} KB attached)</span>
-              <button onClick={() => setAttachedFile(null)} className="ml-auto p-1 hover:bg-navy/5 rounded cursor-pointer">
+              <button onClick={() => setAttachedFile(null)} className="ml-auto p-1 hover:bg-white/5 rounded cursor-pointer">
                 <X className="w-3.5 h-3.5 text-navy/50" />
               </button>
             </div>
@@ -415,7 +415,7 @@ export default function CenterPanel() {
               <motion.div
                 initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
                 transition={{ duration: 0.12 }}
-                className="mb-1.5 bg-white border border-navy/10 rounded-2xl shadow-lg overflow-hidden"
+                className="mb-1.5 bg-surface border border-navy/10 rounded-2xl shadow-lg overflow-hidden"
               >
                 {mentionCandidates.map((agent) => (
                   <button
@@ -428,7 +428,7 @@ export default function CenterPanel() {
                       setInput(newInput);
                       setMentionQuery(null);
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-navy/5 transition-colors cursor-pointer text-left"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition-colors cursor-pointer text-left"
                   >
                     <span className="text-base leading-none">{agent.emoji}</span>
                     <div>
@@ -441,12 +441,12 @@ export default function CenterPanel() {
             )}
           </AnimatePresence>
 
-          <div className="flex items-center gap-3 bg-white border border-navy/10 rounded-2xl px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-ocean-100 focus-within:border-ocean-400/70 transition-all">
+          <div className="flex items-center gap-3 bg-surface border border-navy/10 rounded-2xl px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-white/20 focus-within:border-white/25 transition-all">
             {/* Left Plus icon = new chat */}
             <button
               onClick={handleNewChat}
               title="Start new chat (clears messages)"
-              className="w-8 h-8 rounded-full bg-[rgba(23,23,31,0.03)] hover:bg-[rgba(23,23,31,0.08)] flex items-center justify-center text-navy/60 transition-colors cursor-pointer"
+              className="w-8 h-8 rounded-full bg-white/[0.03] hover:bg-white/[0.08] flex items-center justify-center text-navy/60 transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -485,14 +485,14 @@ export default function CenterPanel() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 title="Attach a text file as task context"
-                className="p-1.5 hover:bg-[rgba(23,23,31,0.05)] rounded-lg text-navy/40 hover:text-navy/60 transition-colors cursor-pointer"
+                className="p-1.5 hover:bg-white/[0.05] rounded-lg text-navy/40 hover:text-navy/60 transition-colors cursor-pointer"
               >
                 <Paperclip className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setShowEmoji((v) => !v)}
                 title="Insert emoji"
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${showEmoji ? 'bg-navy/5 text-navy/70' : 'text-navy/40 hover:text-navy/60 hover:bg-[rgba(23,23,31,0.05)]'}`}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${showEmoji ? 'bg-white/5 text-navy/70' : 'text-navy/40 hover:text-navy/60 hover:bg-white/[0.05]'}`}
               >
                 <Smile className="w-4 h-4" />
               </button>
@@ -512,10 +512,10 @@ export default function CenterPanel() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 4 }}
                 transition={{ duration: 0.15 }}
-                className="absolute bottom-20 right-5 z-50 bg-white border border-navy/10 rounded-2xl shadow-lg p-2 grid grid-cols-8 gap-1"
+                className="absolute bottom-20 right-5 z-50 bg-surface border border-navy/10 rounded-2xl shadow-lg p-2 grid grid-cols-8 gap-1"
               >
                 {EMOJIS.map((e) => (
-                  <button key={e} onClick={() => setInput((prev) => prev + e)} className="w-8 h-8 text-lg hover:bg-navy/5 rounded-lg cursor-pointer">
+                  <button key={e} onClick={() => setInput((prev) => prev + e)} className="w-8 h-8 text-lg hover:bg-white/5 rounded-lg cursor-pointer">
                     {e}
                   </button>
                 ))}

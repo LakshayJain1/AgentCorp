@@ -18,7 +18,7 @@ const HIREABLE_ROLES: { role: AgentRole; label: string; emoji: string; descripti
 ];
 
 const STATUS_DOT: Record<string, { color: string; pulse: boolean }> = {
-  idle: { color: 'rgba(23,23,31,0.18)', pulse: false },
+  idle: { color: 'rgba(255,255,255,0.18)', pulse: false },
   thinking: { color: '#FF9F0A', pulse: true },
   researching: { color: '#0A84FF', pulse: true },
   coding: { color: '#FF9F0A', pulse: true },
@@ -52,7 +52,7 @@ function AgentRow({ agent }: { agent: { id: string; name: string; role: string; 
 
   return (
     <div className={`group relative flex items-center gap-2.5 px-3 py-3 rounded-2xl transition-all duration-200 ${
-      isSelected ? 'glass-card !bg-white/90 shadow-md border-navy/15' : 'hover:bg-[rgba(23,23,31,0.03)]'
+      isSelected ? 'glass-card !bg-surface shadow-md border-navy/15' : 'hover:bg-white/[0.03]'
     } ${!agent.online ? 'opacity-40' : ''}`}>
       <motion.button
         whileHover={{ x: 1 }}
@@ -62,13 +62,13 @@ function AgentRow({ agent }: { agent: { id: string; name: string; role: string; 
       >
         <div className="relative shrink-0">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-sm shadow-sm bg-white"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-sm shadow-sm bg-surface"
             style={{ border: `1px solid ${colorHex}26` }}
           >
             {agent.emoji}
           </div>
           <div
-            className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${agent.online ? 'bg-[#34C759]' : 'bg-gray-300'}`}
+            className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${agent.online ? 'bg-[#34C759]' : 'bg-white/15'}`}
             style={{ borderColor: 'rgba(255,255,255,0.9)' }}
           />
         </div>
@@ -94,9 +94,9 @@ function AgentRow({ agent }: { agent: { id: string; name: string; role: string; 
             }
           }}
           title={agent.online ? `Fire ${agent.name}` : `Re-hire a ${agent.role}`}
-          className="opacity-0 group-hover:opacity-100 shrink-0 p-1.5 rounded-lg hover:bg-rose-50 text-navy/30 hover:text-rose-500 transition-all cursor-pointer"
+          className="opacity-0 group-hover:opacity-100 shrink-0 p-1.5 rounded-lg hover:bg-rose-500/10 text-navy/30 hover:text-rose-400 transition-all cursor-pointer"
         >
-          {agent.online ? <UserMinus className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5 text-emerald-500" />}
+          {agent.online ? <UserMinus className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5 text-emerald-400" />}
         </button>
       )}
       {!canFire && <ChevronRight className="w-4 h-4 text-navy/30 shrink-0" />}
@@ -134,7 +134,7 @@ export default function LeftSidebar() {
             whileTap={{ scale: 0.96 }}
             onClick={handleNewChat}
             title="Start new chat (clears messages and selection)"
-            className="flex-1 py-3 px-4 rounded-full bg-gradient-to-r from-ocean to-teal text-white text-xs font-bold flex items-center justify-center gap-2 shadow-[0_4px_16px_rgba(10,132,255,0.25)] cursor-pointer hover:opacity-90"
+            className="flex-1 py-3 px-4 rounded-full bg-black text-white text-xs font-bold flex items-center justify-center gap-2 shadow-none cursor-pointer hover:opacity-90"
           >
             <Plus className="w-4 h-4" />
             New Chat
@@ -144,7 +144,7 @@ export default function LeftSidebar() {
             whileTap={{ scale: 0.96 }}
             onClick={toggleLibrary}
             title={showLibrary ? 'Hide team library' : 'Show team library (tasks + deliverables)'}
-            className={`p-3 rounded-2xl glass-card cursor-pointer ${showLibrary ? 'text-ocean-600 bg-ocean-50' : 'text-navy/60 hover:text-navy'}`}
+            className={`p-3 rounded-2xl glass-card cursor-pointer ${showLibrary ? 'text-white bg-ocean-50' : 'text-navy/60 hover:text-navy'}`}
           >
             <BookOpen className="w-4 h-4" />
           </motion.button>
@@ -159,7 +159,7 @@ export default function LeftSidebar() {
           <button
             onClick={() => setShowHireModal((v) => !v)}
             title="Hire a new agent"
-            className="p-1.5 rounded-xl glass-card hover:bg-ocean-50 text-navy/40 hover:text-ocean-600 transition-colors cursor-pointer"
+            className="p-1.5 rounded-xl glass-card hover:bg-ocean-50 text-navy/40 hover:text-white transition-colors cursor-pointer"
           >
             <UserPlus className="w-3.5 h-3.5" />
           </button>
@@ -173,7 +173,7 @@ export default function LeftSidebar() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.15 }}
-              className="mx-2.5 mb-2 bg-white border border-navy/10 rounded-2xl shadow-xl p-3 space-y-2"
+              className="mx-2.5 mb-2 bg-surface border border-navy/10 rounded-2xl shadow-xl p-3 space-y-2"
             >
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-bold text-navy">Hire an agent</p>
@@ -190,7 +190,7 @@ export default function LeftSidebar() {
                       centralOrchestrator.initWorkers();
                       setShowHireModal(false);
                     }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-navy/5 text-left transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-white/5 text-left transition-colors cursor-pointer"
                   >
                     <span className="text-base">{r.emoji}</span>
                     <div className="min-w-0">
@@ -216,7 +216,7 @@ export default function LeftSidebar() {
                 ) : (
                   <div className="space-y-1 max-h-40 overflow-y-auto glass-scrollbar">
                     {[...tasks].slice(-8).reverse().map((t) => (
-                      <div key={t.id} className="text-[11px] bg-white/70 border border-navy/5 rounded-xl px-2.5 py-1.5">
+                      <div key={t.id} className="text-[11px] bg-white/[0.06] border border-navy/5 rounded-xl px-2.5 py-1.5">
                         <p className="font-bold text-navy truncate">{t.title}</p>
                         <p className="text-navy/40 text-[10px] capitalize">{t.status}{t.assignedTo ? ` · ${agents.find((a) => a.id === t.assignedTo)?.name || ''}` : ''}</p>
                       </div>
@@ -231,7 +231,7 @@ export default function LeftSidebar() {
                 ) : (
                   <div className="space-y-1 max-h-40 overflow-y-auto glass-scrollbar">
                     {[...projects].slice(-8).reverse().map((p) => (
-                      <div key={p.id} className="text-[11px] bg-white/70 border border-navy/5 rounded-xl px-2.5 py-1.5">
+                      <div key={p.id} className="text-[11px] bg-white/[0.06] border border-navy/5 rounded-xl px-2.5 py-1.5">
                         <p className="font-bold text-navy truncate">{p.title}</p>
                         <p className="text-navy/40 text-[10px] uppercase">{p.type}{p.lang ? ` · ${p.lang}` : ''}</p>
                       </div>
@@ -252,7 +252,7 @@ export default function LeftSidebar() {
       </div>
 
       {/* Bottom Section */}
-      <div className="p-4 border-t glass-divider bg-white/40 relative">
+      <div className="p-4 border-t glass-divider bg-white/[0.06] relative">
         <AnimatePresence>
           {showSimDetails && (
             <motion.div
@@ -260,7 +260,7 @@ export default function LeftSidebar() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 4 }}
               transition={{ duration: 0.15 }}
-              className="absolute bottom-full left-2 right-2 mb-2 bg-white border border-navy/10 rounded-2xl shadow-lg p-3 text-[11px]"
+              className="absolute bottom-full left-2 right-2 mb-2 bg-surface border border-navy/10 rounded-2xl shadow-lg p-3 text-[11px]"
             >
               <p className="font-bold text-navy mb-1.5">Simulation details</p>
               <div className="grid grid-cols-2 gap-1.5 text-navy/60">
@@ -276,7 +276,7 @@ export default function LeftSidebar() {
         </AnimatePresence>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-navy text-white flex items-center justify-center text-xs font-bold">N</div>
+            <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold">N</div>
             <div>
               <div className="flex items-center gap-1.5">
                 <span className={`w-1.5 h-1.5 rounded-full ${simulation.paused ? 'bg-amber-400' : 'bg-[#34C759] animate-pulse'}`} />
@@ -288,14 +288,14 @@ export default function LeftSidebar() {
             <button
               onClick={toggleMute}
               title={isMuted ? 'Unmute ambient chatter' : 'Mute ambient chatter'}
-              className="p-1.5 hover:bg-navy/5 rounded-lg cursor-pointer text-navy/40 hover:text-navy/70"
+              className="p-1.5 hover:bg-white/5 rounded-lg cursor-pointer text-navy/40 hover:text-navy/70"
             >
               {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
             </button>
             <button
               onClick={() => setShowSimDetails((v) => !v)}
               title={showSimDetails ? 'Hide simulation details' : 'Show simulation details'}
-              className="p-1.5 hover:bg-navy/5 rounded-lg cursor-pointer text-navy/30 hover:text-navy/60"
+              className="p-1.5 hover:bg-white/5 rounded-lg cursor-pointer text-navy/30 hover:text-navy/60"
             >
               {showSimDetails ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>

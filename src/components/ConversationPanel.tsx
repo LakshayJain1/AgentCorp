@@ -60,8 +60,8 @@ export default function ConversationPanel() {
             <span className="text-sm font-semibold text-navy/40 mb-1">No messages yet</span>
             <span className="text-xs text-navy/25 mb-4">Agent conversations will appear here...</span>
             <div className="w-full max-w-[160px] space-y-2">
-              <div className="h-1.5 bg-[rgba(23,23,31,0.05)] rounded-full pulse-skeleton w-2/3 mx-auto" />
-              <div className="h-1.5 bg-[rgba(23,23,31,0.05)] rounded-full pulse-skeleton w-5/6 mx-auto" />
+              <div className="h-1.5 bg-white/[0.05] rounded-full pulse-skeleton w-2/3 mx-auto" />
+              <div className="h-1.5 bg-white/[0.05] rounded-full pulse-skeleton w-5/6 mx-auto" />
             </div>
           </div>
         )}
@@ -69,7 +69,7 @@ export default function ConversationPanel() {
           const isNewSender = i === 0 || allMessages[i - 1].fromAgentId !== msg.fromAgentId;
           const color = ROLE_COLORS[msg.fromRole] || '#86868B';
           return (
-            <div key={msg.id} className="flex items-start gap-2.5 hover:bg-white/70/50 p-1.5 rounded-lg transition-all">
+            <div key={msg.id} className="flex items-start gap-2.5 hover:bg-white/10/50 p-1.5 rounded-lg transition-all">
               {isNewSender && (
                 <div
                   className="w-7 h-7 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5 border-2"
@@ -85,7 +85,7 @@ export default function ConversationPanel() {
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-navy font-semibold text-xs">{msg.fromName}</span>
                     <span
-                      className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-white/70 border border-navy/5"
+                      className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-white/[0.06] border border-navy/5"
                       style={{ color }}
                     >
                       {msg.fromRole}

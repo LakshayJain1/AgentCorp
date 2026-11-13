@@ -20,7 +20,7 @@ export default function WorkspaceFolderButton() {
         disabled={busy}
         title={error ? `Error: ${error}` : root ? `Agents can read and write in:\n${root}\n\nClick to change` : 'Choose the project folder your agents can read and write'}
         className={`flex items-center gap-1.5 pl-2.5 py-1.5 text-xs font-semibold rounded-full border transition-colors cursor-pointer disabled:opacity-50 ${
-          root ? 'pr-2.5 text-navy/70 border-navy/10 bg-white/60 hover:bg-white' : 'pr-3 text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100'
+          root ? 'pr-2.5 text-navy/70 border-navy/10 bg-white/[0.06] hover:bg-white/10' : 'pr-3 text-amber-400 border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/15'
         } ${root ? 'rounded-r-none' : ''}`}
       >
         {root ? <FolderOpen className="w-3.5 h-3.5" /> : <FolderPlus className="w-3.5 h-3.5" />}
@@ -31,7 +31,7 @@ export default function WorkspaceFolderButton() {
           onClick={clear}
           title="Stop agents from accessing this folder"
           aria-label="Disconnect project folder"
-          className="px-1.5 py-1.5 rounded-r-full border border-l-0 border-navy/10 bg-white/60 text-navy/40 hover:text-rose-500 hover:bg-white cursor-pointer"
+          className="px-1.5 py-1.5 rounded-r-full border border-l-0 border-navy/10 bg-white/[0.06] text-navy/40 hover:text-rose-400 hover:bg-white/10 cursor-pointer"
         >
           <X className="w-3 h-3" />
         </button>

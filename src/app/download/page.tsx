@@ -85,7 +85,7 @@ export default function DownloadPage() {
           transition={SPRING}
           className="text-center mb-14"
         >
-          <BrandLogo size={64} className="mx-auto shadow-[0_16px_40px_rgba(10,132,255,0.35)] mb-7" priority />
+          <BrandLogo size={64} className="mx-auto shadow-none mb-7" priority />
           <h1 className="display-hero text-navy">Download AgentCorp</h1>
           <p className="prose-body max-w-md mx-auto mt-5">
             Run your autonomous AI workspace natively on your machine. Same features as the web app, installed locally.
@@ -101,8 +101,8 @@ export default function DownloadPage() {
             className="glass rounded-3xl p-9 mb-10 text-center"
           >
             <div className="flex items-center justify-center gap-2.5 mb-2">
-              <span className="text-ocean-600">{detected.icon}</span>
-              <span className="text-sm font-semibold text-ocean-700 uppercase tracking-wider">
+              <span className="text-white">{detected.icon}</span>
+              <span className="text-sm font-semibold text-white uppercase tracking-wider">
                 Detected: {detected.label}
               </span>
             </div>
@@ -123,7 +123,7 @@ export default function DownloadPage() {
                 <a
                   href="/downloads/AgentCorp-Setup-2.1.1.exe"
                   download
-                  className="text-xs text-ocean-600 hover:text-ocean-700 font-medium underline underline-offset-2"
+                  className="text-xs text-white hover:text-white font-medium underline underline-offset-2"
                 >
                   Installer (.exe)
                 </a>
@@ -131,7 +131,7 @@ export default function DownloadPage() {
                 <a
                   href="/downloads/AgentCorp-2.1.1.exe"
                   download
-                  className="text-xs text-ocean-600 hover:text-ocean-700 font-medium underline underline-offset-2"
+                  className="text-xs text-white hover:text-white font-medium underline underline-offset-2"
                 >
                   Portable (.exe)
                 </a>
@@ -164,12 +164,12 @@ export default function DownloadPage() {
                   download
                   className={`group flex flex-col items-center gap-3 p-7 rounded-3xl border transition-all duration-300 ${
                     p === platform
-                      ? 'glass border-ocean-300/60 shadow-[var(--shadow-lift)]'
-                      : 'bg-white/60 border-navy/5 hover:bg-white hover:shadow-[var(--shadow-soft)]'
+                      ? 'glass border-white/25 shadow-none'
+                      : 'bg-white/[0.06] border-navy/5 hover:bg-white/10 hover:shadow-none'
                   }`}
                 >
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${
-                    p === platform ? 'bg-ocean-600 text-white shadow-[0_8px_20px_rgba(10,132,255,0.35)]' : 'bg-white text-navy/50 border border-navy/5 group-hover:text-ocean-600'
+                    p === platform ? 'bg-ocean-600 text-white shadow-none' : 'bg-surface text-navy/50 border border-navy/5 group-hover:text-white'
                   }`}>
                     {dl.icon}
                   </div>
@@ -205,7 +205,7 @@ export default function DownloadPage() {
             'System tray support (coming soon)',
           ].map((feature, i) => (
             <div key={i} className="flex items-start gap-2.5 p-3">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
               <span className="text-sm text-navy/70">{feature}</span>
             </div>
           ))}
@@ -220,11 +220,11 @@ export default function DownloadPage() {
         >
           <p className="text-xs text-navy/40">
             Need help? Check the{' '}
-            <a href="#" className="text-ocean-600 hover:text-ocean-700 underline underline-offset-2">
+            <a href="#" className="text-white hover:text-white underline underline-offset-2">
               installation guide
             </a>{' '}
             or{' '}
-            <a href="#" className="text-ocean-600 hover:text-ocean-700 underline underline-offset-2">
+            <a href="#" className="text-white hover:text-white underline underline-offset-2">
               contact support
             </a>.
           </p>

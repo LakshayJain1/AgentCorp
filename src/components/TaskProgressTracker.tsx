@@ -12,7 +12,7 @@ export default function TaskProgressTracker() {
     <div className="fixed bottom-0 left-0 right-0 flex gap-1 px-4 py-1.5 glass-topbar z-50">
       {tasks.slice(-6).map((task) => {
         const statusColors: Record<string, string> = {
-          pending: 'bg-gray-300',
+          pending: 'bg-white/15',
           assigned: 'bg-ocean-500',
           in_progress: 'bg-amber-400',
           review: 'bg-[#BF5AF2]',
@@ -26,7 +26,7 @@ export default function TaskProgressTracker() {
             animate={{ opacity: 1, x: 0 }}
             className="flex items-center gap-1.5 text-xs truncate max-w-[200px]"
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${statusColors[task.status] || 'bg-gray-300'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${statusColors[task.status] || 'bg-white/15'}`} />
             <span className="text-navy/55 truncate">{task.title}</span>
             <span className="text-navy/55 uppercase text-[9px]">{task.status.replace('_', ' ')}</span>
           </motion.div>

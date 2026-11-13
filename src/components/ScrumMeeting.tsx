@@ -84,7 +84,7 @@ export default function ScrumMeeting() {
       <motion.button
         whileTap={{ scale: 0.97 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-violet-200 text-violet-600 bg-violet-50 hover:bg-violet-100 transition-all flex items-center gap-1.5 cursor-pointer"
+        className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-violet-500/25 text-violet-400 bg-violet-500/10 hover:bg-violet-500/15 transition-all flex items-center gap-1.5 cursor-pointer"
       >
         <MessageSquareText className="w-3 h-3" />
         Daily Scrum
@@ -97,7 +97,7 @@ export default function ScrumMeeting() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.97 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-full right-0 mt-2 bg-white border border-navy/10 rounded-2xl shadow-xl p-4 w-80 z-50"
+            className="absolute top-full right-0 mt-2 bg-surface border border-navy/10 rounded-2xl shadow-xl p-4 w-80 z-50"
           >
             {/* Header */}
             <div className="flex justify-between items-center mb-3">
@@ -110,7 +110,7 @@ export default function ScrumMeeting() {
                   <button
                     onClick={generate}
                     title="Regenerate"
-                    className="text-navy/30 hover:text-violet-500 transition-colors cursor-pointer"
+                    className="text-navy/30 hover:text-violet-400 transition-colors cursor-pointer"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                   </button>
@@ -178,7 +178,7 @@ export default function ScrumMeeting() {
                     {!allDispatched && (
                       <button
                         onClick={dispatchAll}
-                        className="text-[10px] font-semibold text-violet-600 hover:text-violet-700 flex items-center gap-0.5 cursor-pointer"
+                        className="text-[10px] font-semibold text-violet-400 hover:text-violet-400 flex items-center gap-0.5 cursor-pointer"
                       >
                         <Zap className="w-2.5 h-2.5" />
                         Dispatch all
@@ -192,7 +192,7 @@ export default function ScrumMeeting() {
                         <div
                           key={i}
                           className={`flex items-start gap-2 text-xs rounded-lg px-2 py-1.5 transition-colors ${
-                            sent ? 'bg-violet-50/50 text-navy/35' : 'bg-navy/3 hover:bg-navy/6 text-navy/70'
+                            sent ? 'bg-violet-500/10 text-navy/35' : 'bg-white/3 hover:bg-white/6 text-navy/70'
                           }`}
                         >
                           <span className="flex-1">{title}</span>
@@ -201,8 +201,8 @@ export default function ScrumMeeting() {
                             disabled={sent}
                             className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition-all cursor-pointer ${
                               sent
-                                ? 'text-violet-300 bg-violet-50 cursor-default'
-                                : 'text-violet-600 bg-violet-50 hover:bg-violet-100'
+                                ? 'text-violet-300 bg-violet-500/10 cursor-default'
+                                : 'text-violet-400 bg-violet-500/10 hover:bg-violet-500/15'
                             }`}
                           >
                             {sent ? '✓ sent' : 'run'}
@@ -218,13 +218,13 @@ export default function ScrumMeeting() {
                   <>
                     <div className="border-t border-navy/6" />
                     <section>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-500/60 mb-1.5 flex items-center gap-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-400/60 mb-1.5 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
                         Blockers
                       </p>
                       <div className="flex flex-col gap-1">
                         {result.blockers.map((b, i) => (
-                          <p key={i} className="text-xs text-amber-700/70 bg-amber-50 rounded-lg px-2 py-1">
+                          <p key={i} className="text-xs text-amber-400/70 bg-amber-500/10 rounded-lg px-2 py-1">
                             {b}
                           </p>
                         ))}

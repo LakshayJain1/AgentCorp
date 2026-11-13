@@ -111,7 +111,7 @@ export default function RightPanel() {
         );
       default:
         return (
-          <span className="text-[9px] font-bold text-navy/40 bg-navy/5 px-1.5 py-0.5 rounded uppercase">
+          <span className="text-[9px] font-bold text-navy/40 bg-white/5 px-1.5 py-0.5 rounded uppercase">
             FILE
           </span>
         );
@@ -136,7 +136,7 @@ export default function RightPanel() {
   const connectedCount = integrations.connections.length;
 
   return (
-    <div className="w-full lg:w-1/4 shrink-0 h-full min-h-0 flex flex-col glass-panel bg-[#FAFBFD]/30 border-l">
+    <div className="w-full lg:w-1/4 shrink-0 h-full min-h-0 flex flex-col glass-panel bg-black/20 border-l">
 
       {/* Tab Bar */}
       <div className="shrink-0 flex items-center gap-1 px-3 pt-3 pb-0 border-b border-navy/6">
@@ -144,7 +144,7 @@ export default function RightPanel() {
           onClick={() => setActiveTab('overview')}
           className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold rounded-t-lg transition-all cursor-pointer ${
             activeTab === 'overview'
-              ? 'text-navy border-b-2 border-ocean-500 bg-white/60'
+              ? 'text-navy border-b-2 border-white/25 bg-white/[0.06]'
               : 'text-navy/45 hover:text-navy/70'
           }`}
         >
@@ -155,14 +155,14 @@ export default function RightPanel() {
           onClick={() => setActiveTab('integrations')}
           className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold rounded-t-lg transition-all cursor-pointer ${
             activeTab === 'integrations'
-              ? 'text-navy border-b-2 border-ocean-500 bg-white/60'
+              ? 'text-navy border-b-2 border-white/25 bg-white/[0.06]'
               : 'text-navy/45 hover:text-navy/70'
           }`}
         >
           <Plug className="w-3.5 h-3.5" />
           Integrations
           {connectedCount > 0 && (
-            <span className="ml-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-emerald-100 text-emerald-600">
+            <span className="ml-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-emerald-500/15 text-emerald-400">
               {connectedCount}
             </span>
           )}
@@ -194,7 +194,7 @@ export default function RightPanel() {
             onClick={handleSprintPlanning}
             disabled={sprintLoading}
             title="PM-driven sprint: auto-generates and kicks off 4 tasks"
-            className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-full bg-ocean/10 text-ocean-600 hover:bg-ocean/20 transition-colors cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-full bg-ocean/10 text-white hover:bg-ocean/20 transition-colors cursor-pointer disabled:opacity-50"
           >
             <CalendarDays className="w-3 h-3" />
             {sprintLoading ? 'Planning…' : 'Plan Sprint'}
@@ -204,8 +204,8 @@ export default function RightPanel() {
         {/* 4 Stats Cards Grid */}
         <div className="grid grid-cols-4 gap-2">
           {/* CPU Card */}
-          <div className="bg-[#EBF2FC]/40 border border-[#EBF2FC] rounded-2xl p-2.5 flex flex-col justify-between min-h-[75px] shadow-sm hover:shadow-md transition-shadow">
-            <div className="bg-white rounded-lg w-6 h-6 flex items-center justify-center border border-navy/5">
+          <div className="bg-white/5/40 border border-white/10 rounded-2xl p-2.5 flex flex-col justify-between min-h-[75px] shadow-sm hover:shadow-md transition-shadow">
+            <div className="bg-surface rounded-lg w-6 h-6 flex items-center justify-center border border-navy/5">
               <Cpu className="w-3.5 h-3.5 text-navy/60" />
             </div>
             <div className="mt-2">
@@ -215,9 +215,9 @@ export default function RightPanel() {
           </div>
 
           {/* Memory Card */}
-          <div className="bg-[#EBF2FC]/40 border border-[#EBF2FC] rounded-2xl p-2.5 flex flex-col justify-between min-h-[75px] shadow-sm hover:shadow-md transition-shadow">
-            <div className="bg-white rounded-lg w-6 h-6 flex items-center justify-center border border-navy/5">
-              <Database className="w-3.5 h-3.5 text-[#0A84FF]" />
+          <div className="bg-white/5/40 border border-white/10 rounded-2xl p-2.5 flex flex-col justify-between min-h-[75px] shadow-sm hover:shadow-md transition-shadow">
+            <div className="bg-surface rounded-lg w-6 h-6 flex items-center justify-center border border-navy/5">
+              <Database className="w-3.5 h-3.5 text-white" />
             </div>
             <div className="mt-2">
               <span className="block text-[8px] font-bold text-navy/40 uppercase">Memory</span>
@@ -226,8 +226,8 @@ export default function RightPanel() {
           </div>
 
           {/* Agents Card */}
-          <div className="bg-[#EBF2FC]/40 border border-[#EBF2FC] rounded-2xl p-2.5 flex flex-col justify-between min-h-[75px] shadow-sm hover:shadow-md transition-shadow">
-            <div className="bg-white rounded-lg w-6 h-6 flex items-center justify-center border border-navy/5">
+          <div className="bg-white/5/40 border border-white/10 rounded-2xl p-2.5 flex flex-col justify-between min-h-[75px] shadow-sm hover:shadow-md transition-shadow">
+            <div className="bg-surface rounded-lg w-6 h-6 flex items-center justify-center border border-navy/5">
               <Users className="w-3.5 h-3.5 text-[#BF5AF2]" />
             </div>
             <div className="mt-2">
@@ -237,8 +237,8 @@ export default function RightPanel() {
           </div>
 
           {/* Tasks Card */}
-          <div className="bg-[#EBF2FC]/40 border border-[#EBF2FC] rounded-2xl p-2.5 flex flex-col justify-between min-h-[75px] shadow-sm hover:shadow-md transition-shadow">
-            <div className="bg-white rounded-lg w-6 h-6 flex items-center justify-center border border-[#34C759]/20">
+          <div className="bg-white/5/40 border border-white/10 rounded-2xl p-2.5 flex flex-col justify-between min-h-[75px] shadow-sm hover:shadow-md transition-shadow">
+            <div className="bg-surface rounded-lg w-6 h-6 flex items-center justify-center border border-[#34C759]/20">
               <CheckSquare className="w-3.5 h-3.5 text-[#34C759]" />
             </div>
             <div className="mt-2">
@@ -253,7 +253,7 @@ export default function RightPanel() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-lg bg-navy/5 flex items-center justify-center">
+            <span className="w-5 h-5 rounded-lg bg-white/5 flex items-center justify-center">
               <FileText className="w-3.5 h-3.5 text-navy/60" />
             </span>
             <h3 className="text-sm font-bold text-navy font-display tracking-tight">Execution Log</h3>
@@ -262,10 +262,10 @@ export default function RightPanel() {
         </div>
 
         {/* Empty / Logs List State */}
-        <div className="bg-[#FAFBFD]/80 border border-navy/5 rounded-2xl p-4 shadow-sm min-h-[140px] flex items-center justify-center">
+        <div className="bg-black/20 border border-navy/5 rounded-2xl p-4 shadow-sm min-h-[140px] flex items-center justify-center">
           {executionLogs.length === 0 ? (
             <div className="text-center py-4">
-              <div className="w-10 h-10 rounded-full bg-navy/5 flex items-center justify-center mx-auto mb-2">
+              <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-2">
                 <FileText className="w-5 h-5 text-navy/40" />
               </div>
               <p className="text-xs font-bold text-navy/80">No logs yet</p>
@@ -281,12 +281,12 @@ export default function RightPanel() {
                   : 'bg-amber-400 animate-pulse';
                 const agent = agents.find((a) => a.id === log.agentId);
                 return (
-                  <div key={idx} className="flex items-start gap-2 text-[10px] py-1.5 px-2 rounded-xl hover:bg-navy/4 transition-colors">
+                  <div key={idx} className="flex items-start gap-2 text-[10px] py-1.5 px-2 rounded-xl hover:bg-white/4 transition-colors">
                     <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${dot}`} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {agent && <span className="font-bold text-navy/70">{agent.emoji} {agent.name}</span>}
-                        <span className="text-[9px] font-mono text-navy/35 bg-navy/5 px-1 rounded">{log.tool}</span>
+                        <span className="text-[9px] font-mono text-navy/35 bg-white/5 px-1 rounded">{log.tool}</span>
                       </div>
                       <p className="text-navy/60 truncate mt-0.5">{log.action}</p>
                       <p className="text-navy/35 text-[9px] truncate">{log.taskTitle}</p>
@@ -306,7 +306,7 @@ export default function RightPanel() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-lg bg-navy/5 flex items-center justify-center">
+            <span className="w-5 h-5 rounded-lg bg-white/5 flex items-center justify-center">
               <Folder className="w-3.5 h-3.5 text-[#FF9F0A]" />
             </span>
             <h3 className="text-sm font-bold text-navy font-display tracking-tight">Deliverables</h3>
@@ -316,7 +316,7 @@ export default function RightPanel() {
               <button
                 onClick={handleExportAll}
                 title="Download all deliverables as a single text file"
-                className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded-lg bg-navy/5 hover:bg-navy/10 text-navy/60 hover:text-navy transition-colors cursor-pointer"
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded-lg bg-white/5 hover:bg-white/10 text-navy/60 hover:text-navy transition-colors cursor-pointer"
               >
                 <PackageOpen className="w-3 h-3" /> Export All
               </button>
@@ -338,8 +338,8 @@ export default function RightPanel() {
         {!listCollapsed && (
         <div className="space-y-2">
           {displayDeliverables.length === 0 ? (
-            <div className="bg-[#FAFBFD]/80 border border-navy/5 rounded-2xl p-4 text-center">
-              <div className="w-10 h-10 rounded-full bg-navy/5 flex items-center justify-center mx-auto mb-2">
+            <div className="bg-black/20 border border-navy/5 rounded-2xl p-4 text-center">
+              <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-2">
                 <Folder className="w-5 h-5 text-navy/40" />
               </div>
               <p className="text-xs font-bold text-navy/80">No deliverables yet</p>
@@ -355,7 +355,7 @@ export default function RightPanel() {
               return (
               <div
                 key={file.id}
-                className={`bg-white border rounded-2xl shadow-sm transition-shadow ${isOpen ? 'border-ocean-300 shadow-md' : 'border-navy/5 hover:shadow-md'}`}
+                className={`bg-surface border rounded-2xl shadow-sm transition-shadow ${isOpen ? 'border-white/25 shadow-md' : 'border-navy/5 hover:shadow-md'}`}
               >
                 <button
                   onClick={() => setExpandedId(isOpen ? null : file.id)}
@@ -363,7 +363,7 @@ export default function RightPanel() {
                   className="w-full p-3 flex items-center justify-between cursor-pointer text-left"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-[#FAFBFD] border border-navy/5 flex items-center justify-center text-sm shadow-sm shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-black/20 border border-navy/5 flex items-center justify-center text-sm shadow-sm shrink-0">
                       {getDeliverableIcon(file.type)}
                     </div>
                     <div className="min-w-0">
@@ -401,7 +401,7 @@ export default function RightPanel() {
                           {parentTask && (
                             <button
                               onClick={() => setSelectedTask(parentTask.id)}
-                              className="font-semibold text-ocean-600 hover:underline cursor-pointer truncate"
+                              className="font-semibold text-white hover:underline cursor-pointer truncate"
                               title="Jump to parent task"
                             >
                               Task: {parentTask.title}
@@ -409,26 +409,26 @@ export default function RightPanel() {
                           )}
                           <span className="ml-auto shrink-0">{file.content.length} chars</span>
                         </div>
-                        <pre className="text-[11px] leading-relaxed text-navy/80 bg-[#FAFBFD] border border-navy/5 rounded-xl p-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words glass-scrollbar">
+                        <pre className="text-[11px] leading-relaxed text-navy/80 bg-black/20 border border-navy/5 rounded-xl p-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words glass-scrollbar">
                           {file.content || 'No content.'}
                         </pre>
                         <div className="flex items-center gap-2 mt-2">
                           <button
                             onClick={() => handleCopy(file.id, file.content)}
-                            className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-navy/5 hover:bg-navy/10 text-navy/70 cursor-pointer"
+                            className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-navy/70 cursor-pointer"
                           >
-                            {copiedId === file.id ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedId === file.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                             {copiedId === file.id ? 'Copied' : 'Copy'}
                           </button>
                           <button
                             onClick={() => handleDownload(file.title, file.type, file.lang, file.content)}
-                            className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-navy/5 hover:bg-navy/10 text-navy/70 cursor-pointer"
+                            className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-navy/70 cursor-pointer"
                           >
                             <Download className="w-3.5 h-3.5" /> Download
                           </button>
                           <button
                             onClick={() => setExpandedId(null)}
-                            className="ml-auto flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg text-navy/40 hover:text-navy/70 hover:bg-navy/5 cursor-pointer"
+                            className="ml-auto flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg text-navy/40 hover:text-navy/70 hover:bg-white/5 cursor-pointer"
                           >
                             <X className="w-3.5 h-3.5" /> Close
                           </button>

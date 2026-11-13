@@ -43,7 +43,7 @@ const OAUTH_CONNECTORS: OAuthConnectorDef[] = [
     desc: 'Read files, create branches, and open pull requests on your repos.',
     icon: <GitBranch size={15} />,
     color: 'hover:border-gray-400',
-    accent: 'bg-[rgba(23,23,31,0.05)] text-navy/80',
+    accent: 'bg-white/[0.05] text-navy/80',
     scopes: 'repo · read:user',
     configuredKey: 'githubOAuthConfigured',
   },
@@ -53,7 +53,7 @@ const OAUTH_CONNECTORS: OAuthConnectorDef[] = [
     desc: 'Post task completions and agent activity to a channel.',
     icon: <Bell size={15} />,
     color: 'hover:border-amber-400',
-    accent: 'bg-amber-50 text-amber-700',
+    accent: 'bg-amber-500/10 text-amber-400',
     scopes: 'chat:write · channels:read',
     configuredKey: 'slackOAuthConfigured',
   },
@@ -63,7 +63,7 @@ const OAUTH_CONNECTORS: OAuthConnectorDef[] = [
     desc: 'Create issues and keep task status in sync with your team.',
     icon: <Zap size={15} />,
     color: 'hover:border-violet-400',
-    accent: 'bg-violet-50 text-violet-700',
+    accent: 'bg-violet-500/10 text-violet-400',
     scopes: 'read · write',
     configuredKey: 'linearOAuthConfigured',
   },
@@ -73,7 +73,7 @@ const OAUTH_CONNECTORS: OAuthConnectorDef[] = [
     desc: 'View deployments, check project status, and trigger builds.',
     icon: <Cloud size={15} />,
     color: 'hover:border-slate-400',
-    accent: 'bg-slate-50 text-slate-700',
+    accent: 'bg-white/5 text-white/80',
     scopes: 'read · write · deploy',
     configuredKey: 'vercelOAuthConfigured',
   },
@@ -83,7 +83,7 @@ const OAUTH_CONNECTORS: OAuthConnectorDef[] = [
     desc: 'Search pages, create notes, and append content to your workspace.',
     icon: <Globe size={15} />,
     color: 'hover:border-stone-400',
-    accent: 'bg-stone-50 text-stone-700',
+    accent: 'bg-white/5 text-white/80',
     scopes: 'read · insert content',
     configuredKey: 'notionOAuthConfigured',
   },
@@ -188,27 +188,27 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
 
   return (
     <div className="space-y-3 text-navy">
-      <div className="p-4 rounded-xl bg-white border border-navy/5 soft-shadow relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-28 h-28 bg-violet-100/40 rounded-full blur-2xl pointer-events-none" />
+      <div className="p-4 rounded-xl bg-surface border border-navy/5 soft-shadow relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-28 h-28 bg-violet-500/15 rounded-full blur-2xl pointer-events-none" />
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-xs font-bold text-transparent bg-clip-text bg-gradient-to-r from-ocean-600 to-violet-500 uppercase tracking-wider">
+            <h3 className="text-xs font-bold text-white/70 uppercase tracking-wider">
               Integrations
             </h3>
             <p className="text-[10px] text-navy/40 mt-0.5">
               {connectedCount} of {OAUTH_CONNECTORS.length} connected
             </p>
           </div>
-          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 border border-emerald-100">
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[9px] font-semibold text-emerald-600 uppercase">Live</span>
+            <span className="text-[9px] font-semibold text-emerald-400 uppercase">Live</span>
           </div>
         </div>
 
         {integrations.error && (
-          <div className="mt-3 p-2.5 rounded-lg bg-rose-50 border border-rose-200 flex items-start gap-2">
-            <AlertTriangle size={12} className="text-rose-500 shrink-0 mt-0.5" />
-            <div className="text-[10px] text-rose-700 leading-relaxed">
+          <div className="mt-3 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/25 flex items-start gap-2">
+            <AlertTriangle size={12} className="text-rose-400 shrink-0 mt-0.5" />
+            <div className="text-[10px] text-rose-400 leading-relaxed">
               {integrations.error}
               {integrations.code === 'server_not_configured' && (
                 <span className="block mt-1">
@@ -223,18 +223,18 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
           <div
             className={`mt-3 p-2.5 rounded-lg border flex items-start gap-2 ${
               banner.kind === 'ok'
-                ? 'bg-emerald-50 border-emerald-200'
-                : 'bg-rose-50 border-rose-200'
+                ? 'bg-emerald-500/10 border-emerald-500/25'
+                : 'bg-rose-500/10 border-rose-500/25'
             }`}
           >
             {banner.kind === 'ok' ? (
-              <Check size={12} className="text-emerald-600 shrink-0 mt-0.5" />
+              <Check size={12} className="text-emerald-400 shrink-0 mt-0.5" />
             ) : (
-              <AlertTriangle size={12} className="text-rose-500 shrink-0 mt-0.5" />
+              <AlertTriangle size={12} className="text-rose-400 shrink-0 mt-0.5" />
             )}
             <span
               className={`text-[10px] leading-relaxed ${
-                banner.kind === 'ok' ? 'text-emerald-700' : 'text-rose-700'
+                banner.kind === 'ok' ? 'text-emerald-400' : 'text-rose-400'
               }`}
             >
               {banner.text}
@@ -243,9 +243,9 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
         )}
 
         {platform && platform.needed.length > 0 && (
-          <div className="mt-3 p-2.5 rounded-lg bg-sky-50 border border-sky-200 flex items-start gap-2">
-            <AlertTriangle size={12} className="text-sky-500 shrink-0 mt-0.5" />
-            <div className="text-[10px] text-sky-700 leading-relaxed">
+          <div className="mt-3 p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/25 flex items-start gap-2">
+            <AlertTriangle size={12} className="text-sky-400 shrink-0 mt-0.5" />
+            <div className="text-[10px] text-sky-400 leading-relaxed">
               <strong>Setup needed (platform owner):</strong>
               <ul className="list-disc ml-3 mt-1 space-y-0.5">
                 {platform.needed.map((n) => (
@@ -256,9 +256,9 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
           </div>
         )}
 
-        <div className="mt-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
-          <AlertTriangle size={12} className="text-amber-500 shrink-0 mt-0.5" />
-          <p className="text-[10px] text-amber-700 leading-relaxed">
+        <div className="mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-start gap-2">
+          <AlertTriangle size={12} className="text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-[10px] text-amber-400 leading-relaxed">
             <strong>Beta:</strong> agents can push commits, send messages, and create issues.{' '}
             <strong>Use at your own risk</strong> on test environments only.
           </p>
@@ -276,8 +276,8 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
           return (
             <div
               key={connector.id}
-              className={`rounded-xl border bg-white soft-shadow overflow-hidden transition-all duration-200 ${connector.color} ${
-                isConnected ? 'border-emerald-200' : 'border-navy/5'
+              className={`rounded-xl border bg-surface soft-shadow overflow-hidden transition-all duration-200 ${connector.color} ${
+                isConnected ? 'border-emerald-500/25' : 'border-navy/5'
               }`}
             >
               <button
@@ -287,7 +287,7 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
                 <div className="flex items-center gap-2.5">
                   <div
                     className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                      isConnected ? 'bg-emerald-50 text-emerald-600' : connector.accent
+                      isConnected ? 'bg-emerald-500/10 text-emerald-400' : connector.accent
                     }`}
                   >
                     {connector.icon}
@@ -301,11 +301,11 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {isConnected ? (
-                    <span className="px-2 py-0.5 rounded-full text-[8px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 uppercase">
+                    <span className="px-2 py-0.5 rounded-full text-[8px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 uppercase">
                       Connected
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[8px] font-semibold bg-white/70 text-navy/40 border border-navy/10 uppercase">
+                    <span className="px-2 py-0.5 rounded-full text-[8px] font-semibold bg-white/[0.06] text-navy/40 border border-navy/10 uppercase">
                       Off
                     </span>
                   )}
@@ -325,7 +325,7 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
                     transition={{ duration: 0.18 }}
                     className="overflow-hidden border-t border-navy/5"
                   >
-                    <div className="p-3 space-y-2.5 bg-white/70">
+                    <div className="p-3 space-y-2.5 bg-white/[0.06]">
                       <p className="text-[10px] text-navy/55 leading-relaxed">{connector.desc}</p>
 
                       {isConnected && connection ? (
@@ -334,7 +334,7 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
                             {connection.scopes.map((scope) => (
                               <span
                                 key={scope}
-                                className="px-1.5 py-0.5 rounded bg-[rgba(23,23,31,0.04)] text-[8px] font-medium text-navy/50"
+                                className="px-1.5 py-0.5 rounded bg-white/[0.04] text-[8px] font-medium text-navy/50"
                               >
                                 {scope}
                               </span>
@@ -349,7 +349,7 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
                           <button
                             onClick={() => handleDisconnect(connector.id, connector.label)}
                             disabled={isBusy}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 font-semibold text-[10px] transition-colors cursor-pointer disabled:opacity-50"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/25 text-rose-400 font-semibold text-[10px] transition-colors cursor-pointer disabled:opacity-50"
                           >
                             {isBusy ? (
                               <><Loader2 size={11} className="animate-spin" /> Disconnecting…</>
@@ -367,12 +367,12 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
                           {configured ? (
                             <a
                               href={`/api/oauth/${connector.id}/start`}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ocean-50 hover:bg-ocean-100 border border-ocean-200 text-ocean-600 font-semibold text-[10px] transition-colors"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-ocean-50 hover:bg-ocean-100 border border-white/25 text-white font-semibold text-[10px] transition-colors"
                             >
                               <ExternalLink size={11} /> Connect {connector.label}
                             </a>
                           ) : (
-                            <p className="text-[9px] text-amber-600">
+                            <p className="text-[9px] text-amber-400">
                               Platform OAuth credentials are not configured yet.
                             </p>
                           )}
@@ -390,9 +390,9 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
           );
         })}
 
-        <div className="rounded-xl border border-navy/5 bg-white/60 p-3">
+        <div className="rounded-xl border border-navy/5 bg-white/[0.06] p-3">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-ocean-50 text-ocean-600 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-ocean-50 text-white flex items-center justify-center">
               <Bot size={15} />
             </div>
             <div>
@@ -406,7 +406,7 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
           </div>
         </div>
 
-        <div className="rounded-xl border border-navy/5 bg-white/50 p-3">
+        <div className="rounded-xl border border-navy/5 bg-white/[0.06] p-3">
           <p className="text-[9px] font-semibold uppercase tracking-wider text-navy/35 mb-2">
             Coming soon
           </p>
@@ -414,7 +414,7 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
             {COMING_SOON.map((c) => (
               <span
                 key={c.id}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[rgba(23,23,31,0.03)] text-[9px] text-navy/40"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.03] text-[9px] text-navy/40"
               >
                 {c.icon}
                 {c.label}

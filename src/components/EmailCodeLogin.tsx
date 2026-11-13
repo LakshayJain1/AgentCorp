@@ -160,7 +160,7 @@ export default function EmailCodeLogin({ onSignedIn }: EmailCodeLoginProps) {
   }
 
   const inputClass =
-    'w-full px-3.5 py-2.5 bg-white/70 border border-navy/10 rounded-xl text-navy text-sm outline-none focus:border-ocean-400/60 transition-all placeholder:text-navy/30'
+    'w-full px-3.5 py-2.5 bg-white/[0.06] border border-navy/10 rounded-xl text-navy text-sm outline-none focus:border-white/25 transition-all placeholder:text-navy/30'
 
   if (step === 'email') {
     return (
@@ -179,14 +179,14 @@ export default function EmailCodeLogin({ onSignedIn }: EmailCodeLoginProps) {
         <button
           type="submit"
           disabled={busy || !email.trim()}
-          className="w-full py-3 rounded-xl bg-navy text-white text-xs font-bold flex items-center justify-center gap-2 hover:bg-ocean-600 transition-colors disabled:opacity-50 cursor-pointer"
+          className="w-full py-3 rounded-full bg-black text-white text-xs font-bold flex items-center justify-center gap-2 hover:bg-ocean-600 transition-colors disabled:opacity-50 cursor-pointer"
         >
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
           {busy ? 'Sending code…' : 'Email me a sign-in code'}
         </button>
         {/* Clerk's bot-protection widget mounts here (required for custom sign-up flows) */}
         <div id="clerk-captcha" />
-        {error && <p role="alert" className="text-[11px] text-rose-600">{error}</p>}
+        {error && <p role="alert" className="text-[11px] text-rose-400">{error}</p>}
       </form>
     )
   }
@@ -217,17 +217,17 @@ export default function EmailCodeLogin({ onSignedIn }: EmailCodeLoginProps) {
       <button
         type="submit"
         disabled={busy || code.length !== 6}
-        className="w-full py-3 rounded-xl bg-gradient-to-r from-ocean to-teal text-white text-xs font-bold flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(10,132,255,0.30)] hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
+        className="w-full py-3 rounded-full bg-black text-white text-xs font-bold flex items-center justify-center gap-2 shadow-none hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
       >
         {busy ? <Loader2 size={14} className="animate-spin" /> : null}
         {busy ? 'Signing you in…' : 'Verify and continue'}
       </button>
-      {error && <p role="alert" className="text-[11px] text-rose-600">{error}</p>}
+      {error && <p role="alert" className="text-[11px] text-rose-400">{error}</p>}
       <button
         type="button"
         onClick={() => sendCode()}
         disabled={busy || cooldown > 0}
-        className="text-[11px] text-ocean-600 hover:text-ocean-700 font-semibold disabled:text-navy/35 disabled:cursor-default cursor-pointer"
+        className="text-[11px] text-white hover:text-white font-semibold disabled:text-navy/35 disabled:cursor-default cursor-pointer"
       >
         {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
       </button>

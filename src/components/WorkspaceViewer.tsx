@@ -8,7 +8,7 @@ import { useAuthUser } from '@/hooks/useAuthUser';
 import type { OrgSnapshot } from '@/app/api/org-state/route';
 
 const STATUS_COLORS: Record<string, string> = {
-  idle: 'bg-navy/20',
+  idle: 'bg-white/20',
   thinking: 'bg-amber-400',
   coding: 'bg-ocean',
   debugging: 'bg-rose-400',
@@ -16,18 +16,18 @@ const STATUS_COLORS: Record<string, string> = {
   researching: 'bg-teal-400',
   communicating: 'bg-green-400',
   completed: 'bg-green-500',
-  waiting: 'bg-navy/30',
+  waiting: 'bg-black/30',
   blocked: 'bg-rose-500',
 };
 
 const TASK_STATUS_PILL: Record<string, string> = {
-  pending: 'bg-navy/8 text-navy/50',
-  prioritized: 'bg-amber-50 text-amber-600',
-  assigned: 'bg-ocean-50 text-ocean-600',
-  in_progress: 'bg-violet-50 text-violet-600',
-  review: 'bg-teal-50 text-teal-600',
-  completed: 'bg-green-50 text-green-600',
-  failed: 'bg-rose-50 text-rose-500',
+  pending: 'bg-white/8 text-navy/50',
+  prioritized: 'bg-amber-500/10 text-amber-400',
+  assigned: 'bg-ocean-50 text-white',
+  in_progress: 'bg-violet-500/10 text-violet-400',
+  review: 'bg-teal-500/10 text-teal-400',
+  completed: 'bg-green-500/10 text-green-400',
+  failed: 'bg-rose-500/10 text-rose-400',
 };
 
 function timeAgo(ts: number) {
@@ -42,15 +42,15 @@ function AgentCard({ agent, tasks }: {
   tasks: OrgSnapshot['tasks'];
 }) {
   const task = agent.currentTaskId ? tasks.find((t) => t.id === agent.currentTaskId) : null;
-  const dot = STATUS_COLORS[agent.workStatus] ?? 'bg-navy/20';
+  const dot = STATUS_COLORS[agent.workStatus] ?? 'bg-white/20';
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/60 border border-navy/6 hover:bg-white transition-colors">
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/[0.06] border border-navy/6 hover:bg-white/10 transition-colors">
       <div className="relative shrink-0">
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-ocean/10 to-teal/10 flex items-center justify-center text-xl leading-none">
+        <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-xl leading-none">
           {agent.emoji}
         </div>
-        <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${dot}`} />
+        <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white/10 ${dot}`} />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-bold text-navy truncate">{agent.name}</p>
@@ -61,7 +61,7 @@ function AgentCard({ agent, tasks }: {
       </div>
       <div className="shrink-0 text-right">
         <div className="text-[9px] text-navy/40">{agent.energy}%</div>
-        <div className="w-10 h-1 rounded-full bg-navy/8 mt-1 overflow-hidden">
+        <div className="w-10 h-1 rounded-full bg-white/8 mt-1 overflow-hidden">
           <div
             className="h-full rounded-full bg-ocean transition-all"
             style={{ width: `${agent.energy}%` }}
@@ -80,7 +80,7 @@ function LiveBanner({ snapshot, status, ts }: {
   return (
     <div className="glass-topbar px-5 py-2.5 flex items-center gap-3 z-30 shrink-0">
       <div className="flex items-center gap-3 shrink-0">
-        <BrandLogo size={36} className="shadow-[0_4px_14px_rgba(10,132,255,0.3)]" />
+        <BrandLogo size={36} className="shadow-none" />
         <div>
           <h1 className="text-sm font-bold text-navy font-display tracking-tight">
             {snapshot.companyName}
@@ -100,8 +100,8 @@ function LiveBanner({ snapshot, status, ts }: {
 
         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-semibold ${
           status === 'live'
-            ? 'bg-green-50 text-green-600 border border-green-200'
-            : 'bg-amber-50 text-amber-600 border border-amber-200'
+            ? 'bg-green-500/10 text-green-400 border border-green-500/25'
+            : 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
         }`}>
           {status === 'live'
             ? <><Radio className="w-3 h-3 animate-pulse" /> Live</>
@@ -109,7 +109,7 @@ function LiveBanner({ snapshot, status, ts }: {
           }
         </div>
 
-        <div className="px-3 py-1.5 rounded-full bg-violet-50 border border-violet-100 text-[10px] font-semibold text-violet-600">
+        <div className="px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/25 text-[10px] font-semibold text-violet-400">
           View only
         </div>
       </div>
@@ -121,7 +121,7 @@ function NotFoundState() {
   return (
     <div className="flex-1 flex items-center justify-center p-8">
       <div className="text-center max-w-sm">
-        <div className="w-16 h-16 rounded-2xl bg-navy/5 flex items-center justify-center mx-auto mb-4">
+        <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
           <WifiOff className="w-8 h-8 text-navy/30" />
         </div>
         <h2 className="text-base font-bold text-navy mb-2">Workspace not broadcasting</h2>
@@ -138,7 +138,7 @@ function NoAccessState({ email }: { email?: string }) {
   return (
     <div className="flex-1 flex items-center justify-center p-8">
       <div className="text-center max-w-sm">
-        <div className="w-16 h-16 rounded-2xl bg-navy/5 flex items-center justify-center mx-auto mb-4">
+        <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
           <WifiOff className="w-8 h-8 text-navy/30" />
         </div>
         <h2 className="text-base font-bold text-navy mb-2">You haven&apos;t been invited to this workspace</h2>
@@ -158,7 +158,7 @@ function LoadingState() {
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-          className="w-10 h-10 rounded-full border-2 border-ocean/20 border-t-ocean mx-auto mb-4"
+          className="w-10 h-10 rounded-full border-2 border-white/25 border-t-ocean mx-auto mb-4"
         />
         <p className="text-sm text-navy/50 font-medium">Connecting to workspace…</p>
       </div>
@@ -210,7 +210,7 @@ export default function WorkspaceViewer({ orgId }: { orgId: string }) {
 
       <div className="flex-1 overflow-hidden min-h-0 flex">
         {/* Left: Agents */}
-        <div className="w-72 shrink-0 border-r border-navy/8 flex flex-col overflow-hidden bg-white/30">
+        <div className="w-72 shrink-0 border-r border-navy/8 flex flex-col overflow-hidden bg-white/[0.06]">
           <div className="px-4 pt-4 pb-2">
             <p className="text-[10px] font-bold uppercase text-navy/40 tracking-wider">
               Agents · {onlineAgents.length} online
@@ -250,7 +250,7 @@ export default function WorkspaceViewer({ orgId }: { orgId: string }) {
         </div>
 
         {/* Right: Tasks + Stats */}
-        <div className="w-72 shrink-0 border-l border-navy/8 flex flex-col overflow-hidden bg-white/30">
+        <div className="w-72 shrink-0 border-l border-navy/8 flex flex-col overflow-hidden bg-white/[0.06]">
           {/* Stats row */}
           <div className="px-4 pt-4 pb-3 border-b border-navy/6 grid grid-cols-2 gap-2">
             {[
@@ -259,7 +259,7 @@ export default function WorkspaceViewer({ orgId }: { orgId: string }) {
               { label: 'Efficiency', val: `${Math.round(snapshot.simulation.efficiency)}%`, icon: <Zap className="w-3 h-3" /> },
               { label: 'Deliverables', val: snapshot.deliverableProjects.length, icon: <Cpu className="w-3 h-3" /> },
             ].map((s) => (
-              <div key={s.label} className="bg-white/70 rounded-xl px-3 py-2 border border-navy/6">
+              <div key={s.label} className="bg-white/[0.06] rounded-xl px-3 py-2 border border-navy/6">
                 <div className="flex items-center gap-1 text-navy/40 mb-1">{s.icon}<span className="text-[9px] font-semibold uppercase">{s.label}</span></div>
                 <p className="text-sm font-bold text-navy">{s.val}</p>
               </div>
@@ -275,10 +275,10 @@ export default function WorkspaceViewer({ orgId }: { orgId: string }) {
               <p className="text-[10px] text-navy/30 px-2 py-4 text-center">No tasks yet</p>
             )}
             {[...snapshot.tasks].reverse().map((task) => (
-              <div key={task.id} className="px-3 py-2 rounded-xl bg-white/60 border border-navy/6">
+              <div key={task.id} className="px-3 py-2 rounded-xl bg-white/[0.06] border border-navy/6">
                 <p className="text-xs font-semibold text-navy truncate">{task.title}</p>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${TASK_STATUS_PILL[task.status] ?? 'bg-navy/8 text-navy/50'}`}>
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${TASK_STATUS_PILL[task.status] ?? 'bg-white/8 text-navy/50'}`}>
                     {task.status}
                   </span>
                   {task.deliverableType && (

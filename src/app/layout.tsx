@@ -1,12 +1,22 @@
 import { ClerkProvider } from '@clerk/nextjs';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
 
+// Geist is the only typeface (Conicorn design system). Self-hosted by next/font.
+const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'], display: 'swap' });
+const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'], display: 'swap' });
+
 export const metadata: Metadata = {
   title: 'AgentCorp - AI Office Simulation',
   description: 'Premium AI-powered autonomous agent workspace',
+};
+
+export const viewport: Viewport = {
+  themeColor: '#1A1A1A',
+  colorScheme: 'dark',
 };
 
 export default function RootLayout({
@@ -15,12 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700&display=swap" rel="stylesheet" />
-      </head>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased">
         <ClerkProvider>
           {children}

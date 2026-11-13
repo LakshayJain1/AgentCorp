@@ -40,22 +40,22 @@ export default function ExecutionLogViewer() {
           </div>
         )}
         {allLogs.map((log) => (
-          <div key={log.id} className="py-1.5 px-2 rounded-lg hover:bg-[rgba(0,0,0,0.02)] transition-colors">
+          <div key={log.id} className="py-1.5 px-2 rounded-lg hover:bg-white/[0.03] transition-colors">
             <div className="flex items-center gap-1.5 text-[11px]">
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: statusColor(log.status) }} />
               <span className="text-navy/55 shrink-0">
                 {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </span>
-              <span className="text-violet-600 font-semibold shrink-0">{log.tool}</span>
+              <span className="text-violet-400 font-semibold shrink-0">{log.tool}</span>
               <span className="text-navy/25">·</span>
               <span className="text-navy/80 truncate">{log.action}</span>
               <span className="ml-auto text-navy/55 text-[9px] shrink-0">{agentMap.get(log.agentId) || log.agentId.slice(0, 8)}</span>
             </div>
             {log.status === 'success' && log.output && (
-              <pre className="text-navy/55 text-[9px] mt-1 ml-3 whitespace-pre-wrap truncate hover:whitespace-pre-wrap bg-white/70/80 p-1.5 rounded-lg cursor-pointer font-mono">{log.output.slice(0, 300)}</pre>
+              <pre className="text-navy/55 text-[9px] mt-1 ml-3 whitespace-pre-wrap truncate hover:whitespace-pre-wrap bg-white/[0.06]/80 p-1.5 rounded-lg cursor-pointer font-mono">{log.output.slice(0, 300)}</pre>
             )}
             {log.status === 'error' && log.output && (
-              <pre className="text-rose-500 text-[9px] mt-1 ml-3 whitespace-pre-wrap bg-rose-50/50 p-1.5 rounded-lg font-mono">{log.output}</pre>
+              <pre className="text-rose-400 text-[9px] mt-1 ml-3 whitespace-pre-wrap bg-rose-500/10 p-1.5 rounded-lg font-mono">{log.output}</pre>
             )}
           </div>
         ))}

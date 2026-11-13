@@ -77,8 +77,7 @@ export default function HeroOrchestrationPanel() {
           initial={{ opacity: 0, y: 20 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ ...SPRING, duration: 0.6 }}
-          className="bg-white border border-[#E5E8EF] rounded-xl overflow-hidden"
-          style={{ boxShadow: '0 2px 20px rgba(23,23,31,0.07), 0 1px 3px rgba(23,23,31,0.05)' }}
+          className="bg-mist border border-[#E6E6E6] rounded-[32px] overflow-hidden"
         >
 
           {/* Panel header */}
@@ -102,7 +101,7 @@ export default function HeroOrchestrationPanel() {
               initial={{ opacity: 0, y: -6 }}
               animate={inView ? { opacity: 1, y: 0 } : {}}
               transition={{ ...SPRING, delay: 0.1 }}
-              className="relative rounded-lg p-3.5 bg-[#F8F9FC] border border-[#E5E8EF] overflow-hidden"
+              className="relative rounded-[20px] p-3.5 bg-white border border-[#E6E6E6] overflow-hidden"
             >
               <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#0071E3]" />
               <div className="pl-1.5">

@@ -46,12 +46,12 @@ export default function ActivityFeed() {
         {allActivities.map((act) => {
           const style = TYPE_STYLES[act.type] || { color: '#86868B', label: act.type };
           return (
-            <div key={act.id} className="flex items-start gap-2 py-1.5 px-2 rounded-lg hover:bg-[rgba(0,0,0,0.02)] transition-colors">
+            <div key={act.id} className="flex items-start gap-2 py-1.5 px-2 rounded-lg hover:bg-white/[0.03] transition-colors">
               <span className="text-sm shrink-0 mt-0.5">{act.agentEmoji}</span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="text-navy font-semibold text-[11px]">{act.agentName}</span>
-                  <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-white/70" style={{ color: style.color }}>{style.label}</span>
+                  <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-white/[0.06]" style={{ color: style.color }}>{style.label}</span>
                   <span className="text-navy/55 text-[9px] ml-auto shrink-0">
                     {new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </span>
@@ -60,7 +60,7 @@ export default function ActivityFeed() {
                 {act.details && (
                   <details className="mt-1 cursor-pointer">
                     <summary className="text-navy/55 text-[9px] hover:text-navy/80 font-semibold uppercase tracking-wider">details</summary>
-                    <pre className="text-navy/55 text-[9px] mt-1 whitespace-pre-wrap bg-white/70/80 p-2 rounded-lg font-mono leading-relaxed">{act.details}</pre>
+                    <pre className="text-navy/55 text-[9px] mt-1 whitespace-pre-wrap bg-white/[0.06]/80 p-2 rounded-lg font-mono leading-relaxed">{act.details}</pre>
                   </details>
                 )}
               </div>

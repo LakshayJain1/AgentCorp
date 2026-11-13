@@ -235,14 +235,11 @@ export default function SetupWizard() {
   };
 
   if (isRestoring) {
-    return <div className="fixed inset-0 z-50 bg-white" />;
+    return <div className="fixed inset-0 z-50 bg-surface" />;
   }
 
   return (
     <div className="fixed inset-0 z-50 bg-paper text-navy overflow-y-auto overflow-x-hidden font-sans select-none">
-      <div className="absolute top-[-20%] right-[-10%] w-[700px] h-[700px] bg-ocean-300/25 rounded-full blur-[160px] pointer-events-none animate-driftSlow" />
-      <div className="absolute bottom-[-20%] left-[-15%] w-[800px] h-[800px] bg-teal/15 rounded-full blur-[180px] pointer-events-none animate-driftSlow" style={{ animationDelay: '-8s' }} />
-      <div className="absolute inset-0 grid-dots opacity-60 pointer-events-none" />
 
       <div className="w-full max-w-6xl mx-auto px-4 md:px-6 py-10 relative z-10 flex flex-col min-h-screen">
 
@@ -266,10 +263,10 @@ export default function SetupWizard() {
                 return (
                   <div key={s} className="flex items-center gap-1.5">
                     <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-semibold transition-all duration-300 ${
-                      allDone        ? 'bg-green-100 text-green-700' :
+                      allDone        ? 'bg-green-500/15 text-green-400' :
                       active         ? 'bg-ocean-600 text-white shadow-sm' :
-                      done           ? 'bg-green-100 text-green-700' :
-                                       'bg-[rgba(23,23,31,0.05)] text-navy/35'
+                      done           ? 'bg-green-500/15 text-green-400' :
+                                       'bg-white/[0.05] text-navy/35'
                     }`}>
                       {done ? <Check className="w-3 h-3" /> : <span className="w-3 text-center">{s}</span>}
                       <span>{label}</span>
@@ -294,10 +291,9 @@ export default function SetupWizard() {
               transition={{ duration: 0.4 }}
               className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6"
             >
-              <div className="lg:col-span-2 flex flex-col justify-between p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow relative overflow-hidden group">
-                <div className="absolute -right-24 -top-24 w-64 h-64 bg-ocean-100/60 rounded-full blur-[80px] group-hover:bg-ocean-100/80 transition-colors duration-500" />
+              <div className="lg:col-span-2 flex flex-col justify-between p-8 bg-surface border border-white/10 rounded-3xl relative overflow-hidden group">
                 <div className="space-y-6">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-ocean-50 border border-ocean-100 text-ocean-600 text-[10px] font-semibold tracking-wider">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-ocean-50 border border-white/25 text-white text-[10px] font-semibold tracking-wider">
                     <Sparkles size={10} /> Active Agent Sandbox v2.0.6
                   </div>
 
@@ -311,32 +307,32 @@ export default function SetupWizard() {
                 <div className="flex flex-col sm:flex-row gap-4 mt-8">
                   <button
                     onClick={() => setStep(1)}
-                    className="px-6 py-3 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                    className="px-6 py-3 rounded-full bg-ocean-600 hover:bg-ocean-700 shadow-none text-white font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
                     Deploy AI Department <ArrowRight size={14} />
                   </button>
                   <button
                     onClick={() => setStep(1)}
-                    className="px-6 py-3 rounded-xl bg-white/70 hover:bg-[rgba(23,23,31,0.04)] border border-navy/10 text-navy/80 font-semibold text-xs tracking-wider transition-all cursor-pointer"
+                    className="px-6 py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.04] border border-navy/10 text-navy/80 font-semibold text-xs tracking-wider transition-all cursor-pointer"
                   >
                     Configure Sandbox
                   </button>
                 </div>
               </div>
 
-              <div className="p-6 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow flex flex-col justify-between overflow-hidden">
+              <div className="p-6 bg-surface border border-white/10 rounded-3xl flex flex-col justify-between overflow-hidden">
                 <div className="border-b border-navy/5 pb-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-ocean-600 flex items-center gap-1.5">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-white flex items-center gap-1.5">
                     <Users size={12} /> Active Department
                   </h3>
                   <p className="text-[10px] text-navy/40 mt-0.5">Pre-configured agent models</p>
                 </div>
                 <div className="space-y-2.5 my-4">
                   {[
-                    { role: 'CEO', name: 'Alex', color: 'from-rose-100 to-rose-50', text: 'text-rose-600', emoji: '👑' },
-                    { role: 'PM', name: 'Sam', color: 'from-ocean-100 to-ocean-50', text: 'text-ocean-600', emoji: '📋' },
-                    { role: 'Engineer', name: 'Mike', color: 'from-amber-100 to-amber-50', text: 'text-amber-600', emoji: '💻' },
-                    { role: 'QA', name: 'Tina', color: 'from-violet-100 to-violet-50', text: 'text-violet-600', emoji: '🔍' },
+                    { role: 'CEO', name: 'Alex', color: 'from-rose-100 to-rose-50', text: 'text-rose-400', emoji: '👑' },
+                    { role: 'PM', name: 'Sam', color: 'from-black to-[#262626]', text: 'text-white', emoji: '📋' },
+                    { role: 'Engineer', name: 'Mike', color: 'from-amber-100 to-amber-50', text: 'text-amber-400', emoji: '💻' },
+                    { role: 'QA', name: 'Tina', color: 'from-violet-100 to-violet-50', text: 'text-violet-400', emoji: '🔍' },
                   ].map((agent, i) => (
                     <div key={i} className={`flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r ${agent.color} border border-navy/5`}>
                       <div className="flex items-center gap-2">
@@ -350,26 +346,26 @@ export default function SetupWizard() {
                     </div>
                   ))}
                 </div>
-                <div className="text-[10px] text-navy/40 bg-white/70 p-2.5 rounded-lg border border-navy/5">
+                <div className="text-[10px] text-navy/40 bg-white/[0.06] p-2.5 rounded-lg border border-navy/5">
                   Spawns additional developers dynamically on scale.
                 </div>
               </div>
 
-              <div className="lg:col-span-2 p-6 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow flex flex-col justify-between group overflow-hidden">
+              <div className="lg:col-span-2 p-6 bg-surface border border-white/10 rounded-3xl flex flex-col justify-between group overflow-hidden">
                 <div className="flex items-center justify-between border-b border-navy/5 pb-3">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-ocean-500 animate-pulse" />
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-ocean-600">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
                       Simulation Live Stream
                     </h3>
                   </div>
                   <span className="text-[9px] text-navy/40 uppercase">Channel: Live_SSE</span>
                 </div>
-                <div className="my-4 h-36 bg-white/70 border border-navy/5 p-4 rounded-xl text-xs text-navy/70 overflow-y-auto space-y-1.5 flex flex-col justify-end font-mono">
+                <div className="my-4 h-36 bg-white/[0.06] border border-navy/5 p-4 rounded-xl text-xs text-navy/70 overflow-y-auto space-y-1.5 flex flex-col justify-end font-mono">
                   {terminalLogs.map((log, idx) => (
                     <div key={idx} className="flex items-start gap-2">
                       <span className="text-navy/25">&gt;</span>
-                      <span className={log.includes('SUCCESS') ? 'text-teal font-semibold' : log.includes('complete') ? 'text-amber-600 font-semibold' : 'text-navy/70'}>
+                      <span className={log.includes('SUCCESS') ? 'text-teal font-semibold' : log.includes('complete') ? 'text-amber-400 font-semibold' : 'text-navy/70'}>
                         {log}
                       </span>
                     </div>
@@ -380,21 +376,20 @@ export default function SetupWizard() {
                     <span className="w-1.5 h-3 bg-ocean-500 animate-pulse inline-block rounded-sm" />
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-[10px] text-navy/40 bg-white/70 p-2.5 rounded-lg border border-navy/5">
-                  <span>Morale Score: <strong className="text-green-600">96%</strong></span>
+                <div className="flex items-center justify-between text-[10px] text-navy/40 bg-white/[0.06] p-2.5 rounded-lg border border-navy/5">
+                  <span>Morale Score: <strong className="text-green-400">96%</strong></span>
                   <span>Deploy Queue: <strong className="text-teal">Idle</strong></span>
-                  <span>Active Sprint: <strong className="text-amber-600">Sprint #6</strong></span>
+                  <span>Active Sprint: <strong className="text-amber-400">Sprint #6</strong></span>
                 </div>
               </div>
 
-              <div className="p-6 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow flex flex-col justify-between relative overflow-hidden group">
-                <div className="absolute -left-20 -bottom-20 w-44 h-44 bg-ocean-100/60 rounded-full blur-[60px]" />
+              <div className="p-6 bg-surface border border-white/10 rounded-3xl flex flex-col justify-between relative overflow-hidden group">
                 <div className="border-b border-navy/5 pb-3">
                   <div className="flex justify-between items-center">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-teal flex items-center gap-1.5">
                       <DollarSign size={12} /> Flexible Scaling
                     </h3>
-                    <span className="px-2 py-0.5 rounded-md bg-cyan-50 border border-cyan-100 text-teal text-[9px] font-semibold uppercase">
+                    <span className="px-2 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/25 text-teal text-[9px] font-semibold uppercase">
                       Interactive
                     </span>
                   </div>
@@ -412,21 +407,21 @@ export default function SetupWizard() {
                       max="4"
                       value={devCount}
                       onChange={(e) => setDevCount(parseInt(e.target.value))}
-                      className="w-full h-1.5 bg-[rgba(23,23,31,0.05)] rounded-lg appearance-none cursor-pointer accent-ocean-600"
+                      className="w-full h-1.5 bg-white/[0.05] rounded-lg appearance-none cursor-pointer accent-white"
                     />
                     <div className="flex justify-between text-[9px] text-navy/40">
                       <span>1 Dev (Free)</span>
                       <span>4 Devs max</span>
                     </div>
                   </div>
-                  <div className="bg-white/70 p-3 rounded-xl border border-navy/5 flex items-center justify-between">
+                  <div className="bg-white/[0.06] p-3 rounded-xl border border-navy/5 flex items-center justify-between">
                     <div>
                       <span className="text-[9px] text-navy/40 block">SPAWNS TIER</span>
                       <span className="text-xs font-semibold text-navy">{isFree ? 'Free Forever' : 'Enterprise Scale'}</span>
                     </div>
                     <div className="text-right leading-none">
                       <span className="text-[9px] text-navy/40 block">EST. CHARGE</span>
-                      <span className="text-xl font-bold text-ocean-600">
+                      <span className="text-xl font-bold text-white">
                         ${totalPrice}<span className="text-[10px] font-normal text-navy/40">/mo</span>
                       </span>
                     </div>
@@ -434,7 +429,7 @@ export default function SetupWizard() {
                 </div>
                 <button
                   onClick={() => setStep(1)}
-                  className="w-full py-2.5 rounded-xl border border-cyan-200 bg-cyan-50 hover:bg-cyan-100 text-teal font-semibold text-xs tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
+                  className="w-full py-2.5 rounded-xl border border-cyan-500/25 bg-cyan-500/10 hover:bg-cyan-500/15 text-teal font-semibold text-xs tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
                 >
                   {isFree ? 'Claim Free Spawn' : 'Buy Spawns'} <ArrowUpRight size={14} />
                 </button>
@@ -450,14 +445,12 @@ export default function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="w-full max-w-[420px] p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow relative overflow-hidden"
+              className="w-full max-w-[420px] p-8 bg-surface border border-white/10 rounded-3xl relative overflow-hidden"
             >
-              <div className="absolute top-[-20%] left-[-20%] w-44 h-44 bg-ocean-100/60 rounded-full blur-[50px] pointer-events-none" />
-              <div className="absolute bottom-[-20%] right-[-20%] w-44 h-44 bg-violet-100/60 rounded-full blur-[50px] pointer-events-none" />
 
               <div className="text-center mb-6">
                 <div className="flex justify-center items-center gap-1.5 mb-2">
-                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-ocean to-violet-500 flex items-center justify-center shadow-sm">
+                  <div className="w-6 h-6 rounded-md bg-white/10 border border-white/10 flex items-center justify-center shadow-sm">
                     <ShieldCheck size={14} className="text-white" />
                   </div>
                   <span className="text-xs font-semibold text-navy/40 uppercase">Secure sign-in</span>
@@ -479,7 +472,7 @@ export default function SetupWizard() {
                       Don&apos;t have an account?{' '}
                       <button
                         onClick={() => setAuthComponent('signup')}
-                        className="text-ocean-600 hover:text-ocean-700 font-semibold underline underline-offset-2 cursor-pointer"
+                        className="text-white hover:text-white font-semibold underline underline-offset-2 cursor-pointer"
                       >
                         Sign up
                       </button>
@@ -489,7 +482,7 @@ export default function SetupWizard() {
                       Already have an account?{' '}
                       <button
                         onClick={() => setAuthComponent('signin')}
-                        className="text-ocean-600 hover:text-ocean-700 font-semibold underline underline-offset-2 cursor-pointer"
+                        className="text-white hover:text-white font-semibold underline underline-offset-2 cursor-pointer"
                       >
                         Sign in
                       </button>
@@ -512,11 +505,11 @@ export default function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="w-full max-w-lg p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow space-y-6"
+              className="w-full max-w-lg p-8 bg-surface border border-white/10 rounded-3xl space-y-6"
             >
               <div>
                 <h2 className="text-lg font-extrabold tracking-tight text-navy flex items-center gap-1.5">
-                  <Sparkles size={18} className="text-ocean-600" /> Personal Setup Profile
+                  <Sparkles size={18} className="text-white" /> Personal Setup Profile
                 </h2>
                 <p className="text-xs text-navy/55 mt-0.5">
                   Define details of your startup corporation for agent synthesis.
@@ -531,7 +524,7 @@ export default function SetupWizard() {
                     placeholder="e.g. AcmeCorp"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-white/70 border border-navy/10 rounded-xl text-navy text-xs outline-none focus:border-ocean-400/60 transition-all"
+                    className="w-full px-3.5 py-2 bg-white/[0.06] border border-navy/10 rounded-xl text-navy text-xs outline-none focus:border-white/25 transition-all"
                   />
                 </div>
                 <div>
@@ -541,13 +534,13 @@ export default function SetupWizard() {
                     placeholder="e.g. Next-gen billing infrastructure for SaaS startups"
                     value={companyProduct}
                     onChange={(e) => setCompanyProduct(e.target.value)}
-                    className="w-full h-16 px-3.5 py-2 bg-white/70 border border-navy/10 rounded-xl text-navy text-xs outline-none resize-none focus:border-ocean-400/60 transition-all"
+                    className="w-full h-16 px-3.5 py-2 bg-white/[0.06] border border-navy/10 rounded-xl text-navy text-xs outline-none resize-none focus:border-white/25 transition-all"
                   />
                 </div>
                 <div>
                   <div className="flex justify-between items-center mb-1.5">
                     <label className="block text-[9px] font-semibold text-navy/55 uppercase tracking-wider">Developer Agents</label>
-                    <span className="text-xs font-semibold text-ocean-600">{devCount} Active Devs</span>
+                    <span className="text-xs font-semibold text-white">{devCount} Active Devs</span>
                   </div>
                   <input
                     type="range"
@@ -555,7 +548,7 @@ export default function SetupWizard() {
                     max="4"
                     value={devCount}
                     onChange={(e) => setDevCount(parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-[rgba(23,23,31,0.05)] border border-navy/10 rounded-lg appearance-none cursor-pointer accent-ocean-600"
+                    className="w-full h-1.5 bg-white/[0.05] border border-navy/10 rounded-lg appearance-none cursor-pointer accent-white"
                   />
                   <p className="text-[10px] text-navy/40 mt-1">
                     Other core roles (CEO, PM, QA, HR) spawn automatically and remain active.
@@ -564,18 +557,18 @@ export default function SetupWizard() {
               </div>
 
               {/* Testing Disclaimer */}
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2.5">
-                <span className="text-amber-500 text-base shrink-0">⚠️</span>
-                <p className="text-[10px] text-amber-700 leading-relaxed">
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2.5">
+                <span className="text-amber-400 text-base shrink-0">⚠️</span>
+                <p className="text-[10px] text-amber-400 leading-relaxed">
                   <strong>Beta Disclaimer:</strong> AgentCorp is in early testing. Agents may make mistakes, produce incorrect outputs, or take unintended actions. <strong>Use at your own risk.</strong> Do not run on production repositories without review. No data is guaranteed to be safe.
                 </p>
               </div>
 
               <div className="flex gap-4 pt-2">
-                <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl bg-white/70 border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-[rgba(23,23,31,0.04)] transition-colors cursor-pointer">
+                <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl bg-white/[0.06] border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-white/[0.04] transition-colors cursor-pointer">
                   Back
                 </button>
-                <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl bg-ocean-50 hover:bg-ocean-100 border border-ocean-200 text-ocean-600 font-semibold text-xs transition-all flex items-center justify-center gap-1 cursor-pointer">
+                <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-full bg-ocean-50 hover:bg-ocean-100 border border-white/25 text-white font-semibold text-xs transition-all flex items-center justify-center gap-1 cursor-pointer">
                   Configure Spawns <ChevronRight size={14} />
                 </button>
               </div>
@@ -590,7 +583,7 @@ export default function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="w-full max-w-xl p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow space-y-6"
+              className="w-full max-w-xl p-8 bg-surface border border-white/10 rounded-3xl space-y-6"
             >
               <div>
                 <h2 className="text-lg font-extrabold tracking-tight text-navy flex items-center gap-1.5">
@@ -602,17 +595,17 @@ export default function SetupWizard() {
               </div>
 
               {isFree ? (
-                <div className="p-6 rounded-2xl bg-green-50 border border-green-100 text-center space-y-4">
-                  <div className="w-12 h-12 rounded-full bg-green-100 border border-green-200 flex items-center justify-center mx-auto">
-                    <CheckCircle2 size={24} className="text-green-600" />
+                <div className="p-6 rounded-2xl bg-green-500/10 border border-green-500/25 text-center space-y-4">
+                  <div className="w-12 h-12 rounded-full bg-green-500/15 border border-green-500/25 flex items-center justify-center mx-auto">
+                    <CheckCircle2 size={24} className="text-green-400" />
                   </div>
                   <div className="space-y-1">
-                    <h4 className="text-sm font-bold text-green-700">Free Tier Active</h4>
+                    <h4 className="text-sm font-bold text-green-400">Free Tier Active</h4>
                     <p className="text-xs text-navy/55 max-w-md mx-auto">
                       1 Developer agent is permanently free. CEO, PM, QA, and HR agents are included. No payment required.
                     </p>
                   </div>
-                  <div className="bg-white p-2.5 rounded-lg border border-navy/5 text-[10px] text-navy/40">
+                  <div className="bg-surface p-2.5 rounded-lg border border-navy/5 text-[10px] text-navy/40">
                     You can scale to Enterprise spawns anytime inside the workspace.
                   </div>
                 </div>
@@ -621,10 +614,8 @@ export default function SetupWizard() {
                   <div className="md:col-span-6 flex justify-center">
                     <motion.div
                       whileHover={{ scale: 1.03 }}
-                      className="w-full max-w-[260px] h-[160px] bg-gradient-to-br from-ocean-100 via-teal/10 to-ocean-50 border border-navy/10 rounded-2xl p-4 flex flex-col justify-between card-shadow relative overflow-hidden"
+                      className="w-full max-w-[260px] h-[160px] bg-gradient-to-br from-black via-teal/10 to-[#262626] border border-navy/10 rounded-2xl p-4 flex flex-col justify-between card-shadow relative overflow-hidden"
                     >
-                      <div className="absolute top-[-30%] right-[-20%] w-32 h-32 bg-ocean-200/60 rounded-full blur-[30px]" />
-                      <div className="absolute bottom-[-30%] left-[-20%] w-32 h-32 bg-cyan-200/60 rounded-full blur-[30px]" />
                       <div className="flex justify-between items-start z-10">
                         <span className="text-[9px] font-semibold text-navy/40 tracking-wider uppercase">Spawns Card</span>
                         <span className="text-sm font-bold italic text-navy/80">VISA</span>
@@ -661,7 +652,7 @@ export default function SetupWizard() {
                         placeholder="e.g. John Doe"
                         value={cardName}
                         onChange={(e) => setCardName(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-white/70 border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-ocean-400/60"
+                        className="w-full px-2.5 py-1.5 bg-white/[0.06] border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-white/25"
                       />
                     </div>
                     <div>
@@ -673,7 +664,7 @@ export default function SetupWizard() {
                         placeholder="4111 2222 3333 4444"
                         value={cardNumber}
                         onChange={(e) => setCardNumber(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-white/70 border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-ocean-400/60"
+                        className="w-full px-2.5 py-1.5 bg-white/[0.06] border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-white/25"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -686,7 +677,7 @@ export default function SetupWizard() {
                           placeholder="MM/YY"
                           value={cardExpiry}
                           onChange={(e) => setCardExpiry(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-white/70 border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-ocean-400/60"
+                          className="w-full px-2.5 py-1.5 bg-white/[0.06] border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-white/25"
                         />
                       </div>
                       <div>
@@ -698,7 +689,7 @@ export default function SetupWizard() {
                           placeholder="•••"
                           value={cardCvv}
                           onChange={(e) => setCardCvv(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-white/70 border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-ocean-400/60"
+                          className="w-full px-2.5 py-1.5 bg-white/[0.06] border border-navy/10 rounded-lg text-navy text-[10px] outline-none focus:border-white/25"
                         />
                       </div>
                     </div>
@@ -708,23 +699,23 @@ export default function SetupWizard() {
 
               {isFree ? (
                 <div className="flex gap-4 pt-2">
-                  <button onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-white/70 border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-[rgba(23,23,31,0.04)] transition-colors cursor-pointer">
+                  <button onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-white/[0.06] border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-white/[0.04] transition-colors cursor-pointer">
                     Back
                   </button>
-                  <button onClick={() => setStep(4)} className="flex-1 py-2.5 rounded-xl bg-green-50 hover:bg-green-100 border border-green-200 text-green-600 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                  <button onClick={() => setStep(4)} className="flex-1 py-2.5 rounded-xl bg-green-500/10 hover:bg-green-500/15 border border-green-500/25 text-green-400 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
                     Continue <ChevronRight size={14} />
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handlePaymentSubmit} className="space-y-4">
                   <div className="flex gap-4 pt-2">
-                    <button type="button" onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-white/70 border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-[rgba(23,23,31,0.04)] transition-colors cursor-pointer">
+                    <button type="button" onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-white/[0.06] border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-white/[0.04] transition-colors cursor-pointer">
                       Back
                     </button>
                     <button
                       type="submit"
                       disabled={isPaying || paymentSuccess}
-                      className="flex-1 py-2.5 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                      className="flex-1 py-2.5 rounded-full bg-ocean-600 hover:bg-ocean-700 shadow-none text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
                     >
                       {isPaying ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -748,7 +739,7 @@ export default function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="w-full max-w-xl p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow space-y-6"
+              className="w-full max-w-xl p-8 bg-surface border border-white/10 rounded-3xl space-y-6"
             >
               <div>
                 <h2 className="text-lg font-extrabold tracking-tight text-navy flex items-center gap-1.5">
@@ -760,7 +751,7 @@ export default function SetupWizard() {
               </div>
 
               <div className="space-y-3.5 max-h-[280px] overflow-y-auto pr-1">
-                <div className="p-3.5 bg-white/70 border border-navy/5 rounded-2xl space-y-2">
+                <div className="p-3.5 bg-white/[0.06] border border-navy/5 rounded-2xl space-y-2">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
                       <GitBranch size={14} className="text-navy/70" />
@@ -768,7 +759,7 @@ export default function SetupWizard() {
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" checked={ghConnected} onChange={(e) => setGhConnected(e.target.checked)} className="sr-only peer" />
-                      <div className="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-navy/15 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-ocean-500"></div>
+                      <div className="w-7 h-4 bg-white/15 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white/10 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-navy/15 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-ocean-500"></div>
                     </label>
                   </div>
                   {ghConnected && (
@@ -780,7 +771,7 @@ export default function SetupWizard() {
                   )}
                 </div>
 
-                <div className="p-3.5 bg-white/70 border border-navy/5 rounded-2xl space-y-2">
+                <div className="p-3.5 bg-white/[0.06] border border-navy/5 rounded-2xl space-y-2">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
                       <Play size={12} className="rotate-90 fill-gray-600 text-navy/70" />
@@ -788,7 +779,7 @@ export default function SetupWizard() {
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" checked={vConnected} onChange={(e) => setVConnected(e.target.checked)} className="sr-only peer" />
-                      <div className="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-navy/15 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-ocean-500"></div>
+                      <div className="w-7 h-4 bg-white/15 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white/10 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-navy/15 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-ocean-500"></div>
                     </label>
                   </div>
                   {vConnected && (
@@ -800,15 +791,15 @@ export default function SetupWizard() {
                   )}
                 </div>
 
-                <div className="p-3.5 bg-white/70 border border-navy/5 rounded-2xl space-y-2">
+                <div className="p-3.5 bg-white/[0.06] border border-navy/5 rounded-2xl space-y-2">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                      <Sparkles size={14} className="text-amber-500" />
+                      <Sparkles size={14} className="text-amber-400" />
                       <h3 className="text-xs font-semibold text-navy">Slack Notifications</h3>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" checked={sConnected} onChange={(e) => setSConnected(e.target.checked)} className="sr-only peer" />
-                      <div className="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-navy/15 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-400"></div>
+                      <div className="w-7 h-4 bg-white/15 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white/10 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-navy/15 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-400"></div>
                     </label>
                   </div>
                   {sConnected && (
@@ -820,7 +811,7 @@ export default function SetupWizard() {
                   )}
                 </div>
 
-                <div className="p-3.5 bg-white/70 border border-navy/5 rounded-2xl space-y-2">
+                <div className="p-3.5 bg-white/[0.06] border border-navy/5 rounded-2xl space-y-2">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
                       <Key size={14} className="text-teal" />
@@ -835,10 +826,10 @@ export default function SetupWizard() {
               </div>
 
               <div className="flex gap-4 pt-2">
-                <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl bg-white/70 border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-[rgba(23,23,31,0.04)] transition-colors cursor-pointer">
+                <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl bg-white/[0.06] border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-white/[0.04] transition-colors cursor-pointer">
                   Back
                 </button>
-                <button onClick={handleLaunchSequence} className="flex-1 py-2.5 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer">
+                <button onClick={handleLaunchSequence} className="flex-1 py-2.5 rounded-full bg-ocean-600 hover:bg-ocean-700 shadow-none text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer">
                   Launch Simulation <ArrowRight size={14} />
                 </button>
               </div>
@@ -853,11 +844,11 @@ export default function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="w-full max-w-lg p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow space-y-6"
+              className="w-full max-w-lg p-8 bg-surface border border-white/10 rounded-3xl space-y-6"
             >
               <div>
                 <h2 className="text-lg font-extrabold tracking-tight text-navy flex items-center gap-2">
-                  <Users size={18} className="text-ocean-600" /> Invite Teammates
+                  <Users size={18} className="text-white" /> Invite Teammates
                 </h2>
                 <p className="text-xs text-navy/55 mt-0.5">
                   Share your workspace with collaborators. They&apos;ll see your team&apos;s activity in real-time.
@@ -867,7 +858,7 @@ export default function SetupWizard() {
               {/* Invite link — created for real once the workspace exists */}
               <div className="space-y-2">
                 <label className="block text-[9px] font-semibold text-navy/55 uppercase tracking-wider">Workspace Invite Link</label>
-                <div className="flex items-center gap-2 bg-white/50 border border-dashed border-navy/15 rounded-xl px-3 py-2">
+                <div className="flex items-center gap-2 bg-white/[0.06] border border-dashed border-navy/15 rounded-xl px-3 py-2">
                   <Link size={13} className="text-navy/30 shrink-0" />
                   <span className="flex-1 text-[11px] text-navy/45">Your private link is created when you launch.</span>
                 </div>
@@ -893,7 +884,7 @@ export default function SetupWizard() {
                         updated[i] = e.target.value;
                         setInviteEmails(updated);
                       }}
-                      className="w-full px-3.5 py-2 bg-white/70 border border-navy/10 rounded-xl text-navy text-xs outline-none focus:border-ocean-400/60 transition-all placeholder:text-navy/25"
+                      className="w-full px-3.5 py-2 bg-white/[0.06] border border-navy/10 rounded-xl text-navy text-xs outline-none focus:border-white/25 transition-all placeholder:text-navy/25"
                     />
                   ))}
                 </div>
@@ -903,12 +894,12 @@ export default function SetupWizard() {
               </div>
 
               <div className="flex gap-4 pt-2">
-                <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl bg-white/70 border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-[rgba(23,23,31,0.04)] transition-colors cursor-pointer">
+                <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl bg-white/[0.06] border border-navy/10 text-navy/80 font-semibold text-xs hover:bg-white/[0.04] transition-colors cursor-pointer">
                   Back
                 </button>
                 <button
                   onClick={handleLaunchSequence}
-                  className="flex-1 py-2.5 rounded-xl bg-ocean-600 hover:bg-ocean-700 shadow-[0_8px_24px_rgba(10,132,255,0.35)] text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                  className="flex-1 py-2.5 rounded-full bg-ocean-600 hover:bg-ocean-700 shadow-none text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                 >
                   Launch Workspace <ArrowRight size={14} />
                 </button>
@@ -924,32 +915,32 @@ export default function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="w-full max-w-xl p-8 glass rounded-3xl !bg-white/80 !backdrop-blur-2xl card-shadow space-y-6"
+              className="w-full max-w-xl p-8 bg-surface border border-white/10 rounded-3xl space-y-6"
             >
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-ocean to-teal flex items-center justify-center shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center shadow-sm">
                   <Server size={22} className="text-white animate-pulse" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-navy">
                     Synthesizing Office Instance
                   </h3>
-                  <p className="text-xs text-ocean-600 animate-pulse font-semibold">
+                  <p className="text-xs text-white animate-pulse font-semibold">
                     Running compiler scripts...
                   </p>
                 </div>
               </div>
 
-              <div className="relative w-full h-2 bg-[rgba(23,23,31,0.05)] rounded-full overflow-hidden">
+              <div className="relative w-full h-2 bg-white/[0.05] rounded-full overflow-hidden">
                 <motion.div
-                  className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-ocean-600 via-ocean-400 to-ocean-600 rounded-full"
+                  className="absolute top-0 bottom-0 left-0 bg-white rounded-full"
                   initial={{ width: '0%' }}
                   animate={{ width: `${(currentDeployStep + 1) * 12.5}%` }}
                   transition={{ duration: 0.5 }}
                 />
               </div>
 
-              <div className="h-[180px] p-4 rounded-xl bg-white/70 border border-navy/5 text-xs text-navy/70 overflow-y-auto space-y-1.5 flex flex-col justify-start font-mono">
+              <div className="h-[180px] p-4 rounded-xl bg-white/[0.06] border border-navy/5 text-xs text-navy/70 overflow-y-auto space-y-1.5 flex flex-col justify-start font-mono">
                 <AnimatePresence>
                   {deployStatus.map((log, idx) => (
                     <motion.div
@@ -958,7 +949,7 @@ export default function SetupWizard() {
                       animate={{ opacity: 1, x: 0 }}
                       className="flex items-start gap-1.5 text-xs"
                     >
-                      <span className="text-violet-500 font-bold">&gt;</span>
+                      <span className="text-violet-400 font-bold">&gt;</span>
                       <span>{log}</span>
                       {idx === currentDeployStep && (
                         <span className="w-1.5 h-3.5 bg-ocean-500 inline-block animate-pulse ml-0.5 rounded-sm" />
@@ -969,7 +960,7 @@ export default function SetupWizard() {
               </div>
 
               <div className="flex justify-center pt-2">
-                <Loader2 className="w-5 h-5 text-ocean-400 animate-spin" />
+                <Loader2 className="w-5 h-5 text-white animate-spin" />
               </div>
             </motion.div>
           )}

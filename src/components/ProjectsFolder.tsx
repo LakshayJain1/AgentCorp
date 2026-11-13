@@ -18,7 +18,7 @@ export default function ProjectsFolder() {
 
   return (
     <div>
-      <button onClick={() => setIsOpen(!isOpen)} className="flex items-center justify-between w-full mb-2.5 cursor-pointer py-1 rounded-lg hover:bg-[rgba(0,0,0,0.02)] transition-colors">
+      <button onClick={() => setIsOpen(!isOpen)} className="flex items-center justify-between w-full mb-2.5 cursor-pointer py-1 rounded-lg hover:bg-white/[0.03] transition-colors">
         <div className="flex items-center gap-2">
           <span className="text-sm">📁</span>
           <h3 className="text-navy/70 font-semibold text-xs uppercase tracking-wider">Deliverables</h3>
@@ -62,12 +62,12 @@ export default function ProjectsFolder() {
                     <AnimatePresence>
                       {selectedProject === project.id && (
                         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden px-3 pb-3">
-                          <pre className="text-navy/80 text-xs whitespace-pre-wrap bg-white/70/80 p-3 rounded-xl max-h-[220px] overflow-y-auto glass-scrollbar font-mono leading-relaxed">
+                          <pre className="text-navy/80 text-xs whitespace-pre-wrap bg-white/[0.06]/80 p-3 rounded-xl max-h-[220px] overflow-y-auto glass-scrollbar font-mono leading-relaxed">
                             {project.content.slice(0, 1500)}{project.content.length > 1500 ? '\n...(truncated)' : ''}
                           </pre>
                           <div className="flex gap-2 mt-2">
-                            <button onClick={() => navigator.clipboard.writeText(project.content)} className="text-xs px-3 py-1.5 glass-card text-ocean-600 rounded-lg hover:bg-ocean-50 transition-colors cursor-pointer">Copy</button>
-                            <button onClick={() => { const blob = new Blob([project.content], { type: 'text/plain' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${project.title.replace(/\s+/g, '_')}.${project.lang || 'txt'}`; a.click(); URL.revokeObjectURL(url); }} className="text-xs px-3 py-1.5 glass-card text-emerald-600 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer">Download</button>
+                            <button onClick={() => navigator.clipboard.writeText(project.content)} className="text-xs px-3 py-1.5 glass-card text-white rounded-full hover:bg-ocean-50 transition-colors cursor-pointer">Copy</button>
+                            <button onClick={() => { const blob = new Blob([project.content], { type: 'text/plain' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${project.title.replace(/\s+/g, '_')}.${project.lang || 'txt'}`; a.click(); URL.revokeObjectURL(url); }} className="text-xs px-3 py-1.5 glass-card text-emerald-400 rounded-lg hover:bg-emerald-500/10 transition-colors cursor-pointer">Download</button>
                           </div>
                         </motion.div>
                       )}

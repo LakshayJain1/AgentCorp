@@ -45,10 +45,10 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
-        className="glass-card !bg-white/80 !backdrop-blur-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto mx-4 rounded-2xl"
+        className="glass-card !bg-white/[0.06] !backdrop-blur-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto mx-4 rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 glass-card !bg-white/90 !backdrop-blur-xl p-5 flex items-start justify-between z-10 rounded-t-2xl">
+        <div className="sticky top-0 glass-card !bg-surface !backdrop-blur-xl p-5 flex items-start justify-between z-10 rounded-t-2xl">
           <div>
             <div className="flex items-center gap-2.5 mb-1.5">
               <span className="text-xl shrink-0">{TYPE_ICONS[task.deliverableType || 'code']}</span>
@@ -61,7 +61,7 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
               <span className="text-[9px] font-semibold uppercase" style={{ color: PRIORITY_COLORS[task.priority] }}>{task.priority}</span>
             </div>
           </div>
-          <button onClick={onClose} className="text-navy/55 hover:text-rose-500 transition-colors cursor-pointer"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="text-navy/55 hover:text-rose-400 transition-colors cursor-pointer"><X className="w-4 h-4" /></button>
         </div>
 
         <div className="p-5 border-b glass-divider">
@@ -69,7 +69,7 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
           <div className="space-y-2">
             {task.steps.map((step, i) => (
               <div key={i} className="flex items-center gap-3 text-sm">
-                <div className={`w-2 h-2 rounded-full shrink-0 ${step.completed ? 'bg-green-400' : 'bg-gray-200'}`} />
+                <div className={`w-2 h-2 rounded-full shrink-0 ${step.completed ? 'bg-green-400' : 'bg-white/15'}`} />
                 <span className={step.completed ? 'text-navy/55 line-through' : 'text-navy/80'}>{step.description}</span>
                 {step.aiOutput && <span className="text-navy/55 text-xs ml-auto shrink-0 truncate max-w-[160px]">{step.aiOutput.slice(0, 30)}...</span>}
               </div>
@@ -93,19 +93,19 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
 
         {task.executionLogs.length > 0 && (
           <div className="p-5 border-b glass-divider">
-            <h3 className="text-violet-600 font-semibold text-xs mb-3 uppercase tracking-wider">Execution Logs ({task.executionLogs.length})</h3>
+            <h3 className="text-violet-400 font-semibold text-xs mb-3 uppercase tracking-wider">Execution Logs ({task.executionLogs.length})</h3>
             <div className="space-y-2.5 max-h-[200px] overflow-y-auto glass-scrollbar">
               {task.executionLogs.slice(-10).map((log) => (
                 <div key={log.id} className="text-xs flex items-start gap-2 pb-1.5">
                   <div className={`shrink-0 mt-1 w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-green-400' : log.status === 'error' ? 'bg-rose-400' : 'bg-amber-400'}`} />
                   <div className="min-w-0 flex-1">
                     <div className="text-navy/80">
-                      <span className="text-violet-600 font-semibold">{log.tool}</span>
+                      <span className="text-violet-400 font-semibold">{log.tool}</span>
                       <span className="text-navy/55 mx-1">·</span>
                       {log.action}
                     </div>
                     {log.output && (
-                      <pre className="text-navy/55 text-[9px] mt-1 whitespace-pre-wrap bg-white/70/80 p-2 rounded-lg max-h-[100px] overflow-y-auto font-mono">{log.output.slice(0, 500)}</pre>
+                      <pre className="text-navy/55 text-[9px] mt-1 whitespace-pre-wrap bg-white/[0.06]/80 p-2 rounded-lg max-h-[100px] overflow-y-auto font-mono">{log.output.slice(0, 500)}</pre>
                     )}
                   </div>
                 </div>
@@ -117,13 +117,13 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
         {task.deliverable && (
           <div className="p-5">
             <div className="flex items-center gap-2.5 mb-3">
-              <h3 className="text-green-600 font-semibold text-xs uppercase tracking-wider">Deliverable</h3>
+              <h3 className="text-green-400 font-semibold text-xs uppercase tracking-wider">Deliverable</h3>
               <span className="text-navy/55 text-[9px]">{task.deliverable.length} chars</span>
               <button onClick={() => navigator.clipboard.writeText(task.deliverable || '')} className="ml-auto text-navy/55 hover:text-navy/80 text-[10px] font-semibold uppercase flex items-center gap-1 cursor-pointer">
                 <Copy className="w-3 h-3" /> Copy
               </button>
             </div>
-            <pre className="bg-white/70/80 rounded-xl p-4 overflow-x-auto text-xs leading-relaxed max-h-[300px] overflow-y-auto glass-scrollbar">
+            <pre className="bg-white/[0.06]/80 rounded-xl p-4 overflow-x-auto text-xs leading-relaxed max-h-[300px] overflow-y-auto glass-scrollbar">
               <code className="text-navy/80 whitespace-pre-wrap">{task.deliverable}</code>
             </pre>
           </div>
@@ -162,14 +162,14 @@ function TaskItem({ task, onClick }: { task: Task; onClick: () => void }) {
             <span className="text-[9px] px-1.5 py-0.5 rounded-lg font-semibold" style={{ color: STATUS_COLORS[task.status], backgroundColor: `${STATUS_COLORS[task.status]}10` }}>
               {task.status.replace('_', ' ')}
             </span>
-            {task.deliverable && <span className="text-green-500/70 text-[9px] font-semibold">✓ Output Ready</span>}
+            {task.deliverable && <span className="text-green-400/70 text-[9px] font-semibold">✓ Output Ready</span>}
           </div>
         </div>
       </div>
       {task.status !== 'completed' && task.status !== 'failed' && (
         <div className="flex gap-1 mt-3">
           {task.steps.map((step, i) => (
-            <div key={i} className={`h-1 rounded-full transition-all flex-1 ${step.completed ? 'bg-green-400' : 'bg-[rgba(23,23,31,0.05)]'}`} />
+            <div key={i} className={`h-1 rounded-full transition-all flex-1 ${step.completed ? 'bg-green-400' : 'bg-white/[0.05]'}`} />
           ))}
         </div>
       )}

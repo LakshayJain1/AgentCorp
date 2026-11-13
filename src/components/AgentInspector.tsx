@@ -72,7 +72,7 @@ function AgentCard({ agent }: { agent: Agent }) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="bg-white border border-navy/5 rounded-xl p-3 hover:border-navy/10 hover:shadow-sm transition-all cursor-pointer"
+      className="bg-surface border border-navy/5 rounded-xl p-3 hover:border-navy/10 hover:shadow-sm transition-all cursor-pointer"
       onClick={() => setSelectedAgent(agent.id)}
     >
       <div className="flex items-start justify-between mb-2">
@@ -80,7 +80,7 @@ function AgentCard({ agent }: { agent: Agent }) {
           <div className="relative shrink-0">
             <div className="text-xl">{agent.emoji}</div>
             {agent.online && (
-              <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full border-2 border-white" />
+              <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full border-2 border-white/10" />
             )}
           </div>
           <div className="min-w-0">
@@ -127,7 +127,7 @@ function AgentCard({ agent }: { agent: Agent }) {
       </div>
 
       {currentTask && (
-        <div className="text-amber-600 text-[9px] truncate mb-2 bg-amber-50 border border-amber-100 rounded-lg px-2 py-0.5">
+        <div className="text-amber-400 text-[9px] truncate mb-2 bg-amber-500/10 border border-amber-500/25 rounded-lg px-2 py-0.5">
           📋 {currentTask.title}
         </div>
       )}
@@ -137,7 +137,7 @@ function AgentCard({ agent }: { agent: Agent }) {
           <span>Performance</span>
           <span className="font-bold" style={{ color: score > 70 ? '#34C759' : score > 45 ? '#FF9F0A' : '#FF453A' }}>{score}/100</span>
         </div>
-        <div className="w-full h-1.5 bg-[rgba(23,23,31,0.05)] rounded-full overflow-hidden">
+        <div className="w-full h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
           <motion.div
             animate={{ width: `${score}%` }}
             className={`h-full rounded-full ${
@@ -187,7 +187,7 @@ export default function AgentInspector() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="mt-3 p-3.5 bg-white border border-navy/10 rounded-xl card-shadow relative overflow-hidden shrink-0"
+            className="mt-3 p-3.5 bg-surface border border-navy/10 rounded-xl card-shadow relative overflow-hidden shrink-0"
           >
             <div className="flex items-center justify-between mb-3 border-b border-navy/5 pb-2">
               <h4 className="text-navy font-semibold text-xs">
@@ -195,7 +195,7 @@ export default function AgentInspector() {
               </h4>
               <button
                 onClick={() => setSelectedAgent(null)}
-                className="text-navy/40 hover:text-rose-500 transition-colors cursor-pointer"
+                className="text-navy/40 hover:text-rose-400 transition-colors cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -203,15 +203,15 @@ export default function AgentInspector() {
 
             <div className="space-y-2 text-xs">
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                <div className="bg-white/[0.06] border border-navy/5 rounded-lg p-2">
                   <div className="text-navy/40 text-[9px] font-semibold uppercase">Role</div>
                   <div className="text-navy font-semibold capitalize">{selectedAgent.role}</div>
                 </div>
-                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                <div className="bg-white/[0.06] border border-navy/5 rounded-lg p-2">
                   <div className="text-navy/40 text-[9px] font-semibold uppercase">Seniority</div>
                   <div className="text-navy font-semibold capitalize">{selectedAgent.performance.seniority}</div>
                 </div>
-                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                <div className="bg-white/[0.06] border border-navy/5 rounded-lg p-2">
                   <div className="text-navy/40 text-[9px] font-semibold uppercase">Status</div>
                   <div className="font-semibold uppercase" style={{ color: STATUS_COLORS[selectedAgent.workStatus] || '#86868B' }}>
                     {selectedAgent.cooldownRemainingSeconds && selectedAgent.cooldownRemainingSeconds > 0
@@ -219,17 +219,17 @@ export default function AgentInspector() {
                       : selectedAgent.workStatus}
                   </div>
                 </div>
-                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                <div className="bg-white/[0.06] border border-navy/5 rounded-lg p-2">
                   <div className="text-navy/40 text-[9px] font-semibold uppercase">Mood</div>
                   <div className="font-semibold uppercase" style={{ color: MOOD_COLORS[selectedAgent.mood] || '#86868B' }}>
                     {selectedAgent.mood}
                   </div>
                 </div>
-                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                <div className="bg-white/[0.06] border border-navy/5 rounded-lg p-2">
                   <div className="text-navy/40 text-[9px] font-semibold uppercase">Efficiency</div>
                   <div className="font-bold text-navy">{Math.round(selectedAgent.efficiency)}%</div>
                 </div>
-                <div className="bg-white/70 border border-navy/5 rounded-lg p-2">
+                <div className="bg-white/[0.06] border border-navy/5 rounded-lg p-2">
                   <div className="text-navy/40 text-[9px] font-semibold uppercase">Success Rate</div>
                   <div className="font-bold text-navy">{(selectedAgent.performance.successRate * 100).toFixed(0)}%</div>
                 </div>
