@@ -25,7 +25,7 @@ Credentialed API calls then resolve the caller's token server-side:
 
 ```
 GET /api/github/file  →  requireIntegration('github')
-                          ├─ auth0.getSession()        (who)
+                          ├─ getUserId()               (who)
                           ├─ resolveWorkspace(sub)     (server-owned workspace id)
                           ├─ getToken(...)             (decrypt / refresh inline)
                           └─ readRepoFile(token, ...)  (token never leaves server)
@@ -124,7 +124,7 @@ gateway returns only the provider's textual result.
 - **Refresh is single-flight.** The refresh ciphertext is atomically nulled
   (`UPDATE … WHERE refresh_token = $old`) before rotating, so two serverless
   instances cannot invalidate each other's rotated token.
-- **State is single-use** and bound to the Auth0 subject; a cookie provides
+- **State is single-use** and bound to the Clerk user id; a cookie provides
   defence in depth.
 - **No tokens in Zustand, localStorage, responses, or logs.**
 

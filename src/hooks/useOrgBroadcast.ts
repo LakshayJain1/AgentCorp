@@ -64,7 +64,7 @@ export function useOrgBroadcast() {
         });
         // 403 = this id is owned by another account (e.g. copied localStorage).
         if (res.status === 403) {
-          useGameStore.setState({ orgId: '', auth0OrgId: '', invitesSent: false });
+          useGameStore.setState({ orgId: '', clerkOrgId: '', invitesSent: false });
           useGameStore.getState().ensureStrongOrgId();
         }
       } catch {

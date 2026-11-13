@@ -72,7 +72,7 @@ export function sanitizeSnapshot(input: unknown): OrgSnapshot | null {
 }
 
 // ── In-memory fallback (used only when DATABASE_URL is not configured) ──
-interface MemEntry { ownerSub: string; snapshot: OrgSnapshot; auth0OrgId: string | null; ts: number }
+interface MemEntry { ownerSub: string; snapshot: OrgSnapshot; clerkOrgId: string | null; ts: number }
 const mem = new Map<string, MemEntry>();
 const TTL_MS = 10 * 60 * 1000;
 function evictStale() {
@@ -90,10 +90,19 @@ function ensureTable(): Promise<void> {
         org_id text PRIMARY KEY,
         owner_sub text NOT NULL,
         snapshot jsonb NOT NULL,
-        auth0_org_id text,
+        clerk_org_id text,
         updated_at timestamptz NOT NULL DEFAULT now()
       )`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS org_snapshots_auth0_org_idx ON org_snapshots (auth0_org_id)`);
+      // Auth0 -> Clerk migration: rename the old link column and drop the Auth0 org ids
+      // (they mean nothing to Clerk). No-op once migrated.
+      await db.execute(sql`DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'org_snapshots' AND column_name = 'auth0_org_id') THEN
+          ALTER TABLE org_snapshots RENAME COLUMN auth0_org_id TO clerk_org_id;
+          UPDATE org_snapshots SET clerk_org_id = NULL;
+        END IF;
+      END $$`);
+      await db.execute(sql`DROP INDEX IF EXISTS org_snapshots_auth0_org_idx`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS org_snapshots_clerk_org_idx ON org_snapshots (clerk_org_id)`);
     })().catch((e) => { ensured = null; throw e; });
   }
   return ensured;
@@ -115,16 +124,18 @@ export async function saveSnapshot(orgId: string, ownerSub: string, snapshot: Or
       .values({ orgId, ownerSub, snapshot })
       .onConflictDoUpdate({
         target: orgSnapshots.orgId,
-        set: { snapshot, updatedAt: sql`now()` },
-        setWhere: eq(orgSnapshots.ownerSub, ownerSub),
+        // Rows owned by a pre-Clerk (Auth0) id are claimable by the first Clerk user
+        // that writes with the org id (it is a 128-bit secret held only by the owner).
+        set: { snapshot, ownerSub, updatedAt: sql`now()` },
+        setWhere: sql`${orgSnapshots.ownerSub} = ${ownerSub} OR ${orgSnapshots.ownerSub} NOT LIKE 'user\_%'`,
       })
       .returning({ orgId: orgSnapshots.orgId });
     return rows.length > 0;
   }
   evictStale();
   const existing = mem.get(orgId);
-  if (existing && existing.ownerSub !== ownerSub) return false;
-  mem.set(orgId, { ownerSub, snapshot, auth0OrgId: existing?.auth0OrgId ?? null, ts: Date.now() });
+  if (existing && existing.ownerSub !== ownerSub && existing.ownerSub.startsWith('user_')) return false;
+  mem.set(orgId, { ownerSub, snapshot, clerkOrgId: existing?.clerkOrgId ?? null, ts: Date.now() });
   return true;
 }
 
@@ -139,31 +150,31 @@ export async function getSnapshot(orgId: string): Promise<{ snapshot: OrgSnapsho
   return e ? { snapshot: e.snapshot, ts: e.ts, ownerSub: e.ownerSub } : null;
 }
 
-/** Remember which Auth0 Organization belongs to this org (owner only). */
-export async function linkAuth0Org(orgId: string, ownerSub: string, auth0OrgId: string): Promise<boolean> {
+/** Remember which Clerk Organization belongs to this org (owner only). */
+export async function linkClerkOrg(orgId: string, ownerSub: string, clerkOrgId: string): Promise<boolean> {
   if (await dbReady()) {
     const rows = await getDb()
       .update(orgSnapshots)
-      .set({ auth0OrgId })
+      .set({ clerkOrgId })
       .where(sql`${orgSnapshots.orgId} = ${orgId} AND ${orgSnapshots.ownerSub} = ${ownerSub}`)
       .returning({ orgId: orgSnapshots.orgId });
     return rows.length > 0;
   }
   const e = mem.get(orgId);
   if (!e || e.ownerSub !== ownerSub) return false;
-  e.auth0OrgId = auth0OrgId;
+  e.clerkOrgId = clerkOrgId;
   return true;
 }
 
-export async function findOrgByAuth0Org(auth0OrgId: string): Promise<string | null> {
+/** The Clerk Organization linked to one of our org ids, if invites were ever sent. */
+export async function getClerkOrgId(orgId: string): Promise<string | null> {
   if (await dbReady()) {
     const rows = await getDb()
-      .select({ orgId: orgSnapshots.orgId })
+      .select({ clerkOrgId: orgSnapshots.clerkOrgId })
       .from(orgSnapshots)
-      .where(eq(orgSnapshots.auth0OrgId, auth0OrgId))
+      .where(eq(orgSnapshots.orgId, orgId))
       .limit(1);
-    return rows[0]?.orgId ?? null;
+    return rows[0]?.clerkOrgId ?? null;
   }
-  for (const [k, v] of mem) if (v.auth0OrgId === auth0OrgId) return k;
-  return null;
+  return mem.get(orgId)?.clerkOrgId ?? null;
 }

@@ -4,7 +4,7 @@ import { useOrgViewer } from '@/hooks/useOrgViewer';
 import BrandLogo from '@/components/BrandLogo'
 import { motion, AnimatePresence } from 'framer-motion';
 import { Cpu, Radio, WifiOff, Clock, Users, CheckSquare, Zap, BarChart2 } from 'lucide-react';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import { useAuthUser } from '@/hooks/useAuthUser';
 import type { OrgSnapshot } from '@/app/api/org-state/route';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -134,6 +134,23 @@ function NotFoundState() {
   );
 }
 
+function NoAccessState({ email }: { email?: string }) {
+  return (
+    <div className="flex-1 flex items-center justify-center p-8">
+      <div className="text-center max-w-sm">
+        <div className="w-16 h-16 rounded-2xl bg-navy/5 flex items-center justify-center mx-auto mb-4">
+          <WifiOff className="w-8 h-8 text-navy/30" />
+        </div>
+        <h2 className="text-base font-bold text-navy mb-2">You haven&apos;t been invited to this workspace</h2>
+        <p className="text-sm text-navy/50 leading-relaxed">
+          {email ? <>You&apos;re signed in as <strong>{email}</strong>, which</> : <>This account</>}{' '}doesn&apos;t have an invitation.
+          Ask the owner to invite this email address, or sign in with the address they invited.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function LoadingState() {
   return (
     <div className="flex-1 flex items-center justify-center p-8">
@@ -151,7 +168,7 @@ function LoadingState() {
 
 export default function WorkspaceViewer({ orgId }: { orgId: string }) {
   const { snapshot, ts, status } = useOrgViewer(orgId);
-  const { user } = useUser();
+  const { user } = useAuthUser();
 
   if (status === 'loading') {
     return (
@@ -167,7 +184,7 @@ export default function WorkspaceViewer({ orgId }: { orgId: string }) {
     );
   }
 
-  if (status === 'not_found' || !snapshot) {
+  if (status === 'not_found' || status === 'no_access' || !snapshot) {
     return (
       <div className="h-screen w-screen flex flex-col ws-bg overflow-hidden">
         <div className="glass-topbar px-5 py-2.5 flex items-center gap-3 z-30 shrink-0">
@@ -178,7 +195,7 @@ export default function WorkspaceViewer({ orgId }: { orgId: string }) {
             <span className="text-[10px] text-navy/40">{user.name}</span>
           )}
         </div>
-        <NotFoundState />
+        {status === 'no_access' ? <NoAccessState email={user?.email} /> : <NotFoundState />}
       </div>
     );
   }

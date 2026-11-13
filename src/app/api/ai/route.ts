@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth0 } from '@/lib/auth0';
+import { getUserId } from '@/lib/session';
 import { getToken } from '@/lib/integrations/token-service';
 import { getServerTool, listServerToolsAsOpenAI } from '@/lib/integrations/tools';
 import { resolveWorkspace } from '@/lib/workspace';
@@ -187,10 +187,8 @@ async function callGeminiFallback(body: RequestBody): Promise<string | null> {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth0.getSession();
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const userId = session.user.sub;
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const body: RequestBody = await req.json();

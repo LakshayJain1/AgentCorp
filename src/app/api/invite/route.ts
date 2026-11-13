@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
-import { auth0 } from '@/lib/auth0';
-import { getOrCreateAuth0Org, mgmt } from '@/lib/auth0Mgmt';
+import { clerkClient } from '@clerk/nextjs/server';
+import { getUserId } from '@/lib/session';
+import { canViewOrg, clerkErrorCode } from '@/lib/orgAccess';
 import { rateLimit } from '@/lib/rateLimit';
-import { ORG_ID_RE, findOrgByAuth0Org, getSnapshot, linkAuth0Org } from '@/lib/orgStore';
+import { ORG_ID_RE, getClerkOrgId, getSnapshot, linkClerkOrg } from '@/lib/orgStore';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -10,23 +11,16 @@ export const runtime = 'nodejs';
 const MAX_EMAILS_PER_REQUEST = 10;
 const EMAIL_RE = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]+$/;
 
-// POST /api/invite — the OWNER of an org sends Auth0 invitation emails.
+// POST /api/invite — the OWNER of an org invites people by email. Clerk sends
+// the invitation email; the link lands on /workspace?invite=<orgId>, where the
+// invitee signs in with an emailed code and is let in because their verified
+// email matches the invitation (see lib/orgAccess.ts).
 export async function POST(req: NextRequest) {
-  const session = await auth0.getSession();
-  const sub = session?.user?.sub as string | undefined;
-  if (!session?.user || !sub) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const userId = await getUserId();
+  if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!process.env.AUTH0_MGMT_CLIENT_ID || !process.env.AUTH0_MGMT_CLIENT_SECRET) {
-    return Response.json(
-      { error: 'AUTH0_MGMT_CLIENT_ID / AUTH0_MGMT_CLIENT_SECRET not configured' },
-      { status: 503 },
-    );
-  }
-
-  // Invitation emails come from our Auth0 tenant — treat this as a spam vector.
-  if (!rateLimit(`invite:${sub}`, 5, 60 * 60_000) || !rateLimit(`invite-day:${sub}`, 15, 24 * 60 * 60_000)) {
+  // Invitation emails come from our Clerk instance — treat this as a spam vector.
+  if (!rateLimit(`invite:${userId}`, 5, 60 * 60_000) || !rateLimit(`invite-day:${userId}`, 15, 24 * 60 * 60_000)) {
     return Response.json({ error: 'Too many invitations. Try again later.' }, { status: 429 });
   }
 
@@ -50,7 +44,7 @@ export async function POST(req: NextRequest) {
   if (!entry) {
     return Response.json({ error: 'Workspace is not synced yet — try again in a few seconds.' }, { status: 409 });
   }
-  if (entry.ownerSub !== sub) {
+  if (entry.ownerSub !== userId) {
     return Response.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -70,15 +64,32 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line no-control-regex
   const safeCompany = companyName.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 100);
 
-  const org = await getOrCreateAuth0Org(orgId, safeCompany);
-  if (!org) {
-    return Response.json({ error: 'Failed to create Auth0 organization' }, { status: 500 });
-  }
-  await linkAuth0Org(orgId, sub, org.id).catch((e) => console.error('[invite] link failed:', (e as Error).message));
+  const clerk = await clerkClient();
 
-  // eslint-disable-next-line no-control-regex
-  const inviterName = String((session.user.name as string | undefined) || safeCompany).replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 100);
-  const clientId = process.env.AUTH0_CLIENT_ID!;
+  // Find or create the Clerk Organization that mirrors this workspace.
+  let clerkOrgId = await getClerkOrgId(orgId).catch(() => null);
+  if (!clerkOrgId) {
+    try {
+      const created = await clerk.organizations.createOrganization({
+        name: safeCompany,
+        createdBy: userId,
+        privateMetadata: { agentcorpOrgId: orgId },
+      });
+      clerkOrgId = created.id;
+      await linkClerkOrg(orgId, userId, clerkOrgId).catch((e) =>
+        console.error('[invite] link failed:', (e as Error).message),
+      );
+    } catch (e) {
+      console.error('[invite] organization create failed:', clerkErrorCode(e), (e as Error).message);
+      return Response.json(
+        { error: 'Could not create the invite group. Make sure Organizations are enabled in the Clerk dashboard.' },
+        { status: 503 },
+      );
+    }
+  }
+
+  const base = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+  const redirectUrl = `${base.replace(/\/$/, '')}/workspace?invite=${orgId}`;
 
   const sent: string[] = [];
   const failed: string[] = [];
@@ -86,62 +97,45 @@ export async function POST(req: NextRequest) {
   await Promise.all(
     validEmails.map(async (email) => {
       try {
-        const res = await mgmt(`/organizations/${org.id}/invitations`, {
-          method: 'POST',
-          body: JSON.stringify({
-            inviter: { name: inviterName },
-            invitee: { email },
-            client_id: clientId,
-            send_invitation_email: true,
-            ttl_sec: 60 * 60 * 24 * 7, // 7 days
-            app_metadata: { agentcorp_invite_org_id: orgId },
-          }),
+        await clerk.organizations.createOrganizationInvitation({
+          organizationId: clerkOrgId!,
+          emailAddress: email,
+          role: 'org:member',
+          inviterUserId: userId,
+          redirectUrl,
+          expiresInDays: 7,
         });
-        if (res.ok) {
-          sent.push(email);
-        } else {
-          console.error(`[invite] failed (${res.status}) for an invitee`);
-          failed.push(email);
-        }
+        sent.push(email);
       } catch (e) {
-        console.error('[invite] request error:', (e as Error).message);
+        const code = clerkErrorCode(e);
+        // Already invited / already a member: they have (or will have) access, so not a failure.
+        if (code === 'duplicate_record' || code === 'already_a_member_in_organization') {
+          sent.push(email);
+          return;
+        }
+        console.error('[invite] invitation failed:', code, (e as Error).message);
         failed.push(email);
       }
     }),
   );
 
-  return Response.json({ ok: true, auth0OrgId: org.id, sent, failed });
+  return Response.json({ ok: true, clerkOrgId, sent, failed });
 }
 
-// GET /api/invite?auth0OrgId=xxx → our internal orgId.
-// Used after a user accepts an Auth0 invitation. Signed-in users may only
-// resolve THEIR OWN Auth0 organization, so an org id seen in an invitation URL
-// can't be turned into a workspace link by a third party.
+// GET /api/invite?orgId=org_… — "am I allowed into this workspace?". Accepts a
+// pending invitation addressed to the caller's verified email as a side effect.
 export async function GET(req: NextRequest) {
-  const session = await auth0.getSession();
-  if (!session?.user) return Response.json({ found: false }, { status: 401 });
+  const userId = await getUserId();
+  if (!userId) return Response.json({ found: false }, { status: 401 });
 
-  const auth0OrgId = req.nextUrl.searchParams.get('auth0OrgId');
-  if (!auth0OrgId) return Response.json({ found: false }, { status: 400 });
-
-  const myAuth0Org = (session.user as Record<string, unknown>).org_id;
-  if (typeof myAuth0Org !== 'string' || myAuth0Org !== auth0OrgId) {
-    return Response.json({ found: false }, { status: 404 });
+  if (!rateLimit(`invite-check:${userId}`, 30, 60_000)) {
+    return Response.json({ found: false }, { status: 429 });
   }
 
-  const linked = await findOrgByAuth0Org(auth0OrgId).catch(() => null);
-  if (linked) return Response.json({ found: true, orgId: linked });
+  const orgId = req.nextUrl.searchParams.get('orgId') ?? '';
+  if (!ORG_ID_RE.test(orgId)) return Response.json({ found: false }, { status: 400 });
 
-  // Fallback for organizations created before org links were stored.
-  if (!process.env.AUTH0_MGMT_CLIENT_ID) return Response.json({ found: false }, { status: 404 });
-  try {
-    const res = await mgmt(`/organizations/${encodeURIComponent(auth0OrgId)}`);
-    if (!res.ok) return Response.json({ found: false }, { status: 404 });
-    const org = (await res.json()) as { metadata?: { external_id?: string } };
-    const orgId = org.metadata?.external_id;
-    if (!orgId || !ORG_ID_RE.test(orgId)) return Response.json({ found: false }, { status: 404 });
-    return Response.json({ found: true, orgId });
-  } catch {
-    return Response.json({ found: false }, { status: 500 });
-  }
+  const ok = await canViewOrg(userId, orgId);
+  if (!ok) return Response.json({ found: false, reason: 'not_invited' }, { status: 403 });
+  return Response.json({ found: true, orgId });
 }

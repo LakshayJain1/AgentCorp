@@ -1,7 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
-import { auth0 } from '@/lib/auth0';
+import { getUserId } from '@/lib/session';
 
 export interface ScrumYesterdayItem {
   title: string;
@@ -28,7 +28,7 @@ const clip = (list: unknown, maxItems: number, maxLen: number): string[] =>
 export async function generateDailyScrumTasks(rawInput: ScrumInput): Promise<ScrumResult> {
   // Server actions are public endpoints: require a signed-in user and bound the input,
   // otherwise this is an open, unauthenticated LLM proxy on our API key.
-  const session = await auth0.getSession();
+  const userId = await getUserId();
   const input: ScrumInput = {
     companyName: String(rawInput?.companyName ?? '').slice(0, 120),
     companyProduct: String(rawInput?.companyProduct ?? '').slice(0, 300),
@@ -54,7 +54,7 @@ export async function generateDailyScrumTasks(rawInput: ScrumInput): Promise<Scr
     blockers: input.blockedTasks,
   };
 
-  if (!session?.user) return fallback;
+  if (!userId) return fallback;
 
   try {
     const h = await headers();

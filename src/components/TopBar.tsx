@@ -4,14 +4,14 @@ import { useGameStore } from '@/store/gameStore';
 import BrandLogo from '@/components/BrandLogo'
 import WorkspaceFolderButton from '@/components/WorkspaceFolderButton'
 import { motion, AnimatePresence } from 'framer-motion';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import { useAuthUser } from '@/hooks/useAuthUser';
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ScrumMeeting from '@/components/ScrumMeeting';
 import { Play, Pause, Search, Command, X, UserPlus, Copy, Check, Send, Mail } from 'lucide-react';
 
 export default function TopBar() {
-  const { user, isLoading } = useUser();
+  const { user, isLoading } = useAuthUser();
   const isSignedIn = !isLoading && !!user;
   const router = useRouter();
   const simulation = useGameStore((s) => s.simulation);
@@ -27,7 +27,7 @@ export default function TopBar() {
   const companyName = useGameStore((s) => s.companyName);
   const inviteEmails = useGameStore((s) => s.inviteEmails);
   const invitesSent = useGameStore((s) => s.invitesSent);
-  const setAuth0OrgId = useGameStore((s) => s.setAuth0OrgId);
+  const setClerkOrgId = useGameStore((s) => s.setClerkOrgId);
   const markInvitesSent = useGameStore((s) => s.markInvitesSent);
 
   const [query, setQuery] = useState('');
@@ -36,7 +36,7 @@ export default function TopBar() {
   const [inviteCopied, setInviteCopied] = useState(false);
   const [emailDraft, setEmailDraft] = useState(['', '', '']);
   const [sendingInvites, setSendingInvites] = useState(false);
-  const [inviteResult, setInviteResult] = useState<{ sent: string[]; failed: string[] } | null>(null);
+  const [inviteResult, setInviteResult] = useState<{ sent: string[]; failed: string[]; error?: string } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const inviteRef = useRef<HTMLDivElement>(null);
 
@@ -236,7 +236,7 @@ export default function TopBar() {
               >
                 <div>
                   <p className="text-xs font-bold text-navy">Invite to workspace</p>
-                  <p className="text-[10px] text-navy/45 mt-0.5">Send Auth0-signed invite emails or share the link directly.</p>
+                  <p className="text-[10px] text-navy/45 mt-0.5">Email an invite or share the link directly.</p>
                 </div>
 
                 {/* Copy link row */}
@@ -271,7 +271,7 @@ export default function TopBar() {
                 {/* Email invite section */}
                 <div className="border-t border-navy/8 pt-3 space-y-2">
                   <p className="text-[10px] font-semibold text-navy/55 flex items-center gap-1.5">
-                    <Mail className="w-3 h-3" /> Email invites via Auth0
+                    <Mail className="w-3 h-3" /> Email invites
                   </p>
                   <div className="space-y-1.5">
                     {[0, 1, 2].map((i) => (
@@ -297,6 +297,9 @@ export default function TopBar() {
                           <Check className="w-3 h-3" /> Sent to: {inviteResult.sent.join(', ')}
                         </p>
                       )}
+                      {inviteResult.error && (
+                        <p className="text-[9px] text-rose-500 font-medium">{inviteResult.error}</p>
+                      )}
                       {inviteResult.failed.length > 0 && (
                         <p className="text-[9px] text-rose-500 font-medium">
                           Failed: {inviteResult.failed.join(', ')}
@@ -319,8 +322,12 @@ export default function TopBar() {
                           body: JSON.stringify({ orgId, companyName, emails }),
                         });
                         const data = await res.json();
-                        if (data.auth0OrgId) setAuth0OrgId(data.auth0OrgId);
-                        setInviteResult({ sent: data.sent ?? [], failed: data.failed ?? [] });
+                        if (data.clerkOrgId) setClerkOrgId(data.clerkOrgId);
+                        setInviteResult({
+                          sent: data.sent ?? [],
+                          failed: data.failed ?? [],
+                          error: res.ok ? undefined : (data.error as string | undefined) ?? 'Could not send invites. Please try again.',
+                        });
                         if ((data.sent ?? []).length > 0) markInvitesSent();
                       } catch {
                         setInviteResult({ sent: [], failed: emails });
@@ -336,7 +343,7 @@ export default function TopBar() {
                     }
                   </button>
                   <p className="text-[9px] text-navy/35 leading-relaxed">
-                    Auth0 emails each person a branded invite with a one-click login button. Link expires in 7 days.
+                    Each person gets an email with a link; they sign in with a one-time code. Invites expire in 7 days.
                   </p>
                 </div>
               </motion.div>

@@ -1,4 +1,4 @@
-import { Auth0Provider } from '@auth0/nextjs-auth0/client';
+import { ClerkProvider } from '@clerk/nextjs';
 import type { Metadata } from 'next';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
@@ -22,11 +22,11 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700&display=swap" rel="stylesheet" />
       </head>
       <body className="antialiased">
-        <Auth0Provider>
+        <ClerkProvider>
           {children}
           <Analytics />
           <SpeedInsights />
-        </Auth0Provider>
+        </ClerkProvider>
       </body>
     </html>
   );

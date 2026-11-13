@@ -12,8 +12,6 @@ const isDev = process.env.NODE_ENV === 'development';
 const WEB_URL = (process.env.AGENTCORP_WEB_URL || '').replace(/\/+$/, '')
   || (isDev ? 'http://localhost:3000' : 'https://agent-corp.vercel.app');
 const DEEP_LINK_SCHEME = 'agentcorp';
-// Auth0 tenant (optional): lets the window follow Auth0 pages if ever required.
-const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || process.env.AUTH0_ISSUER_BASE_URL?.replace('https://', '') || '';
 
 let mainWindow = null;
 
@@ -33,18 +31,18 @@ function log(...args) {
 
 // ─── Trust helpers (bugs #1, #2, #11) ────────────────────────────────
 const WEB_ORIGIN = (() => { try { return new URL(WEB_URL).origin; } catch { return ''; } })();
-const AUTH0_ORIGIN = AUTH0_DOMAIN ? `https://${AUTH0_DOMAIN}` : '';
 
 // Exact-origin match. Never use substring checks on URLs.
 function isWebUrl(u) {
   try { return new URL(u).origin === WEB_ORIGIN; } catch { return false; }
 }
-// Pages allowed inside the privileged window: our web app and Auth0 login.
+// Pages allowed inside the privileged window: our web app only (sign-in is
+// the in-app email-code form, so no identity-provider pages are ever needed).
 // Everything else is opened in the system browser.
 function isTrustedNavigation(u) {
   try {
     const o = new URL(u).origin;
-    return o === WEB_ORIGIN || (!!AUTH0_ORIGIN && o === AUTH0_ORIGIN);
+    return o === WEB_ORIGIN;
   } catch { return false; }
 }
 function isLocalPage(u) {
@@ -93,7 +91,7 @@ const ipcMain = {
 function safeEnv() {
   const out = {};
   for (const [k, v] of Object.entries(process.env)) {
-    if (/(KEY|TOKEN|SECRET|PASSWORD|AUTH0|CREDENTIAL)/i.test(k)) continue;
+    if (/(KEY|TOKEN|SECRET|PASSWORD|AUTH0|CLERK|CREDENTIAL)/i.test(k)) continue;
     out[k] = v;
   }
   return out;
@@ -103,89 +101,6 @@ function safeEnv() {
 // Windows/Linux passes the URL in process.argv; on macOS via open-url). Stash
 // it and process once the window is ready.
 let pendingDeepLink = null;
-
-// ─── Local auth server ───────────────────────────────────────────────
-// Fallback hand-off channel: the web page POSTs the session token to
-// http://127.0.0.1:PORT/auth. A random single-use nonce ties the server to the
-// browser session that opened it. The port is OS-assigned (bug #10), the
-// Origin header is enforced, the body is size-capped, and the server shuts
-// itself down after success or 5 minutes.
-let authServerPort = 0;
-let authServerState = null; // one-time nonce generated per sign-in attempt
-let authServer = null;
-let authServerTimer = null;
-
-function generateState() {
-  authServerState = crypto.randomBytes(24).toString('hex');
-  return authServerState;
-}
-
-function stopAuthServer() {
-  if (authServerTimer) { clearTimeout(authServerTimer); authServerTimer = null; }
-  if (authServer) { try { authServer.close(); } catch { /* ignore */ } authServer = null; }
-  authServerPort = 0;
-}
-
-function startAuthServer() {
-  if (authServer) return Promise.resolve(authServerPort);
-  return new Promise((resolve, reject) => {
-    const srv = http.createServer((req, res) => {
-      const origin = req.headers.origin;
-      if (origin && origin !== WEB_ORIGIN) { res.writeHead(403); res.end(); return; }
-      res.setHeader('Access-Control-Allow-Origin', WEB_ORIGIN);
-      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-      res.setHeader('Access-Control-Allow-Private-Network', 'true');
-      res.setHeader('Vary', 'Origin');
-
-      if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
-      if (req.method !== 'POST' || req.url !== '/auth' || origin !== WEB_ORIGIN) {
-        res.writeHead(404); res.end(); return;
-      }
-
-      let body = '';
-      let tooBig = false;
-      req.on('data', (chunk) => {
-        body += chunk;
-        if (body.length > 16 * 1024) { tooBig = true; req.destroy(); }
-      });
-      req.on('end', () => {
-        if (tooBig) return;
-        try {
-          const { token, userId, state, cookies } = JSON.parse(body);
-          if (!safeEqual(state, authServerState)) {
-            res.writeHead(403, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: 'invalid state' }));
-            return;
-          }
-          if (!sanitizeCookies(cookies).length) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: 'missing session' }));
-            return;
-          }
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: true }));
-          log('local auth server: token received');
-          authServerState = null; // single use
-          completeSignin({ token, userId: typeof userId === 'string' ? userId : '', cookies, redirect: '/workspace' });
-          stopAuthServer();
-        } catch {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'bad request' }));
-        }
-      });
-    });
-
-    srv.once('error', (e) => { log('local auth server error:', e.message); authServer = null; reject(e); });
-    srv.listen(0, '127.0.0.1', () => {
-      authServer = srv;
-      authServerPort = srv.address().port;
-      authServerTimer = setTimeout(stopAuthServer, 5 * 60 * 1000);
-      log(`local auth server listening on 127.0.0.1:${authServerPort}`);
-      resolve(authServerPort);
-    });
-  });
-}
 
 function handleDeepLinkArgv(argv) {
   if (!Array.isArray(argv)) return;
@@ -198,57 +113,21 @@ function handleDeepLinkArgv(argv) {
 // Cold-start check: only stash here — processed in whenReady.
 handleDeepLinkArgv(process.argv);
 
-// ─── Sign-in: system browser → web session hand-off ──────────────────
-// Sign-in always happens in the user's real browser (Google/GitHub block
-// embedded webviews). The web app then hands us its session cookie through the
-// nonce-protected local server (or the agentcorp:// deep link), and we install
-// it into this window's cookie jar. Without that cookie the window would have
-// no web session and would bounce straight back to the login page.
+// ─── Sign-in ─────────────────────────────────────────────────────────
+// Sign-in is the web app's own email-code form (Clerk), shown right inside this
+// window — no system browser, no cookie hand-off. Clerk stores the session in
+// this window's normal cookie jar, so it persists across launches.
 async function startBrowserSignin() {
-  let port = 0;
-  try { port = await startAuthServer(); } catch { port = 0; }
-  if (!port) { log('local auth server unavailable; cannot start sign-in'); return; }
-  const nonce = generateState();
-  const desktopRedirect = `/desktop-redirect?port=${port}&state=${nonce}`;
-  openExternalSafe(`${WEB_URL}/auth/login?returnTo=${encodeURIComponent(desktopRedirect)}`);
+  loadWorkspace('/onboard');
 }
 
 const SESSION_COOKIE_RE = /^__session(__\d{1,2})?$/;
-
-function sanitizeCookies(list) {
-  if (!Array.isArray(list)) return [];
-  return list.slice(0, 10)
-    .filter((c) => c && typeof c.name === 'string' && SESSION_COOKIE_RE.test(c.name)
-      && typeof c.value === 'string' && c.value.length > 0 && c.value.length <= 8192)
-    .map((c) => ({ name: c.name, value: c.value }));
-}
-
-async function applySessionCookies(list) {
-  const cookies = sanitizeCookies(list);
-  const expirationDate = Math.floor(Date.now() / 1000) + 3 * 24 * 3600; // server rolls it forward
-  for (const c of cookies) {
-    await session.defaultSession.cookies.set({
-      url: WEB_ORIGIN, name: c.name, value: c.value, path: '/',
-      secure: WEB_ORIGIN.startsWith('https:'), httpOnly: true, sameSite: 'lax', expirationDate,
-    });
-  }
-  return cookies.length;
-}
 
 async function hasWebSession() {
   try {
     const all = await session.defaultSession.cookies.get({ url: WEB_ORIGIN });
     return all.some((c) => SESSION_COOKIE_RE.test(c.name));
   } catch { return false; }
-}
-
-async function completeSignin({ token, userId, cookies, redirect }) {
-  const n = await applySessionCookies(cookies);
-  if (!n) { log('sign-in hand-off carried no session cookie'); return false; }
-  if (typeof token === 'string' && token) saveAuth({ token, userId, authenticatedAt: Date.now() });
-  log('sign-in complete: web session installed');
-  loadWorkspace(redirect);
-  return true;
 }
 
 // ─── Encrypted persistent storage (bug #9) ──────────────────────────
@@ -298,25 +177,7 @@ function handleDeepLink(url) {
   let parsed;
   try { parsed = new URL(url); } catch { return false; }
 
-  // Web hand-off: agentcorp://auth-callback?cookies=<json>&state=NONCE
-  if (parsed.hostname === 'auth-callback') {
-    if (!safeEqual(parsed.searchParams.get('state'), authServerState)) {
-      log('deep link: auth-callback rejected (state mismatch)');
-      return false;
-    }
-    let cookies = [];
-    try { cookies = JSON.parse(parsed.searchParams.get('cookies') || '[]'); } catch { /* ignore */ }
-    if (!sanitizeCookies(cookies).length) return false;
-    authServerState = null; // single use
-    if (!app.isReady()) return false;
-    completeSignin({
-      token: parsed.searchParams.get('token'),
-      userId: parsed.searchParams.get('userId'),
-      cookies,
-      redirect: safeRedirectPath(parsed.searchParams.get('redirect')),
-    });
-    return true;
-  }
+  // No deep-link actions are supported: sign-in happens inside this window.
   return false;
 }
 
@@ -425,7 +286,7 @@ function createMainWindow() {
 
   // ── Navigation allowlist (bug #2) ────────────────────────────────────
   // The window carries the privileged preload bridge, so it may only ever
-  // show our web origin, Auth0's login pages, or local launcher files.
+  // show our web origin or local launcher files.
   // Anything else is sent to the user's real browser. Exact-origin matching
   // only — substring checks are bypassable (evil.com/?x=our-host).
   const showLauncher = (why) => {
@@ -435,13 +296,6 @@ function createMainWindow() {
   const guardNavigation = (event, url, isRedirect) => {
     let parsed;
     try { parsed = new URL(url); } catch { event.preventDefault(); return; }
-    // Login must never run inside this window: its transaction cookie would
-    // live here while Google/GitHub need the real browser. Show the launcher.
-    if (parsed.origin === WEB_ORIGIN && /^\/(sign-in|sign-up|auth\/login)(\/|$)/.test(parsed.pathname)) {
-      event.preventDefault();
-      showLauncher('intercepted in-window login — showing launcher');
-      return;
-    }
     if (isTrustedNavigation(url) || isLocalPage(url)) return;
     event.preventDefault();
     if (isRedirect) { showLauncher('blocked untrusted redirect — showing launcher'); return; }
@@ -525,32 +379,13 @@ ipcMain.handle('auth:logout', async () => {
   clearAuth();
   if (mainWindow && !mainWindow.isDestroyed()) {
     try { await session.defaultSession.clearStorageData(); } catch { /* ignore */ }
-    // End the web/Auth0 session in the real browser too, so the next sign-in is clean.
-    openExternalSafe(`${WEB_URL}/auth/logout`);
     mainWindow.loadFile(path.join(__dirname, 'signin.html'));
   }
 }, LOCAL_OK);
 
 ipcMain.handle('auth:start-browser-signin', () => {
-  // Opens the system browser so Google OAuth shows the real account picker.
+  // Loads the in-app email-code sign-in inside this window.
   return startBrowserSignin();
-}, LOCAL_OK);
-
-ipcMain.handle('auth:server-info', () => ({
-  port: authServerPort,
-  state: authServerState,
-}), LOCAL_OK);
-
-ipcMain.handle('auth:handle-link', (_event, url) => {
-  if (typeof url !== 'string' || !url.startsWith(`${DEEP_LINK_SCHEME}://`)) {
-    return { success: false, error: 'That does not look like an AgentCorp link (agentcorp://…)' };
-  }
-  try {
-    const ok = handleDeepLink(url);
-    return ok ? { success: true } : { success: false, error: 'That link is expired or was not issued by this sign-in. Please sign in again.' };
-  } catch (err) {
-    return { success: false, error: String(err) };
-  }
 }, LOCAL_OK);
 
 ipcMain.handle('auth:open-browser', (_event, url) => {
@@ -842,7 +677,6 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  stopAuthServer();
   if (process.platform !== 'darwin') app.quit();
 });
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import type { OrgSnapshot } from '@/lib/orgStore';
 
-export type ViewerStatus = 'loading' | 'live' | 'stale' | 'not_found';
+export type ViewerStatus = 'loading' | 'live' | 'stale' | 'not_found' | 'no_access';
 
 const POLL_MS = 3000;
 const LIVE_THRESHOLD_MS = 8000; // consider live if snapshot is <8s old
@@ -21,6 +21,10 @@ export function useOrgViewer(orgId: string | null) {
       try {
         const res = await fetch(`/api/org-state?orgId=${encodeURIComponent(orgId)}`);
         if (cancelled) return;
+        if (res.status === 403) {
+          setStatus('no_access');
+          return;
+        }
         if (res.status === 404 || res.status === 401) {
           setStatus('not_found');
           return;

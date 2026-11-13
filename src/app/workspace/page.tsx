@@ -11,7 +11,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useOrgBroadcast } from '@/hooks/useOrgBroadcast';
 import { Users, MessageSquare, BarChart2 } from 'lucide-react';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import { useAuthUser } from '@/hooks/useAuthUser';
 
 function WorkspacePageInner() {
   const router = useRouter();
@@ -23,7 +23,7 @@ function WorkspacePageInner() {
   const showAgentRoster = useGameStore((s) => s.showAgentRoster);
   const [mobilePanel, setMobilePanel] = useState<'agents' | 'chat' | 'stats'>('chat');
   const [hydrated, setHydrated] = useState(false);
-  const { user, isLoading: authLoading } = useUser();
+  const { user, isLoading: authLoading } = useAuthUser();
 
   // Always broadcast when the workspace is initialized (no-op if not)
   useOrgBroadcast();
@@ -34,46 +34,16 @@ function WorkspacePageInner() {
     return unsub;
   }, []);
 
-  // Handle post-invite-accept redirect:
-  // When someone accepts an Auth0 org invitation, they land here with user.org_id set.
-  // Resolve the inviter's workspace and open it in viewer mode — even if the invitee
-  // already has a workspace of their own. This runs once per session per invitation so
-  // they can still return to their own workspace afterwards.
-  useEffect(() => {
-    if (!hydrated || authLoading || !user) return;
-    if (inviteOrgId) return; // already in viewer mode via URL param
-
-    const auth0OrgId = (user as Record<string, unknown>).org_id as string | undefined;
-    if (!auth0OrgId) return; // not from an org invite
-
-    let alreadyHandled = false;
-    try { alreadyHandled = sessionStorage.getItem('ac_invite_handled') === auth0OrgId; } catch { /* storage blocked */ }
-    if (alreadyHandled) return;
-
-    fetch(`/api/invite?auth0OrgId=${encodeURIComponent(auth0OrgId)}`)
-      .then((r) => r.json())
-      .then((d: { found: boolean; orgId?: string }) => {
-        if (d.found && d.orgId) {
-          try { sessionStorage.setItem('ac_invite_handled', auth0OrgId); } catch { /* ignore */ }
-          if (d.orgId !== myOrgId) router.replace(`/workspace?invite=${d.orgId}`);
-        } else if (!isInitialized) {
-          router.replace('/onboard');
-        }
-      })
-      .catch(() => { if (!isInitialized) router.replace('/onboard'); });
-  }, [hydrated, authLoading, user, isInitialized, inviteOrgId, myOrgId, router]);
-
+  // Signed out → email-code sign-in in onboarding. An invite link keeps its
+  // workspace id so we come straight back to the invited workspace afterwards.
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      router.replace(`/auth/login?returnTo=${encodeURIComponent('/workspace')}`);
+      router.replace(inviteOrgId ? `/onboard?invite=${encodeURIComponent(inviteOrgId)}` : '/onboard');
       return;
     }
-    if (inviteOrgId) return;
-    if (hydrated && !isInitialized) {
-      const auth0OrgId = (user as Record<string, unknown>).org_id as string | undefined;
-      if (!auth0OrgId) router.replace('/onboard'); // only redirect if not handling org invite above
-    }
+    if (inviteOrgId) return; // viewer mode — the server decides whether this user may view it
+    if (hydrated && !isInitialized) router.replace('/onboard');
   }, [hydrated, isInitialized, user, authLoading, router, inviteOrgId]);
 
   if (authLoading) return null;

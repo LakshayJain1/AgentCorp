@@ -25,7 +25,7 @@ npm run desktop:build:win    # Windows (.exe installer + portable)
 
 1. **Install** — User installs the desktop app (Mac/Windows)
 2. **Launch** — App opens and loads the AgentCorp onboard page
-3. **Onboard** — User signs up/in via Clerk on the web
+3. **Onboard** — User signs in inside the app window with an emailed one-time code (Clerk)
 4. **Redirect** — After onboarding, web app redirects to `agentcorp://` deep link
 5. **Workspace** — Desktop app catches the deep link, stores auth, loads workspace
 
@@ -49,7 +49,7 @@ desktop/
 agentcorp://auth-callback?token=<userId>&userId=<userId>&redirect=/workspace
 ```
 
-The web app's `/desktop-redirect` route generates this URL after onboarding completes. The desktop app intercepts it, stores the auth token, and loads the workspace.
+Sign-in happens inside the app window — there is no browser hand-off or deep link for auth.
 
 ## Notes
 

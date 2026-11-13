@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { auth0 } from '@/lib/auth0';
+import { getUserId } from '@/lib/session';
 import { DbNotConfiguredError } from '@/lib/db/client';
 import { getToken } from '@/lib/integrations/token-service';
 import { getServerTool, ToolInputError } from '@/lib/integrations/tools';
@@ -17,8 +17,7 @@ interface ExecuteBody {
 // Runs a provider tool with the caller's decrypted token. Tokens are never
 // returned to the client — only the tool's textual result.
 export async function POST(req: NextRequest) {
-  const session = await auth0.getSession();
-  const userId = session?.user?.sub;
+  const userId = await getUserId();
   if (!userId) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }

@@ -2,12 +2,12 @@
 
 import { useGameStore } from '@/store/gameStore';
 import BrandLogo from '@/components/BrandLogo'
-import { completeClerkOnboarding } from '@/app/onboard/_actions';
+import { completeOnboarding } from '@/app/onboard/_actions';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import EmailCodeLogin from '@/components/EmailCodeLogin';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import { useAuthUser } from '@/hooks/useAuthUser';
 import {
   GitBranch, Play, Key, Sparkles, Server, Check, ArrowRight,
   ShieldCheck, ChevronRight, CreditCard, Users,
@@ -16,61 +16,9 @@ import {
 
 export default function SetupWizard() {
   const { initializePersonalizedOffice } = useGameStore();
-  const { user, isLoading: authLoading, invalidate } = useUser();
+  const { user, isLoading: authLoading } = useAuthUser();
   const isSignedIn = !authLoading && !!user;
 
-  // ── Sign-in popup ────────────────────────────────────────────────────
-  // Auth0 login opens in a popup so the user never leaves the onboarding flow.
-  // The popup lands on /popup-done, which pings this tab over BroadcastChannel;
-  // we then re-read the session and the wizard advances on its own.
-  const [authBusy, setAuthBusy] = useState(false);
-  const popupRef = useRef<Window | null>(null);
-  const popupPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    let bc: BroadcastChannel | null = null;
-    try {
-      bc = new BroadcastChannel('agentcorp-auth');
-      bc.onmessage = (e: MessageEvent) => {
-        if (e.data?.type !== 'complete') return;
-        if (popupPollRef.current) { clearInterval(popupPollRef.current); popupPollRef.current = null; }
-        popupRef.current = null;
-        void invalidate().finally(() => setAuthBusy(false));
-      };
-    } catch { /* BroadcastChannel unsupported — popup-closed polling covers it */ }
-    return () => {
-      bc?.close();
-      if (popupPollRef.current) clearInterval(popupPollRef.current);
-    };
-  }, [invalidate]);
-
-  const startAuth = (mode: 'signin' | 'signup') => {
-    const hint = mode === 'signup' ? '&screen_hint=signup' : '';
-    const width = 480;
-    const height = 720;
-    const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
-    const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
-    const popup = window.open(
-      `/auth/login?returnTo=${encodeURIComponent('/popup-done')}${hint}`,
-      'agentcorp-auth',
-      `popup=yes,width=${width},height=${height},left=${left},top=${top}`,
-    );
-    if (!popup) {
-      // Popup blocked: fall back to a full-page login that still returns to onboarding.
-      window.location.href = `/auth/login?returnTo=${encodeURIComponent('/onboard')}${hint}`;
-      return;
-    }
-    popupRef.current = popup;
-    setAuthBusy(true);
-    if (popupPollRef.current) clearInterval(popupPollRef.current);
-    popupPollRef.current = setInterval(() => {
-      if (popupRef.current && popupRef.current.closed) {
-        if (popupPollRef.current) { clearInterval(popupPollRef.current); popupPollRef.current = null; }
-        popupRef.current = null;
-        void invalidate().finally(() => setAuthBusy(false)); // user may have closed it early
-      }
-    }, 700);
-  };
   const router = useRouter();
 
   const [step, setStep] = useState<number>(1);
@@ -138,45 +86,9 @@ export default function SetupWizard() {
     return () => clearInterval(timer);
   }, [step]);
 
-  // On desktop the user already authenticated in the system browser — never
-  // show the in-app Clerk sign-in form. Treat desktop as always signed-in for
-  // wizard routing purposes.
-  const isDesktop = typeof window !== 'undefined' &&
-    !!(window as unknown as { agentcorpDesktop?: { available?: boolean } }).agentcorpDesktop?.available;
-
   useEffect(() => {
     // Deferred one tick so restoring state isn't a synchronous setState in the effect body.
     const restore = () => {
-    // On desktop: don't wait for Clerk's client-side resolution — skip straight
-    // to step 2. The session cookie was injected by the Electron main process and
-    // is valid server-side; Clerk's React SDK may lag behind on client-side state.
-    if (isDesktop && isSignedIn === undefined) {
-      const saved = sessionStorage.getItem('wizardState');
-      if (saved) {
-        try {
-          const state = JSON.parse(saved);
-          const targetStep = (state.step === 0 || state.step >= 5) ? 2 : Math.max(state.step, 2);
-          setStep(targetStep);
-          setCompanyName(state.companyName);
-          setCompanyProduct(state.companyProduct);
-          setDevCount(state.devCount);
-          setGhConnected(state.ghConnected ?? true);
-          setGhCommit(state.ghCommit ?? true);
-          setVConnected(state.vConnected ?? true);
-          setVDeploy(state.vDeploy ?? true);
-          setSConnected(state.sConnected ?? false);
-          setSBroadcast(state.sBroadcast ?? true);
-        } catch {
-          sessionStorage.removeItem('wizardState');
-          setStep(2);
-        }
-      } else {
-        setStep(2);
-      }
-      setIsRestoring(false);
-      return;
-    }
-
     if (isSignedIn === undefined) return;
     const saved = sessionStorage.getItem('wizardState');
     if (saved) {
@@ -189,6 +101,9 @@ export default function SetupWizard() {
           sessionStorage.removeItem('wizardState');
         }
         if (isSignedIn && targetStep === 1) targetStep = 2;
+        // Signed out (e.g. after sign-out, or an invite link) must always start at sign-in,
+        // never at a step restored from an earlier session.
+        if (!isSignedIn) targetStep = 1;
         setStep(targetStep);
         setCompanyName(state.companyName);
         setCompanyProduct(state.companyProduct);
@@ -213,7 +128,7 @@ export default function SetupWizard() {
     };
     const timer = setTimeout(restore, 0);
     return () => clearTimeout(timer);
-  }, [isSignedIn, isDesktop]);
+  }, [isSignedIn]);
 
   useEffect(() => {
     if (isRestoring) return;
@@ -248,7 +163,7 @@ export default function SetupWizard() {
     //    server action has a valid session token.
     sessionStorage.removeItem('wizardState');
     try {
-      const res = await completeClerkOnboarding({
+      const res = await completeOnboarding({
         companyName,
         companyProduct,
         developersCount: devCount,
@@ -270,7 +185,7 @@ export default function SetupWizard() {
       'Onboarding AI CEO and PM agents...',
       `Spawning ${devCount} developer agents to floor desks...`,
       'Connecting system APIs (GitHub, Vercel, Slack hooks)...',
-      'Running Auth0 secure middleware test... OK',
+      'Verifying secure session... OK',
       'All departments active. Deploying visual layer...'
     ];
     let currentLogIndex = 0;
@@ -545,40 +460,17 @@ export default function SetupWizard() {
                   <div className="w-6 h-6 rounded-md bg-gradient-to-br from-ocean to-violet-500 flex items-center justify-center shadow-sm">
                     <ShieldCheck size={14} className="text-white" />
                   </div>
-                  <span className="text-xs font-semibold text-navy/40 uppercase">Auth0 Secure Auth</span>
+                  <span className="text-xs font-semibold text-navy/40 uppercase">Secure sign-in</span>
                 </div>
                 <h2 className="text-xl font-extrabold tracking-tight text-navy">
                   {authComponent === 'signin' ? 'Sign in to AgentCorp' : 'Create your account'}
                 </h2>
                 <p className="text-xs text-navy/55 mt-1">
-                  No password needed — we&apos;ll email you a code, or use Google / GitHub.
+                  No password needed — we&apos;ll email you a one-time code.
                 </p>
               </div>
 
-              <div className="space-y-4">
-                <EmailCodeLogin onSignedIn={async () => { await invalidate(); }} />
-
-                <div className="flex items-center gap-3" aria-hidden="true">
-                  <div className="flex-1 h-px bg-navy/10" />
-                  <span className="text-[10px] font-semibold text-navy/35 uppercase tracking-wider">or</span>
-                  <div className="flex-1 h-px bg-navy/10" />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => startAuth(authComponent === 'signup' ? 'signup' : 'signin')}
-                  disabled={authBusy}
-                  className="w-full py-3 rounded-xl bg-white/80 border border-navy/10 text-navy text-xs font-bold flex items-center justify-center gap-2 hover:bg-white transition-colors disabled:opacity-70 cursor-pointer"
-                >
-                  {authBusy ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                  {authBusy
-                    ? 'Waiting for sign-in window…'
-                    : authComponent === 'signin' ? 'Continue with Google or GitHub' : 'Sign up with Google or GitHub'}
-                </button>
-                <p className="text-[10px] text-navy/40 text-center leading-relaxed">
-                  A secure sign-in window opens — you&apos;ll come straight back here.
-                </p>
-              </div>
+              <EmailCodeLogin onSignedIn={() => { /* Clerk updates the session state itself; the wizard advances on `isSignedIn`. */ }} />
 
               <div className="mt-5 text-center">
                 <span className="text-xs text-navy/55">
@@ -607,7 +499,7 @@ export default function SetupWizard() {
               </div>
 
               <div className="mt-4 text-center flex items-center justify-center gap-1 text-[9px] text-navy/40">
-                <ShieldCheck size={10} /> Securely compiled & authenticated via Auth0
+                <ShieldCheck size={10} /> Passwordless sign-in via one-time email code
               </div>
             </motion.div>
           )}

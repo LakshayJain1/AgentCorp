@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import BrandLogo from '@/components/BrandLogo'
 import { useRouter } from 'next/navigation';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import { useAuthUser } from '@/hooks/useAuthUser';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Cpu, ArrowRight, ChevronDown, Heart, PlayCircle, Check, Monitor, Menu } from 'lucide-react';
 import HeroOrchestrationPanel from '@/components/HeroOrchestrationPanel';
@@ -13,7 +13,7 @@ const SPRING = { type: 'spring', bounce: 0, duration: 0.55 } as const;
 export default function LandingPage() {
   const router = useRouter();
   // Signed-in visitors go straight to their workspace (it sends them to onboarding if they have none yet).
-  const { user } = useUser();
+  const { user } = useAuthUser();
   const startHref = user ? '/workspace' : '/onboard';
   const [activeTeamTab, setActiveTeamTab] = useState<'engineering' | 'product' | 'marketing' | 'research'>('engineering');
   const [activeFaq, setActiveFaq] = useState<number | null>(null);

@@ -415,7 +415,7 @@ interface GameStore {
   companyProduct: string;
   developersCount: number;
   orgId: string;
-  auth0OrgId: string;
+  clerkOrgId: string;
   inviteEmails: string[];
   invitesSent: boolean;
   connectors: {
@@ -435,7 +435,7 @@ interface GameStore {
   ) => void;
   updateConnectors: (connectors: Partial<GameStore['connectors']>) => void;
   syncOAuthConnections: (connections: Array<{ provider: string; accountId?: string | null }>) => void;
-  setAuth0OrgId: (id: string) => void;
+  setClerkOrgId: (id: string) => void;
   markInvitesSent: () => void;
   /** Replace a legacy (guessable) org id with a strong one. Returns the id now in use. */
   ensureStrongOrgId: () => string;
@@ -473,7 +473,7 @@ export const useGameStore = create<GameStore>()(
   companyProduct: 'Autonomous Developer Sandbox & OS',
   developersCount: 1,
   orgId: '',
-  auth0OrgId: '',
+  clerkOrgId: '',
   inviteEmails: [],
   invitesSent: false,
   connectors: {
@@ -1065,14 +1065,14 @@ export const useGameStore = create<GameStore>()(
     set((state) => ({ showLibrary: !state.showLibrary }));
   },
 
-  setAuth0OrgId: (id) => set({ auth0OrgId: id }),
+  setClerkOrgId: (id) => set({ clerkOrgId: id }),
   markInvitesSent: () => set({ invitesSent: true }),
   ensureStrongOrgId: () => {
     const current = get().orgId;
     if (STRONG_ORG_ID_RE.test(current)) return current;
     const fresh = newOrgId();
     // Old links used a guessable id; they stop working and invites must be re-sent.
-    set({ orgId: fresh, auth0OrgId: '', invitesSent: false });
+    set({ orgId: fresh, clerkOrgId: '', invitesSent: false });
     return fresh;
   },
 

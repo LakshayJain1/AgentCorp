@@ -1,22 +1,61 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useSignIn, useSignUp } from '@clerk/nextjs'
 import { ArrowLeft, Loader2, Mail } from 'lucide-react'
 
 interface EmailCodeLoginProps {
-  /** Called after the code is accepted and the session cookie is set. */
+  /** Called after the code is accepted and the Clerk session is active. */
   onSignedIn: () => void | Promise<void>
 }
 
 const RESEND_SECONDS = 30
+const EMAIL_RE = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]+$/
+const GENERIC_ERROR = 'Something went wrong. Please try again.'
+
+type ClerkErr = {
+  code?: string
+  longMessage?: string
+  message?: string
+  errors?: Array<{ code?: string; longMessage?: string; message?: string }>
+} | null | undefined
+
+/** Clerk wraps API failures as code 'api_response_error'; the useful code is nested in errors[0]. */
+function codeOf(err: ClerkErr): string {
+  return err?.errors?.[0]?.code ?? err?.code ?? ''
+}
+
+/** Turn a Clerk error into a short, user-safe sentence. */
+function friendly(err: ClerkErr, fallback = GENERIC_ERROR): string {
+  switch (codeOf(err)) {
+    case 'form_code_incorrect':
+    case 'verification_failed':
+      return 'That code is incorrect. Check your email and try again.'
+    case 'verification_expired':
+      return 'That code has expired. Request a new one.'
+    case 'too_many_requests':
+    case 'rate_limit_exceeded':
+      return 'Too many attempts. Please wait a minute and try again.'
+    case 'form_param_format_invalid':
+    case 'form_identifier_invalid':
+      return 'Enter a valid email address.'
+    default:
+      return err?.errors?.[0]?.longMessage || err?.longMessage || err?.errors?.[0]?.message || err?.message || fallback
+  }
+}
 
 /**
- * Inline email-code sign-in: type your email, get a 6-digit code, enter it.
- * No popup and no redirect — the session is created by /api/login/verify.
- * New addresses get an account automatically (passwordless sign-up).
+ * Inline email-code sign-in powered by Clerk: type your email, get a 6-digit
+ * code, enter it. No popup and no redirect. If the address has no account yet,
+ * one is created automatically (passwordless sign-up) — the user never has to
+ * choose between "sign in" and "sign up".
  */
 export default function EmailCodeLogin({ onSignedIn }: EmailCodeLoginProps) {
+  const { signIn } = useSignIn()
+  const { signUp } = useSignUp()
+
   const [step, setStep] = useState<'email' | 'code'>('email')
+  const [flow, setFlow] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -34,27 +73,40 @@ export default function EmailCodeLogin({ onSignedIn }: EmailCodeLoginProps) {
     if (step === 'code') codeRef.current?.focus()
   }, [step])
 
-  async function post(path: string, payload: Record<string, string>) {
-    const res = await fetch(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
-    return { ok: res.ok && data.ok === true, error: data.error ?? 'Something went wrong. Please try again.' }
-  }
-
+  /** Email a code — signing in if the address has an account, otherwise creating one. */
   async function sendCode(e?: React.FormEvent) {
     e?.preventDefault()
-    if (busy || !email.trim()) return
+    const address = email.trim().toLowerCase()
+    if (busy) return
+    if (!EMAIL_RE.test(address)) { setError('Enter a valid email address.'); return }
     setBusy(true)
     setError(null)
-    const r = await post('/api/login/start', { email: email.trim() })
-    setBusy(false)
-    if (!r.ok) { setError(r.error); return }
-    setStep('code')
-    setCode('')
-    setCooldown(RESEND_SECONDS)
+    try {
+      // 1) Existing account → sign-in with an emailed code.
+      const created = await signIn.create({ identifier: address })
+      if (!created.error) {
+        const sent = await signIn.emailCode.sendCode()
+        if (sent.error) { setError(friendly(sent.error, "We couldn't send a code right now. Please try again.")); return }
+        setFlow('signin')
+      } else if (codeOf(created.error) === 'form_identifier_not_found') {
+        // 2) No account yet → passwordless sign-up, verified by the same emailed code.
+        const su = await signUp.create({ emailAddress: address })
+        if (su.error) { setError(friendly(su.error)); return }
+        const sent = await signUp.verifications.sendEmailCode()
+        if (sent.error) { setError(friendly(sent.error, "We couldn't send a code right now. Please try again.")); return }
+        setFlow('signup')
+      } else {
+        setError(friendly(created.error))
+        return
+      }
+      setStep('code')
+      setCode('')
+      setCooldown(RESEND_SECONDS)
+    } catch {
+      setError(GENERIC_ERROR)
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function verifyCode(e?: React.FormEvent) {
@@ -62,15 +114,49 @@ export default function EmailCodeLogin({ onSignedIn }: EmailCodeLoginProps) {
     if (busy || code.length !== 6) return
     setBusy(true)
     setError(null)
-    const r = await post('/api/login/verify', { email: email.trim(), code })
-    if (!r.ok) {
+    try {
+      let complete = false
+      if (flow === 'signin') {
+        const r = await signIn.emailCode.verifyCode({ code })
+        if (r.error) { rejectCode(friendly(r.error)); return }
+        if (signIn.status === 'complete') {
+          const f = await signIn.finalize()
+          if (f.error) { rejectCode(friendly(f.error)); return }
+          complete = true
+        }
+      } else {
+        const r = await signUp.verifications.verifyEmailCode({ code })
+        if (r.error) { rejectCode(friendly(r.error)); return }
+        if (signUp.status === 'complete') {
+          const f = await signUp.finalize()
+          if (f.error) { rejectCode(friendly(f.error)); return }
+          complete = true
+        }
+      }
+      if (!complete) {
+        setError('We could not finish signing you in. Please request a new code.')
+        return
+      }
+      await onSignedIn()
+    } catch {
+      setError(GENERIC_ERROR)
+    } finally {
       setBusy(false)
-      setError(r.error)
-      setCode('')
-      codeRef.current?.focus()
-      return
     }
-    try { await onSignedIn() } finally { setBusy(false) }
+  }
+
+  function rejectCode(message: string) {
+    setError(message)
+    setCode('')
+    codeRef.current?.focus()
+  }
+
+  function backToEmail() {
+    setStep('email')
+    setError(null)
+    setCode('')
+    void signIn.reset()
+    void signUp.reset()
   }
 
   const inputClass =
@@ -98,6 +184,8 @@ export default function EmailCodeLogin({ onSignedIn }: EmailCodeLoginProps) {
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
           {busy ? 'Sending code…' : 'Email me a sign-in code'}
         </button>
+        {/* Clerk's bot-protection widget mounts here (required for custom sign-up flows) */}
+        <div id="clerk-captcha" />
         {error && <p role="alert" className="text-[11px] text-rose-600">{error}</p>}
       </form>
     )
@@ -107,7 +195,7 @@ export default function EmailCodeLogin({ onSignedIn }: EmailCodeLoginProps) {
     <form onSubmit={verifyCode} className="space-y-2.5">
       <button
         type="button"
-        onClick={() => { setStep('email'); setError(null); setCode('') }}
+        onClick={backToEmail}
         className="flex items-center gap-1 text-[11px] text-navy/50 hover:text-navy cursor-pointer"
       >
         <ArrowLeft size={11} /> Use a different email

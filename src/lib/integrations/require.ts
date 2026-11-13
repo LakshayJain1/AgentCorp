@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { auth0 } from '@/lib/auth0';
+import { getUserId } from '@/lib/session';
 import { DbNotConfiguredError } from '@/lib/db/client';
 import { CryptoNotConfiguredError } from '@/lib/integrations/crypto';
 import { getToken } from '@/lib/integrations/token-service';
@@ -25,8 +25,7 @@ function notConnected(provider: string): NextResponse {
  * workspace, and a decrypted access token. The token never reaches the client.
  */
 export async function requireIntegration(provider: string): Promise<IntegrationContext> {
-  const session = await auth0.getSession();
-  const userId = session?.user?.sub;
+  const userId = await getUserId();
   if (!userId) {
     return {
       ok: false,

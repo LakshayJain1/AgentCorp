@@ -1,14 +1,12 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Auth (browser-based: sign in on the web, session returns via deep link)
+  // Auth (email-code sign-in runs inside the app window)
   getToken: () => ipcRenderer.invoke('auth:get-token'),
   isAuthenticated: () => ipcRenderer.invoke('auth:is-authenticated'),
   logout: () => ipcRenderer.invoke('auth:logout'),
   openBrowser: (url) => ipcRenderer.invoke('auth:open-browser', url),
   startBrowserSignin: () => ipcRenderer.invoke('auth:start-browser-signin'),
-  handleLink: (url) => ipcRenderer.invoke('auth:handle-link', url),
-  getAuthServerInfo: () => ipcRenderer.invoke('auth:server-info'),
 
   // App info
   getInfo: () => ipcRenderer.invoke('app:get-info'),

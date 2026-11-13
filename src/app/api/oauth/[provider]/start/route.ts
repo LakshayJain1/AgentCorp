@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { lt } from 'drizzle-orm';
 import { NextResponse, type NextRequest } from 'next/server';
-import { auth0 } from '@/lib/auth0';
+import { getUserId } from '@/lib/session';
 import { getDb, DbNotConfiguredError } from '@/lib/db/client';
 import { oauthStates } from '@/lib/db/schema';
 import { getProvider } from '@/lib/integrations/registry';
@@ -41,12 +41,10 @@ export async function GET(
     return NextResponse.json({ success: false, error: 'unknown provider' }, { status: 404 });
   }
 
-  const session = await auth0.getSession();
-  const userId = session?.user?.sub;
+  const userId = await getUserId();
   if (!userId) {
-    const login = absoluteUrl(req, '/auth/login');
-    login.searchParams.set('returnTo', `/api/oauth/${provider}/start`);
-    return NextResponse.redirect(login);
+    // Signed out: send them to onboarding (email-code sign-in) rather than a provider-hosted login.
+    return NextResponse.redirect(absoluteUrl(req, '/onboard'));
   }
 
   try {

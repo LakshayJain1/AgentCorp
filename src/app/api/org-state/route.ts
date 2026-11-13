@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { auth0 } from '@/lib/auth0';
+import { getUserId } from '@/lib/session';
+import { canViewOrg } from '@/lib/orgAccess';
 import { rateLimit } from '@/lib/rateLimit';
 import {
   MAX_SNAPSHOT_BYTES,
@@ -18,8 +19,7 @@ export type { OrgSnapshot } from '@/lib/orgStore';
 // org id; everyone else gets 403. Bodies are size-capped and re-built from
 // known fields only.
 export async function POST(req: NextRequest) {
-  const session = await auth0.getSession();
-  const sub = session?.user?.sub as string | undefined;
+  const sub = await getUserId();
   if (!sub) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   // 1 publish / 3s per tab ≈ 20/min; allow headroom for a couple of tabs.
@@ -62,11 +62,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET — viewers must be signed in. The org id is a 128-bit capability carried by
-// the invite link; unknown and malformed ids look identical (404).
+// GET — viewers must be signed in AND allowed in: the owner, a member of the
+// workspace's Clerk Organization, or someone holding a pending invitation to
+// their verified email. Unknown and malformed ids look identical (404).
 export async function GET(req: NextRequest) {
-  const session = await auth0.getSession();
-  const sub = session?.user?.sub as string | undefined;
+  const sub = await getUserId();
   if (!sub) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!rateLimit(`org-state-get:${sub}`, 120, 60_000)) {
@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
   if (!ORG_ID_RE.test(orgId)) return Response.json({ found: false }, { status: 404 });
 
   try {
+    if (!(await canViewOrg(sub, orgId))) return Response.json({ found: false, reason: 'not_invited' }, { status: 403 });
     const entry = await getSnapshot(orgId);
     if (!entry) return Response.json({ found: false }, { status: 404 });
     return Response.json({ found: true, snapshot: entry.snapshot, ts: entry.ts });

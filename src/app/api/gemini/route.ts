@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth0 } from '@/lib/auth0';
+import { getUserId } from '@/lib/session';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
@@ -12,8 +12,7 @@ interface RequestBody {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth0.getSession();
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await getUserId())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const body: RequestBody = await req.json();

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { auth0 } from '@/lib/auth0';
+import { getUserId } from '@/lib/session';
 import { DbNotConfiguredError } from '@/lib/db/client';
 import { getProvider, listProviders } from '@/lib/integrations/registry';
 import { deleteToken, listConnected } from '@/lib/integrations/token-service';
@@ -11,8 +11,7 @@ export const dynamic = 'force-dynamic';
 // GET /api/integrations — connection summaries + available providers.
 // Never returns tokens, not even masked.
 export async function GET() {
-  const session = await auth0.getSession();
-  const userId = session?.user?.sub;
+  const userId = await getUserId();
   if (!userId) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
@@ -43,8 +42,7 @@ export async function GET() {
 
 // DELETE /api/integrations?provider=github — revoke and wipe the connection.
 export async function DELETE(req: NextRequest) {
-  const session = await auth0.getSession();
-  const userId = session?.user?.sub;
+  const userId = await getUserId();
   if (!userId) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }

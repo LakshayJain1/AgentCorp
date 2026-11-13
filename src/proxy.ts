@@ -1,8 +1,8 @@
-import { auth0 } from '@/lib/auth0';
+import { clerkMiddleware } from '@clerk/nextjs/server';
 
-export async function proxy(req: Request) {
-  return await auth0.middleware(req);
-}
+// Clerk session handling for every request. Routes enforce their own access
+// (each API route calls getUserId()), so nothing is globally blocked here.
+export default clerkMiddleware();
 
 export const config = {
   matcher: [

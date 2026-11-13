@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 
+// Sign-up is the same email-code flow as sign-in, inside onboarding.
 export default function SignUpPage() {
-  redirect('/auth/login?screen_hint=signup&returnTo=%2Fonboard');
+  redirect('/onboard');
 }

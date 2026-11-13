@@ -5,7 +5,7 @@ import { getDb } from '@/lib/db/client';
 import { workspaces } from '@/lib/db/schema';
 
 /**
- * Resolve (or lazily create) the workspace owned by an Auth0 subject.
+ * Resolve (or lazily create) the workspace owned by a Clerk user id.
  * The id is server-generated; the browser may cache it but can never mint it.
  */
 export async function resolveWorkspace(userId: string, name?: string): Promise<string> {

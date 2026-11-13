@@ -18,9 +18,8 @@ Every file and folder in the repo, with a one-liner on what it does.
 | `next-env.d.ts` | Auto-generated Next.js type declarations (never edit) |
 | `eslint.config.mjs` | ESLint rules — Next.js defaults + any project-specific overrides |
 | `postcss.config.mjs` | PostCSS config — wires Tailwind CSS into the build pipeline |
-| `.env` | Local environment variables (gitignored) — API keys, Auth0 credentials |
+| `.env` | Local environment variables (gitignored) — API keys, Clerk keys (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`) |
 | `.env.local` | Local-only overrides (gitignored) — takes priority over `.env` |
-| `.env.auth0.example` | Template showing every Auth0 env var needed — copy to `.env` to configure |
 | `.gitignore` | Files and folders git should never track — node_modules, .env, .next, dist |
 | `AGENTS.md` | Claude Code instructions: tells the AI assistant this is Next.js 16 with breaking changes |
 | `CLAUDE.md` | Entrypoint that references `AGENTS.md` — loaded by Claude Code automatically |
@@ -32,7 +31,7 @@ Every file and folder in the repo, with a one-liner on what it does.
 ## `src/` — Application Source
 
 ### `src/proxy.ts`
-Next.js 16 proxy file (replaces `middleware.ts`). Runs on every request — mounts Auth0 session handling so `/auth/login`, `/auth/callback`, `/auth/logout` work automatically.
+Next.js 16 proxy file (replaces `middleware.ts`). Runs on every request — mounts `clerkMiddleware()` so `auth()` works in server code. Routes enforce their own access.
 
 ---
 
@@ -42,20 +41,18 @@ Every folder here maps to a URL. `page.tsx` = the page. `layout.tsx` = a wrapper
 
 | File | URL / Purpose |
 |---|---|
-| `layout.tsx` | Root layout — wraps every page with `Auth0Provider`, global fonts, and CSS |
+| `layout.tsx` | Root layout — wraps every page with `ClerkProvider`, global fonts, and CSS |
 | `globals.css` | Global Tailwind base styles, custom CSS variables (colors, glass effects) |
 | `favicon.ico` | Browser tab icon |
 | `page.tsx` | Homepage (`/`) — marketing landing page |
 | `workspace/page.tsx` | Main workspace UI (`/workspace`) — the three-panel agent dashboard |
 | `workspace/_actions.ts` | Server actions for workspace — session checks, agent state bootstrapping |
 | `onboard/page.tsx` | Onboarding wizard page (`/onboard`) — shown to new users before workspace |
-| `onboard/layout.tsx` | Onboard layout — validates Auth0 session before rendering the wizard |
+| `onboard/layout.tsx` | Onboard layout — passthrough; the wizard handles the email-code sign-in step |
 | `onboard/_actions.ts` | Server action `completeOnboarding` — validates auth and records completion |
-| `desktop-redirect/page.tsx` | Desktop auth bridge (`/desktop-redirect`) — after browser login, hands token to Electron app via local HTTP or deep link |
-| `desktop-redirect/_actions.ts` | Server action — reads Auth0 session and builds the `agentcorp://` deep-link payload |
 | `download/page.tsx` | Download page (`/download`) — links to the Windows `.exe` installer |
-| `sign-in/[[...sign-in]]/page.tsx` | Legacy Clerk-style sign-in bridge — maps `?redirect_url=` → `/auth/login?returnTo=` |
-| `sign-up/[[...sign-up]]/page.tsx` | Legacy Clerk-style sign-up bridge — redirects to `/auth/login?screen_hint=signup` |
+| `sign-in/[[...sign-in]]/page.tsx` | Legacy sign-in entry — redirects to `/onboard` (email-code sign-in) |
+| `sign-up/[[...sign-up]]/page.tsx` | Legacy sign-up entry — redirects to `/onboard` |
 | `api/ai/route.ts` | `POST /api/ai` — proxies chat completions to OpenRouter (Claude/GPT models) |
 | `api/gemini/route.ts` | `POST /api/gemini` — proxies requests to Google Gemini API |
 | `api/sse/route.ts` | `GET /api/sse` — Server-Sent Events stream; pushes real-time orchestrator events to the browser |
@@ -80,7 +77,7 @@ All client-side UI. Every file is a standalone React component used inside the w
 | `RightPanel.tsx` | Right panel — Overview tab (live stats, execution log, deliverables) and Integrations tab |
 | `ConversationPanel.tsx` | Chat interface — send messages to individual agents or broadcast to all; shows conversation history |
 | `ConnectorsTab.tsx` | Integrations UI inside RightPanel — toggle GitHub, Slack, Figma, etc.; shows connection state |
-| `SetupWizard.tsx` | Multi-step onboarding wizard — company setup, agent configuration, Auth0 sign-in step |
+| `SetupWizard.tsx` | Multi-step onboarding wizard — company setup, agent configuration, email-code sign-in step (`EmailCodeLogin`) |
 | `ScrumMeeting.tsx` | Scrum standup modal — shows each agent's current status, blockers, and progress |
 | `TaskQueue.tsx` | Task list UI — shows pending/in-progress/completed tasks with execution log per task |
 | `TaskProgressTracker.tsx` | Progress bar and step tracker for a single task as it moves through the pipeline |
@@ -217,7 +214,7 @@ All client-side UI. Every file is a standalone React component used inside the w
 
 | File | What it does |
 |---|---|
-| `auth0.ts` | Creates and exports the singleton `Auth0Client` instance used by all server-side auth calls (`getSession`, `getAccessToken`) |
+| `session.ts` | `getUserId()` — the single server-side "who is calling?" helper (Clerk `auth()`); `orgAccess.ts` decides who may view a workspace (owner, Clerk org member, or pending invite to a verified email) |
 
 ---
 
@@ -248,7 +245,7 @@ All client-side UI. Every file is a standalone React component used inside the w
 
 | File | What it does |
 |---|---|
-| `main.js` | Electron main process — creates the BrowserWindow, handles Auth0 PKCE sign-in flow, runs the local HTTP auth server (port 51432), processes deep links (`agentcorp://`), and manages IPC |
+| `main.js` | Electron main process — creates the BrowserWindow (sign-in is the web app's email-code form, shown in-window), restricts navigation to the web origin, and manages IPC |
 | `preload.js` | Electron preload script — exposes a safe `window.electronAPI` bridge to the renderer (auth info, IPC calls) |
 | `index.html` | Fallback HTML shown when the Next.js server is unreachable in dev mode |
 | `README.md` | Desktop-specific setup and build instructions |

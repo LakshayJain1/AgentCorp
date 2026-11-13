@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq } from 'drizzle-orm';
-import { auth0 } from '@/lib/auth0';
+import { getUserId } from '@/lib/session';
 import { DbNotConfiguredError, getDb } from '@/lib/db/client';
 import { oauthStates } from '@/lib/db/schema';
 import { CryptoNotConfiguredError } from '@/lib/integrations/crypto';
@@ -45,8 +45,7 @@ export async function GET(
   const state = q.get('state');
   if (!code || !state) return finish(req, provider, 'error', 'missing_code');
 
-  const session = await auth0.getSession();
-  const userId = session?.user?.sub;
+  const userId = await getUserId();
   if (!userId) {
     // Re-login cannot replay the one-time code, so surface a clean error.
     return finish(req, provider, 'error', 'session_expired');
