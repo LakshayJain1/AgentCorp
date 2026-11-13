@@ -66,7 +66,7 @@ function WorkspacePageInner() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      router.replace('/auth/login');
+      router.replace(`/auth/login?returnTo=${encodeURIComponent('/workspace')}`);
       return;
     }
     if (inviteOrgId) return;

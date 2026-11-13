@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import BrandLogo from '@/components/BrandLogo'
 import { useRouter } from 'next/navigation';
+import { useUser } from '@auth0/nextjs-auth0/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Cpu, ArrowRight, ChevronDown, Heart, PlayCircle, Check, Monitor, Menu } from 'lucide-react';
 import HeroOrchestrationPanel from '@/components/HeroOrchestrationPanel';
@@ -11,6 +12,9 @@ const SPRING = { type: 'spring', bounce: 0, duration: 0.55 } as const;
 
 export default function LandingPage() {
   const router = useRouter();
+  // Signed-in visitors go straight to their workspace (it sends them to onboarding if they have none yet).
+  const { user } = useUser();
+  const startHref = user ? '/workspace' : '/onboard';
   const [activeTeamTab, setActiveTeamTab] = useState<'engineering' | 'product' | 'marketing' | 'research'>('engineering');
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -117,10 +121,10 @@ export default function LandingPage() {
                 Desktop App
               </a>
               <button
-                onClick={() => router.push('/onboard')}
+                onClick={() => router.push(startHref)}
                 className="rounded bg-navy text-white text-[13px] font-semibold px-4 py-2 hover:bg-ocean-600 transition-colors duration-200 cursor-pointer"
               >
-                Get started
+                {user ? 'Open workspace' : 'Get started'}
               </button>
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
@@ -204,7 +208,7 @@ export default function LandingPage() {
                   className="mt-8 flex flex-col sm:flex-row gap-3"
                 >
                   <button
-                    onClick={() => router.push('/onboard')}
+                    onClick={() => router.push(startHref)}
                     className="btn-primary"
                   >
                     Launch Your First Task
@@ -422,7 +426,7 @@ export default function LandingPage() {
                 </div>
 
                 <button
-                  onClick={() => router.push('/onboard')}
+                  onClick={() => router.push(startHref)}
                   className="btn-white text-sm px-5 py-2.5"
                 >
                   Start Dashboard Preview
@@ -572,7 +576,7 @@ export default function LandingPage() {
 
               <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
                 <button
-                  onClick={() => router.push('/onboard')}
+                  onClick={() => router.push(startHref)}
                   className="btn-white"
                 >
                   Spawn Your First Virtual Team

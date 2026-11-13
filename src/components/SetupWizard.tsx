@@ -4,7 +4,7 @@ import { useGameStore } from '@/store/gameStore';
 import BrandLogo from '@/components/BrandLogo'
 import { completeClerkOnboarding } from '@/app/onboard/_actions';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import {
@@ -15,8 +15,61 @@ import {
 
 export default function SetupWizard() {
   const { initializePersonalizedOffice } = useGameStore();
-  const { user, isLoading: authLoading } = useUser();
+  const { user, isLoading: authLoading, invalidate } = useUser();
   const isSignedIn = !authLoading && !!user;
+
+  // ── Sign-in popup ────────────────────────────────────────────────────
+  // Auth0 login opens in a popup so the user never leaves the onboarding flow.
+  // The popup lands on /popup-done, which pings this tab over BroadcastChannel;
+  // we then re-read the session and the wizard advances on its own.
+  const [authBusy, setAuthBusy] = useState(false);
+  const popupRef = useRef<Window | null>(null);
+  const popupPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('agentcorp-auth');
+      bc.onmessage = (e: MessageEvent) => {
+        if (e.data?.type !== 'complete') return;
+        if (popupPollRef.current) { clearInterval(popupPollRef.current); popupPollRef.current = null; }
+        popupRef.current = null;
+        void invalidate().finally(() => setAuthBusy(false));
+      };
+    } catch { /* BroadcastChannel unsupported — popup-closed polling covers it */ }
+    return () => {
+      bc?.close();
+      if (popupPollRef.current) clearInterval(popupPollRef.current);
+    };
+  }, [invalidate]);
+
+  const startAuth = (mode: 'signin' | 'signup') => {
+    const hint = mode === 'signup' ? '&screen_hint=signup' : '';
+    const width = 480;
+    const height = 720;
+    const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
+    const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
+    const popup = window.open(
+      `/auth/login?returnTo=${encodeURIComponent('/popup-done')}${hint}`,
+      'agentcorp-auth',
+      `popup=yes,width=${width},height=${height},left=${left},top=${top}`,
+    );
+    if (!popup) {
+      // Popup blocked: fall back to a full-page login that still returns to onboarding.
+      window.location.href = `/auth/login?returnTo=${encodeURIComponent('/onboard')}${hint}`;
+      return;
+    }
+    popupRef.current = popup;
+    setAuthBusy(true);
+    if (popupPollRef.current) clearInterval(popupPollRef.current);
+    popupPollRef.current = setInterval(() => {
+      if (popupRef.current && popupRef.current.closed) {
+        if (popupPollRef.current) { clearInterval(popupPollRef.current); popupPollRef.current = null; }
+        popupRef.current = null;
+        void invalidate().finally(() => setAuthBusy(false)); // user may have closed it early
+      }
+    }, 700);
+  };
   const router = useRouter();
 
   const [step, setStep] = useState<number>(1);
@@ -502,15 +555,19 @@ export default function SetupWizard() {
               </div>
 
               <div className="space-y-3">
-                <a
-                  href={authComponent === 'signup' ? '/auth/login?screen_hint=signup' : '/auth/login'}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-ocean to-teal text-white text-xs font-bold flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(10,132,255,0.30)] hover:opacity-90 transition-opacity"
+                <button
+                  type="button"
+                  onClick={() => startAuth(authComponent === 'signup' ? 'signup' : 'signin')}
+                  disabled={authBusy}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-ocean to-teal text-white text-xs font-bold flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(10,132,255,0.30)] hover:opacity-90 transition-opacity disabled:opacity-70 cursor-pointer"
                 >
-                  <ShieldCheck size={14} />
-                  {authComponent === 'signin' ? 'Continue with Auth0' : 'Create account with Auth0'}
-                </a>
+                  {authBusy ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                  {authBusy
+                    ? 'Waiting for sign-in window…'
+                    : authComponent === 'signin' ? 'Continue with Auth0' : 'Create account with Auth0'}
+                </button>
                 <p className="text-[10px] text-navy/40 text-center leading-relaxed">
-                  Supports Google, GitHub, email & more.<br />Authentication happens in your browser — nothing touches this page.
+                  Supports Google, GitHub, email & more.<br />A secure sign-in window opens — you&apos;ll come straight back here.
                 </p>
               </div>
 
