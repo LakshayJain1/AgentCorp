@@ -5,6 +5,7 @@ import BrandLogo from '@/components/BrandLogo'
 import { completeClerkOnboarding } from '@/app/onboard/_actions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
+import EmailCodeLogin from '@/components/EmailCodeLogin';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import {
@@ -550,24 +551,32 @@ export default function SetupWizard() {
                   {authComponent === 'signin' ? 'Sign in to AgentCorp' : 'Create your account'}
                 </h2>
                 <p className="text-xs text-navy/55 mt-1">
-                  Authenticate securely to establish host synchronization
+                  No password needed — we&apos;ll email you a code, or use Google / GitHub.
                 </p>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
+                <EmailCodeLogin onSignedIn={async () => { await invalidate(); }} />
+
+                <div className="flex items-center gap-3" aria-hidden="true">
+                  <div className="flex-1 h-px bg-navy/10" />
+                  <span className="text-[10px] font-semibold text-navy/35 uppercase tracking-wider">or</span>
+                  <div className="flex-1 h-px bg-navy/10" />
+                </div>
+
                 <button
                   type="button"
                   onClick={() => startAuth(authComponent === 'signup' ? 'signup' : 'signin')}
                   disabled={authBusy}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-ocean to-teal text-white text-xs font-bold flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(10,132,255,0.30)] hover:opacity-90 transition-opacity disabled:opacity-70 cursor-pointer"
+                  className="w-full py-3 rounded-xl bg-white/80 border border-navy/10 text-navy text-xs font-bold flex items-center justify-center gap-2 hover:bg-white transition-colors disabled:opacity-70 cursor-pointer"
                 >
                   {authBusy ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
                   {authBusy
                     ? 'Waiting for sign-in window…'
-                    : authComponent === 'signin' ? 'Continue with Auth0' : 'Create account with Auth0'}
+                    : authComponent === 'signin' ? 'Continue with Google or GitHub' : 'Sign up with Google or GitHub'}
                 </button>
                 <p className="text-[10px] text-navy/40 text-center leading-relaxed">
-                  Supports Google, GitHub, email & more.<br />A secure sign-in window opens — you&apos;ll come straight back here.
+                  A secure sign-in window opens — you&apos;ll come straight back here.
                 </p>
               </div>
 
