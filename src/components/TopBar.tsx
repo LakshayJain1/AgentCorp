@@ -1,12 +1,14 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
+import BrandLogo from '@/components/BrandLogo'
+import WorkspaceFolderButton from '@/components/WorkspaceFolderButton'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ScrumMeeting from '@/components/ScrumMeeting';
-import { Cpu, Play, Pause, Search, Command, X, UserPlus, Copy, Check, Send, Mail } from 'lucide-react';
+import { Play, Pause, Search, Command, X, UserPlus, Copy, Check, Send, Mail } from 'lucide-react';
 
 export default function TopBar() {
   const { user, isLoading } = useUser();
@@ -40,9 +42,11 @@ export default function TopBar() {
 
   // Pre-populate email draft from onboarding invites (only once, if not already sent)
   useEffect(() => {
-    if (!invitesSent && inviteEmails.length > 0) {
+    if (invitesSent || inviteEmails.length === 0) return;
+    const timer = setTimeout(() => {
       setEmailDraft([inviteEmails[0] ?? '', inviteEmails[1] ?? '', inviteEmails[2] ?? '']);
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [inviteEmails, invitesSent]);
 
   useEffect(() => {
@@ -83,9 +87,7 @@ export default function TopBar() {
     <div className="glass-topbar px-5 py-2.5 flex items-center gap-3 z-30 shrink-0">
       {/* Left: Logo & Brand */}
       <div className="flex items-center gap-3 shrink-0">
-        <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-ocean to-teal flex items-center justify-center shadow-[0_4px_14px_rgba(10,132,255,0.3)]">
-          <Cpu className="w-5 h-5 text-white" />
-        </div>
+        <BrandLogo size={36} className="shadow-[0_4px_14px_rgba(10,132,255,0.3)]" />
         <div>
           <h1 className="text-sm font-bold text-navy flex items-center gap-2 font-display tracking-tight">
             AgentCorp
@@ -209,6 +211,8 @@ export default function TopBar() {
             </div>
           </div>
         )}
+
+        <WorkspaceFolderButton />
 
         {/* Invite button */}
         <div className="relative" ref={inviteRef}>

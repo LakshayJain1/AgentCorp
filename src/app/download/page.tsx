@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import BrandLogo from '@/components/BrandLogo'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Cpu, Monitor, Apple, Laptop, ArrowRight, CheckCircle2, Download } from 'lucide-react'
+import { Monitor, Apple, Laptop, ArrowRight, CheckCircle2, Download } from 'lucide-react'
 
 const SPRING = { type: 'spring', bounce: 0, duration: 0.55 } as const
 
@@ -20,7 +21,7 @@ const DOWNLOADS: Record<Platform, { label: string; icon: React.ReactNode; format
     label: 'Windows',
     icon: <Laptop className="w-5 h-5" />,
     formats: ['.exe installer', '.portable'],
-    url: '/downloads/AgentCorp-Setup-2.0.0.exe',
+    url: '/downloads/AgentCorp-Setup-2.1.0.exe',
   },
   linux: {
     label: 'Linux',
@@ -32,7 +33,7 @@ const DOWNLOADS: Record<Platform, { label: string; icon: React.ReactNode; format
     label: 'Download',
     icon: <Monitor className="w-5 h-5" />,
     formats: [],
-    url: '/downloads/AgentCorp-Setup-2.0.0.exe',
+    url: '/downloads/AgentCorp-Setup-2.1.0.exe',
   },
 }
 
@@ -63,9 +64,7 @@ export default function DownloadPage() {
         <nav className="max-w-5xl mx-auto px-6 py-3 mt-3">
           <div className="glass rounded-full px-4 py-2 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2.5 font-display font-bold text-[15px] text-navy">
-              <div className="w-8 h-8 rounded-[10px] bg-gradient-to-br from-ocean to-teal flex items-center justify-center shadow-sm">
-                <Cpu className="w-4 h-4 text-white" />
-              </div>
+              <BrandLogo size={32} />
               AgentCorp
             </Link>
             <a
@@ -86,9 +85,7 @@ export default function DownloadPage() {
           transition={SPRING}
           className="text-center mb-14"
         >
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-ocean to-teal flex items-center justify-center mx-auto shadow-[0_16px_40px_rgba(10,132,255,0.35)] mb-7">
-            <Cpu className="w-8 h-8 text-white" />
-          </div>
+          <BrandLogo size={64} className="mx-auto shadow-[0_16px_40px_rgba(10,132,255,0.35)] mb-7" priority />
           <h1 className="display-hero text-navy">Download AgentCorp</h1>
           <p className="prose-body max-w-md mx-auto mt-5">
             Run your autonomous AI workspace natively on your machine. Same features as the web app, installed locally.
@@ -124,7 +121,7 @@ export default function DownloadPage() {
             {platform === 'win' && (
               <div className="mt-5 flex items-center justify-center gap-4">
                 <a
-                  href="/downloads/AgentCorp-Setup-2.0.0.exe"
+                  href="/downloads/AgentCorp-Setup-2.1.0.exe"
                   download
                   className="text-xs text-ocean-600 hover:text-ocean-700 font-medium underline underline-offset-2"
                 >
@@ -132,7 +129,7 @@ export default function DownloadPage() {
                 </a>
                 <span className="text-navy/20">|</span>
                 <a
-                  href="/downloads/AgentCorp-2.0.0.exe"
+                  href="/downloads/AgentCorp-2.1.0.exe"
                   download
                   className="text-xs text-ocean-600 hover:text-ocean-700 font-medium underline underline-offset-2"
                 >

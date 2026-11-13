@@ -1,6 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
+import BrandLogo from '@/components/BrandLogo'
 import { completeClerkOnboarding } from '@/app/onboard/_actions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
@@ -9,7 +10,7 @@ import { useUser } from '@auth0/nextjs-auth0/client';
 import {
   GitBranch, Play, Key, Sparkles, Server, Check, ArrowRight,
   ShieldCheck, ChevronRight, CreditCard, Users,
-  CheckCircle2, DollarSign, ArrowUpRight, Loader2, Cpu, Link, Copy, Mail
+  CheckCircle2, DollarSign, ArrowUpRight, Loader2, Link, Copy, Mail
 } from 'lucide-react';
 
 export default function SetupWizard() {
@@ -91,6 +92,8 @@ export default function SetupWizard() {
     !!(window as unknown as { agentcorpDesktop?: { available?: boolean } }).agentcorpDesktop?.available;
 
   useEffect(() => {
+    // Deferred one tick so restoring state isn't a synchronous setState in the effect body.
+    const restore = () => {
     // On desktop: don't wait for Clerk's client-side resolution — skip straight
     // to step 2. The session cookie was injected by the Electron main process and
     // is valid server-side; Clerk's React SDK may lag behind on client-side state.
@@ -154,6 +157,9 @@ export default function SetupWizard() {
       }
     }
     setIsRestoring(false);
+    };
+    const timer = setTimeout(restore, 0);
+    return () => clearTimeout(timer);
   }, [isSignedIn, isDesktop]);
 
   useEffect(() => {
@@ -275,9 +281,7 @@ export default function SetupWizard() {
         {/* Page header — logo + step progress only, no nav links */}
         <div className="flex flex-col items-center gap-5 mb-10 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-[8px] bg-gradient-to-br from-ocean to-teal flex items-center justify-center shadow-sm">
-              <Cpu className="w-3.5 h-3.5 text-white" />
-            </div>
+            <BrandLogo size={28} />
             <span className="font-semibold text-sm text-navy/70 font-display">AgentCorp</span>
           </div>
 

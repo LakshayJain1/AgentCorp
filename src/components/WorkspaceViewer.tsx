@@ -1,6 +1,7 @@
 'use client';
 
 import { useOrgViewer } from '@/hooks/useOrgViewer';
+import BrandLogo from '@/components/BrandLogo'
 import { motion, AnimatePresence } from 'framer-motion';
 import { Cpu, Radio, WifiOff, Clock, Users, CheckSquare, Zap, BarChart2 } from 'lucide-react';
 import { useUser } from '@auth0/nextjs-auth0/client';
@@ -79,9 +80,7 @@ function LiveBanner({ snapshot, status, ts }: {
   return (
     <div className="glass-topbar px-5 py-2.5 flex items-center gap-3 z-30 shrink-0">
       <div className="flex items-center gap-3 shrink-0">
-        <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-ocean to-teal flex items-center justify-center shadow-[0_4px_14px_rgba(10,132,255,0.3)]">
-          <Cpu className="w-5 h-5 text-white" />
-        </div>
+        <BrandLogo size={36} className="shadow-[0_4px_14px_rgba(10,132,255,0.3)]" />
         <div>
           <h1 className="text-sm font-bold text-navy font-display tracking-tight">
             {snapshot.companyName}
@@ -158,9 +157,7 @@ export default function WorkspaceViewer({ orgId }: { orgId: string }) {
     return (
       <div className="h-screen w-screen flex flex-col ws-bg overflow-hidden">
         <div className="glass-topbar px-5 py-2.5 flex items-center gap-3 z-30 shrink-0">
-          <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-ocean to-teal flex items-center justify-center">
-            <Cpu className="w-5 h-5 text-white" />
-          </div>
+          <BrandLogo size={36} />
           <span className="text-sm font-bold text-navy font-display">AgentCorp</span>
           <div className="flex-1" />
           <span className="text-[10px] text-navy/40">Joining workspace…</span>
@@ -174,9 +171,7 @@ export default function WorkspaceViewer({ orgId }: { orgId: string }) {
     return (
       <div className="h-screen w-screen flex flex-col ws-bg overflow-hidden">
         <div className="glass-topbar px-5 py-2.5 flex items-center gap-3 z-30 shrink-0">
-          <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-ocean to-teal flex items-center justify-center">
-            <Cpu className="w-5 h-5 text-white" />
-          </div>
+          <BrandLogo size={36} />
           <span className="text-sm font-bold text-navy font-display">AgentCorp</span>
           <div className="flex-1" />
           {user?.name && (

@@ -25,11 +25,7 @@
       width: 64px;
       height: 64px;
       border-radius: 16px;
-      background: linear-gradient(135deg, #38bdf8, #22d3ee);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 8px 32px rgba(56, 189, 248, 0.25);
+      display: block; box-shadow: 0 8px 32px rgba(56, 189, 248, 0.25);
       animation: pulse 2s ease-in-out infinite;
     }
     .logo svg { width: 32px; height: 32px; fill: white; }
@@ -49,9 +45,7 @@
 </head>
 <body>
   <div class="loader">
-    <div class="logo">
-      <svg viewBox="0 0 24 24"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
-    </div>
+    <img class="logo" src="assets/icon.png" alt="AgentCorp" width="64" height="64">
     <div class="text">
       <h2>AgentCorp</h2>
       <p>Preparing your workspace...</p>

@@ -26,8 +26,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Workspace: set the local directory agents can read/write
   workspace: {
-    setRoot: (dir) => ipcRenderer.invoke('workspace:set-root', dir),
+    // Opens a native folder picker; the page cannot choose the path itself.
+    setRoot: () => ipcRenderer.invoke('workspace:set-root'),
     getRoot: () => ipcRenderer.invoke('workspace:get-root'),
+    clearRoot: () => ipcRenderer.invoke('workspace:clear-root'),
   },
 
   // Desktop file executor — sandboxed to the workspace root
@@ -37,7 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     search: (pattern, relDir) => ipcRenderer.invoke('fs:search', pattern, relDir),
   },
 
-  // Desktop exec — allowlisted commands only (tsc, npx, node, npm)
+  // Desktop exec — allowlisted tools only (tsc/eslint/vitest via npx, npm test/run <script>)
   exec: {
     run: (cmd, args, relCwd) => ipcRenderer.invoke('exec:run', { cmd, args, relCwd }),
   },

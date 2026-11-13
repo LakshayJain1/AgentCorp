@@ -61,6 +61,11 @@ declare global {
   interface Window {
     agentcorpDesktop?: { available?: boolean };
     electronAPI?: {
+      workspace?: {
+        setRoot: () => Promise<{ ok: boolean; root?: string; error?: string }>;
+        getRoot: () => Promise<string | null>;
+        clearRoot: () => Promise<{ ok: boolean }>;
+      };
       fs: {
         read: (relPath: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
         write: (relPath: string, content: string) => Promise<{ ok: boolean; error?: string }>;

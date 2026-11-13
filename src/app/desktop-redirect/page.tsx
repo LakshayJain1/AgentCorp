@@ -1,9 +1,10 @@
 'use client'
 
 import { Suspense, useEffect, useState, useRef } from 'react'
+import BrandLogo from '@/components/BrandLogo'
 import { useSearchParams } from 'next/navigation'
 import { getDesktopAuthPayload } from './_actions'
-import { Cpu, Loader2, CheckCircle2, ExternalLink, AlertCircle } from 'lucide-react'
+import { Loader2, CheckCircle2, ExternalLink, AlertCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 const SPRING = { type: 'spring', bounce: 0, duration: 0.55 } as const
@@ -40,7 +41,9 @@ function DesktopRedirectInner() {
         return
       }
 
-      setDeepLinkUrl(payload.deepLinkUrl)
+      // Bind the deep link to the desktop app's sign-in attempt (state nonce).
+      const deepLink = state ? `${payload.deepLinkUrl}&state=${encodeURIComponent(state)}` : payload.deepLinkUrl
+      setDeepLinkUrl(deepLink)
       setStatus('ready')
 
       // ── Primary: POST token to Electron's local HTTP server ──────────
@@ -64,7 +67,7 @@ function DesktopRedirectInner() {
 
       // ── Fallback: OS deep link (agentcorp:// protocol) ───────────────
       setMethod('deeplink')
-      window.location.href = payload.deepLinkUrl
+      window.location.href = deepLink
     }).catch(() => {
       setStatus('error')
     })
@@ -74,9 +77,7 @@ function DesktopRedirectInner() {
     <div className="min-h-screen bg-paper flex items-center justify-center p-6 font-sans">
       <div className="max-w-md w-full text-center space-y-7">
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={SPRING}>
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-ocean to-teal flex items-center justify-center mx-auto shadow-[0_16px_40px_rgba(10,132,255,0.35)]">
-            <Cpu className="w-8 h-8 text-white" />
-          </div>
+          <BrandLogo size={64} className="mx-auto shadow-[0_16px_40px_rgba(10,132,255,0.35)]" priority />
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING, delay: 0.06 }}>

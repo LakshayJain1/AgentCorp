@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import BrandLogo from '@/components/BrandLogo'
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Cpu, ArrowRight, ChevronDown, Heart, PlayCircle, Check, Monitor, Menu } from 'lucide-react';
@@ -93,9 +94,7 @@ export default function LandingPage() {
             className={`glass rounded-full flex items-center justify-between pl-2 pr-2 py-1.5 transition-all duration-500 ${isScrolled ? 'bg-white/75 shadow-[var(--shadow-lift)]' : 'bg-white/40'}`}
           >
             <a href="#main" className="flex items-center gap-2.5 font-display font-bold text-[17px] text-navy pl-2 pr-4">
-              <span className="relative flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-ocean to-teal shadow-sm">
-                <span className="h-2 w-2 rounded-full bg-white" />
-              </span>
+              <BrandLogo size={32} priority />
               AgentCorp
             </a>
 
@@ -593,7 +592,7 @@ export default function LandingPage() {
       <footer className="border-t border-navy/10 py-12 bg-paper">
         <div className="mx-auto max-w-6xl px-4 md:px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-navy/50">
           <div className="flex items-center gap-2.5 font-display font-bold text-navy">
-            <span className="h-6 w-6 rounded-lg bg-gradient-to-br from-ocean to-teal shadow-sm" />
+            <BrandLogo size={24} />
             AgentCorp
           </div>
           <p className="text-[13px]">&copy; 2026 AgentCorp. Multi-agent orchestration for real work.</p>
