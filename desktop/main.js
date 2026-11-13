@@ -12,10 +12,8 @@ const isDev = process.env.NODE_ENV === 'development';
 const WEB_URL = (process.env.AGENTCORP_WEB_URL || '').replace(/\/+$/, '')
   || (isDev ? 'http://localhost:3000' : 'https://agent-corp.vercel.app');
 const DEEP_LINK_SCHEME = 'agentcorp';
-// Auth0 tenant and native app client (no secret — PKCE only).
-// Set AUTH0_DOMAIN and AUTH0_ELECTRON_CLIENT_ID in the environment or .env.
+// Auth0 tenant (optional): lets the window follow Auth0 pages if ever required.
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || process.env.AUTH0_ISSUER_BASE_URL?.replace('https://', '') || '';
-const AUTH0_CLIENT_ID = process.env.AUTH0_ELECTRON_CLIENT_ID || process.env.AUTH0_CLIENT_ID || '';
 
 let mainWindow = null;
 
@@ -154,25 +152,22 @@ function startAuthServer() {
       req.on('end', () => {
         if (tooBig) return;
         try {
-          const { token, userId, state } = JSON.parse(body);
+          const { token, userId, state, cookies } = JSON.parse(body);
           if (!safeEqual(state, authServerState)) {
             res.writeHead(403, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: false, error: 'invalid state' }));
             return;
           }
-          if (typeof token !== 'string' || !token) {
+          if (!sanitizeCookies(cookies).length) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: 'missing token' }));
+            res.end(JSON.stringify({ ok: false, error: 'missing session' }));
             return;
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: true }));
           log('local auth server: token received');
-          handleDeepLink(
-            `${DEEP_LINK_SCHEME}://auth-callback?token=${encodeURIComponent(token)}`
-            + `&userId=${encodeURIComponent(typeof userId === 'string' ? userId : '')}`
-            + `&redirect=${encodeURIComponent('/workspace')}&state=${encodeURIComponent(state)}`
-          );
+          authServerState = null; // single use
+          completeSignin({ token, userId: typeof userId === 'string' ? userId : '', cookies, redirect: '/workspace' });
           stopAuthServer();
         } catch {
           res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -203,54 +198,57 @@ function handleDeepLinkArgv(argv) {
 // Cold-start check: only stash here — processed in whenReady.
 handleDeepLinkArgv(process.argv);
 
-// ─── Auth0 PKCE helpers ──────────────────────────────────────────────
-function base64URLEncode(buf) {
-  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
-
-function generatePKCEPair() {
-  const verifier = base64URLEncode(crypto.randomBytes(32));
-  const challenge = base64URLEncode(crypto.createHash('sha256').update(verifier).digest());
-  return { verifier, challenge };
-}
-
-let pkceVerifier = null; // stashed while browser is open
-let pkceState = null;    // Auth0 `state`, validated on callback (bug #6)
-
-// ─── System-browser sign-in (Auth0 PKCE) ────────────────────────────
-// Opens the real system browser to Auth0's authorize endpoint.
-// Auth0 redirects to agentcorp://callback?code=...&state=...
-// Electron exchanges the code for tokens (no secret needed — PKCE).
+// ─── Sign-in: system browser → web session hand-off ──────────────────
+// Sign-in always happens in the user's real browser (Google/GitHub block
+// embedded webviews). The web app then hands us its session cookie through the
+// nonce-protected local server (or the agentcorp:// deep link), and we install
+// it into this window's cookie jar. Without that cookie the window would have
+// no web session and would bounce straight back to the login page.
 async function startBrowserSignin() {
   let port = 0;
   try { port = await startAuthServer(); } catch { port = 0; }
   if (!port) { log('local auth server unavailable; cannot start sign-in'); return; }
-  const nonce = generateState(); // local-server nonce (web fallback only)
+  const nonce = generateState();
+  const desktopRedirect = `/desktop-redirect?port=${port}&state=${nonce}`;
+  openExternalSafe(`${WEB_URL}/auth/login?returnTo=${encodeURIComponent(desktopRedirect)}`);
+}
 
-  if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID) {
-    log('AUTH0_DOMAIN / AUTH0_ELECTRON_CLIENT_ID not set — falling back to web sign-in');
-    const desktopRedirect = `/desktop-redirect?port=${port}&state=${nonce}`;
-    openExternalSafe(`${WEB_URL}/auth/login?returnTo=${encodeURIComponent(desktopRedirect)}`);
-    return;
+const SESSION_COOKIE_RE = /^__session(__\d{1,2})?$/;
+
+function sanitizeCookies(list) {
+  if (!Array.isArray(list)) return [];
+  return list.slice(0, 10)
+    .filter((c) => c && typeof c.name === 'string' && SESSION_COOKIE_RE.test(c.name)
+      && typeof c.value === 'string' && c.value.length > 0 && c.value.length <= 8192)
+    .map((c) => ({ name: c.name, value: c.value }));
+}
+
+async function applySessionCookies(list) {
+  const cookies = sanitizeCookies(list);
+  const expirationDate = Math.floor(Date.now() / 1000) + 3 * 24 * 3600; // server rolls it forward
+  for (const c of cookies) {
+    await session.defaultSession.cookies.set({
+      url: WEB_ORIGIN, name: c.name, value: c.value, path: '/',
+      secure: WEB_ORIGIN.startsWith('https:'), httpOnly: true, sameSite: 'lax', expirationDate,
+    });
   }
+  return cookies.length;
+}
 
-  const { verifier, challenge } = generatePKCEPair();
-  pkceVerifier = verifier;
-  pkceState = crypto.randomBytes(24).toString('hex'); // independent of the local nonce
+async function hasWebSession() {
+  try {
+    const all = await session.defaultSession.cookies.get({ url: WEB_ORIGIN });
+    return all.some((c) => SESSION_COOKIE_RE.test(c.name));
+  } catch { return false; }
+}
 
-  const params = new URLSearchParams({
-    response_type: 'code',
-    client_id: AUTH0_CLIENT_ID,
-    redirect_uri: `${DEEP_LINK_SCHEME}://callback`,
-    scope: 'openid profile email offline_access',
-    code_challenge: challenge,
-    code_challenge_method: 'S256',
-    state: pkceState,
-  });
-  if (process.env.AUTH0_AUDIENCE) params.set('audience', process.env.AUTH0_AUDIENCE);
-
-  log('opening Auth0 PKCE authorize');
-  openExternalSafe(`https://${AUTH0_DOMAIN}/authorize?${params.toString()}`);
+async function completeSignin({ token, userId, cookies, redirect }) {
+  const n = await applySessionCookies(cookies);
+  if (!n) { log('sign-in hand-off carried no session cookie'); return false; }
+  if (typeof token === 'string' && token) saveAuth({ token, userId, authenticatedAt: Date.now() });
+  log('sign-in complete: web session installed');
+  loadWorkspace(redirect);
+  return true;
 }
 
 // ─── Encrypted persistent storage (bug #9) ──────────────────────────
@@ -300,78 +298,26 @@ function handleDeepLink(url) {
   let parsed;
   try { parsed = new URL(url); } catch { return false; }
 
-  // ── Auth0 PKCE callback: agentcorp://callback?code=XXX&state=YYY ──
-  if (parsed.hostname === 'callback' && parsed.searchParams.get('code')) {
-    if (!pkceVerifier || !safeEqual(parsed.searchParams.get('state'), pkceState)) {
-      log('deep link: PKCE callback rejected (no pending sign-in or state mismatch)');
-      return false;
-    }
-    pkceState = null; // single use
-    exchangeCodeForTokens(parsed.searchParams.get('code'));
-    return true;
-  }
-
-  // ── Web hand-off: agentcorp://auth-callback?token=XXX&state=NONCE ──
+  // Web hand-off: agentcorp://auth-callback?cookies=<json>&state=NONCE
   if (parsed.hostname === 'auth-callback') {
-    const token = parsed.searchParams.get('token');
-    const userId = parsed.searchParams.get('userId');
-    const redirect = safeRedirectPath(parsed.searchParams.get('redirect'));
-    if (!token) return false;
     if (!safeEqual(parsed.searchParams.get('state'), authServerState)) {
       log('deep link: auth-callback rejected (state mismatch)');
       return false;
     }
+    let cookies = [];
+    try { cookies = JSON.parse(parsed.searchParams.get('cookies') || '[]'); } catch { /* ignore */ }
+    if (!sanitizeCookies(cookies).length) return false;
     authServerState = null; // single use
     if (!app.isReady()) return false;
-    if (!saveAuth({ token, userId, authenticatedAt: Date.now() })) return false;
-    log('deep link: token saved');
-    loadWorkspace(redirect);
+    completeSignin({
+      token: parsed.searchParams.get('token'),
+      userId: parsed.searchParams.get('userId'),
+      cookies,
+      redirect: safeRedirectPath(parsed.searchParams.get('redirect')),
+    });
     return true;
   }
   return false;
-}
-
-async function exchangeCodeForTokens(code) {
-  if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID) {
-    log('cannot exchange code: AUTH0 config missing');
-    return;
-  }
-  if (!pkceVerifier) { log('cannot exchange code: no PKCE verifier'); return; }
-  try {
-    const resp = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        client_id: AUTH0_CLIENT_ID,
-        code_verifier: pkceVerifier,
-        code,
-        redirect_uri: `${DEEP_LINK_SCHEME}://callback`,
-      }),
-    });
-    pkceVerifier = null; // consumed
-    const tokens = await resp.json();
-    if (tokens.error) throw new Error(`${tokens.error}: ${tokens.error_description}`);
-
-    saveAuth({
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      idToken: tokens.id_token,
-      expiresAt: Date.now() + (tokens.expires_in || 86400) * 1000,
-      authenticatedAt: Date.now(),
-    });
-    log('Auth0 PKCE: tokens stored, loading workspace');
-    // The web app owns the browser session (Auth0 SDK cookie). If the window
-    // has no session yet, the web app redirects to /auth/login, which is an
-    // allowed in-window navigation (see isTrustedNavigation) — bug #5.
-    loadWorkspace('/workspace');
-  } catch (err) {
-    pkceVerifier = null;
-    log('Auth0 PKCE token exchange failed:', err && err.message);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.loadFile(path.join(__dirname, 'signin.html'));
-    }
-  }
 }
 
 function loadWorkspace(redirect) {
@@ -482,26 +428,28 @@ function createMainWindow() {
   // show our web origin, Auth0's login pages, or local launcher files.
   // Anything else is sent to the user's real browser. Exact-origin matching
   // only — substring checks are bypassable (evil.com/?x=our-host).
-  const guardNavigation = (event, url) => {
-    if (isTrustedNavigation(url)) {
-      try {
-        const parsed = new URL(url);
-        if (parsed.origin === WEB_ORIGIN
-            && (parsed.pathname.startsWith('/sign-in') || parsed.pathname.startsWith('/sign-up'))) {
-          event.preventDefault();
-          log('intercepted legacy sign-in navigation — showing local launcher');
-          mainWindow.loadFile(path.join(__dirname, 'signin.html'));
-        }
-      } catch { /* ignore */ }
+  const showLauncher = (why) => {
+    log(why);
+    setImmediate(() => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadFile(path.join(__dirname, 'signin.html')); });
+  };
+  const guardNavigation = (event, url, isRedirect) => {
+    let parsed;
+    try { parsed = new URL(url); } catch { event.preventDefault(); return; }
+    // Login must never run inside this window: its transaction cookie would
+    // live here while Google/GitHub need the real browser. Show the launcher.
+    if (parsed.origin === WEB_ORIGIN && /^\/(sign-in|sign-up|auth\/login)(\/|$)/.test(parsed.pathname)) {
+      event.preventDefault();
+      showLauncher('intercepted in-window login — showing launcher');
       return;
     }
-    if (isLocalPage(url)) return; // our own launcher page
+    if (isTrustedNavigation(url) || isLocalPage(url)) return;
     event.preventDefault();
+    if (isRedirect) { showLauncher('blocked untrusted redirect — showing launcher'); return; }
     log('blocked navigation to untrusted URL');
     openExternalSafe(url);
   };
-  mainWindow.webContents.on('will-navigate', guardNavigation);
-  mainWindow.webContents.on('will-redirect', guardNavigation);
+  mainWindow.webContents.on('will-navigate', (e, url) => guardNavigation(e, url, false));
+  mainWindow.webContents.on('will-redirect', (e, url) => guardNavigation(e, url, true));
 
   // New windows are never created with our preload: trusted URLs load in the
   // main window, everything else opens in the system browser.
@@ -540,17 +488,18 @@ function createMainWindow() {
 
   const signinHtml = path.join(__dirname, 'signin.html');
 
-  const savedAuth = loadAuth();
-  const isValid = savedAuth && (
-    savedAuth.expiresAt ? Date.now() < savedAuth.expiresAt : !!(savedAuth.accessToken || savedAuth.token)
-  );
-  if (isValid) {
-    log('startup: valid auth found, loading workspace');
-    mainWindow.loadURL(`${WEB_ORIGIN}/workspace`);
-  } else {
-    log('startup: no valid auth, showing sign-in launcher');
-    mainWindow.loadFile(signinHtml);
-  }
+  // Only go straight to the workspace if this window actually holds a web
+  // session cookie; otherwise show the launcher (never a login redirect loop).
+  hasWebSession().then((ok) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (ok) {
+      log('startup: web session found, loading workspace');
+      mainWindow.loadURL(`${WEB_ORIGIN}/workspace`);
+    } else {
+      log('startup: no web session, showing sign-in launcher');
+      mainWindow.loadFile(signinHtml);
+    }
+  });
 
   return mainWindow;
 }
@@ -574,14 +523,10 @@ ipcMain.handle('auth:is-authenticated', () => {
 
 ipcMain.handle('auth:logout', async () => {
   clearAuth();
-  pkceVerifier = null;
-  pkceState = null;
   if (mainWindow && !mainWindow.isDestroyed()) {
     try { await session.defaultSession.clearStorageData(); } catch { /* ignore */ }
-    if (AUTH0_DOMAIN && AUTH0_CLIENT_ID) {
-      const logoutUrl = `https://${AUTH0_DOMAIN}/v2/logout?client_id=${encodeURIComponent(AUTH0_CLIENT_ID)}&returnTo=${encodeURIComponent(WEB_URL)}`;
-      openExternalSafe(logoutUrl);
-    }
+    // End the web/Auth0 session in the real browser too, so the next sign-in is clean.
+    openExternalSafe(`${WEB_URL}/auth/logout`);
     mainWindow.loadFile(path.join(__dirname, 'signin.html'));
   }
 }, LOCAL_OK);

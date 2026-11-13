@@ -53,7 +53,7 @@ function DesktopRedirectInner() {
           const res = await fetch(`http://127.0.0.1:${port}/auth`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: payload.token, userId: payload.userId, state }),
+            body: JSON.stringify({ token: payload.token, userId: payload.userId, state, cookies: payload.sessionCookies }),
           })
           if (res.ok) {
             setMethod('local')
