@@ -32,8 +32,21 @@ function DesktopRedirectInner() {
     if (didRun.current) return
     didRun.current = true
 
-    const port = searchParams.get('port')
-    const state = searchParams.get('state')
+    // SECURITY: `port` and `state` come from the URL, so an attacker can craft
+    // a link. They are strictly validated *before* any session material is
+    // fetched, and the POST target is built from a numeric port only — a value
+    // like "1@evil.com" must never be able to change the host.
+    const rawPort = searchParams.get('port')
+    const rawState = searchParams.get('state')
+    const portOk = rawPort !== null && /^\d{4,5}$/.test(rawPort) && Number(rawPort) >= 1024 && Number(rawPort) <= 65535
+    const stateOk = rawState !== null && /^[a-f0-9]{48}$/.test(rawState)
+    if (!portOk || !stateOk) {
+      // Not a genuine desktop sign-in hand-off: never expose the session.
+      window.location.replace('/workspace')
+      return
+    }
+    const port = rawPort as string
+    const state = rawState as string
 
     getDesktopAuthPayload().then(async (payload) => {
       if (!payload) {
@@ -50,7 +63,7 @@ function DesktopRedirectInner() {
       // This works regardless of OS protocol registration and is instant.
       if (port && state) {
         try {
-          const res = await fetch(`http://127.0.0.1:${port}/auth`, {
+          const res = await fetch(`http://127.0.0.1:${Number(port)}/auth`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token: payload.token, userId: payload.userId, state, cookies: payload.sessionCookies }),

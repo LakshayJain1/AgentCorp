@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -80,6 +81,24 @@ export const oauthStates = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('oauth_states_expires_idx').on(t.expiresAt)],
+);
+
+/**
+ * Live org snapshots powering the invite "viewer". `ownerSub` is bound on first
+ * write and enforced on every later write, so one user can never overwrite
+ * another user's org. `auth0OrgId` links the Auth0 Organization created for
+ * invitations back to this org.
+ */
+export const orgSnapshots = pgTable(
+  'org_snapshots',
+  {
+    orgId: text('org_id').primaryKey(),
+    ownerSub: text('owner_sub').notNull(),
+    snapshot: jsonb('snapshot').notNull(),
+    auth0OrgId: text('auth0_org_id'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('org_snapshots_auth0_org_idx').on(t.auth0OrgId)],
 );
 
 export type Workspace = typeof workspaces.$inferSelect;

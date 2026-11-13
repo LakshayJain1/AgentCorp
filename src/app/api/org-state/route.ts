@@ -1,75 +1,87 @@
 import { NextRequest } from 'next/server';
 import { auth0 } from '@/lib/auth0';
+import { rateLimit } from '@/lib/rateLimit';
+import {
+  MAX_SNAPSHOT_BYTES,
+  ORG_ID_RE,
+  getSnapshot,
+  sanitizeSnapshot,
+  saveSnapshot,
+} from '@/lib/orgStore';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-interface SnapshotEntry {
-  snapshot: OrgSnapshot;
-  ts: number;
-}
+export type { OrgSnapshot } from '@/lib/orgStore';
 
-export interface OrgSnapshot {
-  companyName: string;
-  companyProduct: string;
-  agents: Array<{
-    id: string; name: string; role: string; emoji: string;
-    workStatus: string; mood: string; energy: number;
-    currentTaskId: string | null; online: boolean;
-  }>;
-  tasks: Array<{
-    id: string; title: string; status: string; priority: string;
-    assignedTo: string | null; deliverableType?: string; createdAt: number;
-  }>;
-  events: Array<{
-    id: string; type: string; message: string;
-    timestamp: number; agentId: string | null;
-  }>;
-  simulation: {
-    efficiency: number; tick: number; speed: number;
-    paused: boolean; totalTasksCompleted: number;
-  };
-  deliverableProjects: Array<{ id: string; title: string; type: string; createdAt: number }>;
-}
-
-// Module-level store — persists for the lifetime of the Node.js process instance
-const store = new Map<string, SnapshotEntry>();
-const TTL_MS = 10 * 60 * 1000; // evict after 10 min of no updates
-
-function evictStale() {
-  const now = Date.now();
-  for (const [k, v] of store) {
-    if (now - v.ts > TTL_MS) store.delete(k);
-  }
-}
-
+// POST — the owner publishes a snapshot of their org. The first writer owns the
+// org id; everyone else gets 403. Bodies are size-capped and re-built from
+// known fields only.
 export async function POST(req: NextRequest) {
   const session = await auth0.getSession();
-  if (!session?.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  const sub = session?.user?.sub as string | undefined;
+  if (!sub) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: { orgId?: string; snapshot?: OrgSnapshot };
+  // 1 publish / 3s per tab ≈ 20/min; allow headroom for a couple of tabs.
+  if (!rateLimit(`org-state:${sub}`, 90, 60_000)) {
+    return Response.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
+  const declared = Number(req.headers.get('content-length') ?? 0);
+  if (declared > MAX_SNAPSHOT_BYTES * 1.5) {
+    return Response.json({ error: 'Payload too large' }, { status: 413 });
+  }
+  const text = await req.text();
+  if (text.length > MAX_SNAPSHOT_BYTES * 1.5) {
+    return Response.json({ error: 'Payload too large' }, { status: 413 });
+  }
+
+  let body: { orgId?: unknown; snapshot?: unknown };
   try {
-    body = await req.json();
+    body = JSON.parse(text);
   } catch {
     return Response.json({ error: 'invalid json' }, { status: 400 });
   }
 
-  const { orgId, snapshot } = body;
-  if (!orgId || typeof orgId !== 'string' || !snapshot) {
-    return Response.json({ error: 'orgId and snapshot required' }, { status: 400 });
+  if (typeof body.orgId !== 'string' || !ORG_ID_RE.test(body.orgId)) {
+    return Response.json({ error: 'invalid orgId' }, { status: 400 });
+  }
+  const snapshot = sanitizeSnapshot(body.snapshot);
+  if (!snapshot) return Response.json({ error: 'snapshot required' }, { status: 400 });
+  if (JSON.stringify(snapshot).length > MAX_SNAPSHOT_BYTES) {
+    return Response.json({ error: 'Snapshot too large' }, { status: 413 });
   }
 
-  evictStale();
-  store.set(orgId, { snapshot, ts: Date.now() });
-  return Response.json({ ok: true });
+  try {
+    const ok = await saveSnapshot(body.orgId, sub, snapshot);
+    if (!ok) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    return Response.json({ ok: true });
+  } catch (e) {
+    console.error('[org-state] save failed:', (e as Error).message);
+    return Response.json({ error: 'Storage unavailable' }, { status: 503 });
+  }
 }
 
+// GET — viewers must be signed in. The org id is a 128-bit capability carried by
+// the invite link; unknown and malformed ids look identical (404).
 export async function GET(req: NextRequest) {
-  const orgId = req.nextUrl.searchParams.get('orgId');
-  if (!orgId) return Response.json({ found: false }, { status: 400 });
+  const session = await auth0.getSession();
+  const sub = session?.user?.sub as string | undefined;
+  if (!sub) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const entry = store.get(orgId);
-  if (!entry) return Response.json({ found: false }, { status: 404 });
+  if (!rateLimit(`org-state-get:${sub}`, 120, 60_000)) {
+    return Response.json({ error: 'Too many requests' }, { status: 429 });
+  }
 
-  return Response.json({ found: true, snapshot: entry.snapshot, ts: entry.ts });
+  const orgId = req.nextUrl.searchParams.get('orgId') ?? '';
+  if (!ORG_ID_RE.test(orgId)) return Response.json({ found: false }, { status: 404 });
+
+  try {
+    const entry = await getSnapshot(orgId);
+    if (!entry) return Response.json({ found: false }, { status: 404 });
+    return Response.json({ found: true, snapshot: entry.snapshot, ts: entry.ts });
+  } catch (e) {
+    console.error('[org-state] read failed:', (e as Error).message);
+    return Response.json({ found: false }, { status: 503 });
+  }
 }

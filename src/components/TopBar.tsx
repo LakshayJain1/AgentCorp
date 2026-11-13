@@ -197,6 +197,7 @@ export default function TopBar() {
               </span>
               <button
                 onClick={() => {
+                  if (!window.confirm('Reset this workspace? Your team and task history on this device will be cleared and onboarding will restart.')) return;
                   useGameStore.persist.clearStorage();
                   router.replace('/onboard');
                 }}

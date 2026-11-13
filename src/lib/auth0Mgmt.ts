@@ -53,6 +53,10 @@ export async function getOrCreateAuth0Org(
   orgId: string,
   companyName: string,
 ): Promise<{ id: string; name: string } | null> {
+  // `orgId` is interpolated into a Lucene query below. Refuse anything that is
+  // not a plain identifier so quotes/operators can never alter the query.
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(orgId)) return null;
+
   // Search by metadata external_id
   const searchRes = await mgmt(
     `/organizations?q=${encodeURIComponent(`metadata.external_id:"${orgId}"`)}&search_engine=v3&per_page=1`,

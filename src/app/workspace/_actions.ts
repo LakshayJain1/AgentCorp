@@ -1,5 +1,8 @@
 'use server';
 
+import { headers } from 'next/headers';
+import { auth0 } from '@/lib/auth0';
+
 export interface ScrumYesterdayItem {
   title: string;
   status: 'done' | 'failed';
@@ -19,7 +22,21 @@ interface ScrumInput {
   blockedTasks: string[];
 }
 
-export async function generateDailyScrumTasks(input: ScrumInput): Promise<ScrumResult> {
+const clip = (list: unknown, maxItems: number, maxLen: number): string[] =>
+  Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string').slice(0, maxItems).map((x) => x.slice(0, maxLen)) : [];
+
+export async function generateDailyScrumTasks(rawInput: ScrumInput): Promise<ScrumResult> {
+  // Server actions are public endpoints: require a signed-in user and bound the input,
+  // otherwise this is an open, unauthenticated LLM proxy on our API key.
+  const session = await auth0.getSession();
+  const input: ScrumInput = {
+    companyName: String(rawInput?.companyName ?? '').slice(0, 120),
+    companyProduct: String(rawInput?.companyProduct ?? '').slice(0, 300),
+    completedTasks: clip(rawInput?.completedTasks, 20, 200),
+    failedTasks: clip(rawInput?.failedTasks, 20, 200),
+    blockedTasks: clip(rawInput?.blockedTasks, 20, 200),
+  };
+
   const yesterday: ScrumYesterdayItem[] = [
     ...input.completedTasks.map((t) => ({ title: t, status: 'done' as const })),
     ...input.failedTasks.map((t) => ({ title: t, status: 'failed' as const })),
@@ -37,14 +54,21 @@ export async function generateDailyScrumTasks(input: ScrumInput): Promise<ScrumR
     blockers: input.blockedTasks,
   };
 
-  try {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+  if (!session?.user) return fallback;
 
+  try {
+    const h = await headers();
+    const host = h.get('x-forwarded-host') ?? h.get('host') ?? '';
+    const derived = /^[a-z0-9.-]+(:\d{1,5})?$/i.test(host)
+      ? `${host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https'}://${host}`
+      : '';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || derived || 'http://localhost:3000';
+
+    // /api/ai requires a session, so forward the caller's cookies (a bare server-side
+    // fetch is always 401, which silently made the scrum always use the canned list).
     const res = await fetch(`${baseUrl}/api/ai`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', cookie: h.get('cookie') ?? '' },
       body: JSON.stringify({
         systemPrompt: `You are the PM at ${input.companyName || 'our company'}, building ${input.companyProduct || 'our product'}. You run the daily standup. Respond ONLY with valid JSON — no markdown fences, no extra text.`,
         prompt: `Yesterday completed: ${input.completedTasks.length ? input.completedTasks.join(' | ') : 'nothing yet'}

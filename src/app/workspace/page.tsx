@@ -36,25 +36,32 @@ function WorkspacePageInner() {
 
   // Handle post-invite-accept redirect:
   // When someone accepts an Auth0 org invitation, they land here with user.org_id set.
-  // If they have no workspace of their own, look up the inviter's orgId and redirect.
+  // Resolve the inviter's workspace and open it in viewer mode — even if the invitee
+  // already has a workspace of their own. This runs once per session per invitation so
+  // they can still return to their own workspace afterwards.
   useEffect(() => {
     if (!hydrated || authLoading || !user) return;
     if (inviteOrgId) return; // already in viewer mode via URL param
 
     const auth0OrgId = (user as Record<string, unknown>).org_id as string | undefined;
-    if (!auth0OrgId || isInitialized) return; // not from an org invite, or already has workspace
+    if (!auth0OrgId) return; // not from an org invite
+
+    let alreadyHandled = false;
+    try { alreadyHandled = sessionStorage.getItem('ac_invite_handled') === auth0OrgId; } catch { /* storage blocked */ }
+    if (alreadyHandled) return;
 
     fetch(`/api/invite?auth0OrgId=${encodeURIComponent(auth0OrgId)}`)
       .then((r) => r.json())
       .then((d: { found: boolean; orgId?: string }) => {
         if (d.found && d.orgId) {
-          router.replace(`/workspace?invite=${d.orgId}`);
-        } else {
+          try { sessionStorage.setItem('ac_invite_handled', auth0OrgId); } catch { /* ignore */ }
+          if (d.orgId !== myOrgId) router.replace(`/workspace?invite=${d.orgId}`);
+        } else if (!isInitialized) {
           router.replace('/onboard');
         }
       })
-      .catch(() => router.replace('/onboard'));
-  }, [hydrated, authLoading, user, isInitialized, inviteOrgId, router]);
+      .catch(() => { if (!isInitialized) router.replace('/onboard'); });
+  }, [hydrated, authLoading, user, isInitialized, inviteOrgId, myOrgId, router]);
 
   useEffect(() => {
     if (authLoading) return;

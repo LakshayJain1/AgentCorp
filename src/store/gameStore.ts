@@ -437,9 +437,19 @@ interface GameStore {
   syncOAuthConnections: (connections: Array<{ provider: string; accountId?: string | null }>) => void;
   setAuth0OrgId: (id: string) => void;
   markInvitesSent: () => void;
+  /** Replace a legacy (guessable) org id with a strong one. Returns the id now in use. */
+  ensureStrongOrgId: () => string;
 }
 
 const projectIdCounter = 0;
+
+/** 128-bit unguessable org id. It doubles as the capability in invite links. */
+export const STRONG_ORG_ID_RE = /^org_[a-f0-9]{32}$/;
+export function newOrgId(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return `org_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+}
 
 export const useGameStore = create<GameStore>()(
   persist(
@@ -906,7 +916,8 @@ export const useGameStore = create<GameStore>()(
   },
 
   initializePersonalizedOffice: (companyName, companyProduct, developersCount, connectors, inviteEmails = []) => {
-    const orgId = get().orgId || `org_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const existingOrgId = get().orgId;
+    const orgId = STRONG_ORG_ID_RE.test(existingOrgId) ? existingOrgId : newOrgId();
     set({
       isInitialized: true,
       companyName,
@@ -1056,6 +1067,14 @@ export const useGameStore = create<GameStore>()(
 
   setAuth0OrgId: (id) => set({ auth0OrgId: id }),
   markInvitesSent: () => set({ invitesSent: true }),
+  ensureStrongOrgId: () => {
+    const current = get().orgId;
+    if (STRONG_ORG_ID_RE.test(current)) return current;
+    const fresh = newOrgId();
+    // Old links used a guessable id; they stop working and invites must be re-sent.
+    set({ orgId: fresh, auth0OrgId: '', invitesSent: false });
+    return fresh;
+  },
 
   updateConnectors: (updates) => {
     set((state) => ({

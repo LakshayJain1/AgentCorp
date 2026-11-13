@@ -43,7 +43,6 @@ export default function SetupWizard() {
   const [sBroadcast, setSBroadcast] = useState(true);
 
   const [inviteEmails, setInviteEmails] = useState<[string, string, string]>(['', '', '']);
-  const [linkCopied, setLinkCopied] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
 
   const [deployStatus, setDeployStatus] = useState<string[]>([]);
@@ -907,31 +906,15 @@ export default function SetupWizard() {
                 </p>
               </div>
 
-              {/* Invite link */}
+              {/* Invite link — created for real once the workspace exists */}
               <div className="space-y-2">
                 <label className="block text-[9px] font-semibold text-navy/55 uppercase tracking-wider">Workspace Invite Link</label>
-                <div className="flex items-center gap-2 bg-white/70 border border-navy/10 rounded-xl px-3 py-2">
-                  <Link size={13} className="text-ocean-500 shrink-0" />
-                  <span className="flex-1 text-[11px] text-navy/60 font-mono truncate">
-                    {typeof window !== 'undefined' ? `${window.location.origin}/workspace?invite=pending` : 'https://agent-corp.vercel.app/workspace?invite=...'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const link = typeof window !== 'undefined'
-                        ? `${window.location.origin}/workspace?invite=pending`
-                        : '';
-                      navigator.clipboard.writeText(link).catch(() => {});
-                      setLinkCopied(true);
-                      setTimeout(() => setLinkCopied(false), 2000);
-                    }}
-                    className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-ocean-50 hover:bg-ocean-100 text-ocean-600 text-[10px] font-semibold transition-colors cursor-pointer"
-                  >
-                    {linkCopied ? <><Check size={10} /> Copied!</> : <><Copy size={10} /> Copy</>}
-                  </button>
+                <div className="flex items-center gap-2 bg-white/50 border border-dashed border-navy/15 rounded-xl px-3 py-2">
+                  <Link size={13} className="text-navy/30 shrink-0" />
+                  <span className="flex-1 text-[11px] text-navy/45">Your private link is created when you launch.</span>
                 </div>
                 <p className="text-[10px] text-navy/40 leading-relaxed">
-                  Anyone with this link can join your workspace and see live agent activity. The unique link is generated when you launch.
+                  Anyone you share it with must sign in, and can then watch your team&apos;s live activity (read-only). Find it under <strong>Invite</strong> in your workspace.
                 </p>
               </div>
 
@@ -957,7 +940,7 @@ export default function SetupWizard() {
                   ))}
                 </div>
                 <p className="text-[10px] text-navy/35">
-                  They&apos;ll receive the invite link. You can also share it directly from inside your workspace.
+                  Nothing is sent yet. Once your workspace is ready, open Invite in the top bar and these addresses are pre-filled — press Send to email them.
                 </p>
               </div>
 
