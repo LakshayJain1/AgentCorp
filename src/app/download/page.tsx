@@ -21,7 +21,7 @@ const DOWNLOADS: Record<Platform, { label: string; icon: React.ReactNode; format
     label: 'Windows',
     icon: <Laptop className="w-5 h-5" />,
     formats: ['.exe installer', '.portable'],
-    url: '/downloads/AgentCorp-Setup-2.1.1.exe',
+    url: '/downloads/AgentCorp-Setup-2.2.0.exe',
   },
   linux: {
     label: 'Linux',
@@ -33,7 +33,7 @@ const DOWNLOADS: Record<Platform, { label: string; icon: React.ReactNode; format
     label: 'Download',
     icon: <Monitor className="w-5 h-5" />,
     formats: [],
-    url: '/downloads/AgentCorp-Setup-2.1.1.exe',
+    url: '/downloads/AgentCorp-Setup-2.2.0.exe',
   },
 }
 
@@ -121,7 +121,7 @@ export default function DownloadPage() {
             {platform === 'win' && (
               <div className="mt-5 flex items-center justify-center gap-4">
                 <a
-                  href="/downloads/AgentCorp-Setup-2.1.1.exe"
+                  href="/downloads/AgentCorp-Setup-2.2.0.exe"
                   download
                   className="text-xs text-white hover:text-white font-medium underline underline-offset-2"
                 >
@@ -129,7 +129,7 @@ export default function DownloadPage() {
                 </a>
                 <span className="text-navy/20">|</span>
                 <a
-                  href="/downloads/AgentCorp-2.1.1.exe"
+                  href="/downloads/AgentCorp-2.2.0.exe"
                   download
                   className="text-xs text-white hover:text-white font-medium underline underline-offset-2"
                 >
