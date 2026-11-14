@@ -1,5 +1,6 @@
 'use client';
 
+import RoleIcon from '@/components/RoleIcon';
 import { useGameStore, getAgentById } from '@/store/gameStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Agent } from '@/agents/AgentTypes';
@@ -78,7 +79,7 @@ function AgentCard({ agent }: { agent: Agent }) {
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2.5">
           <div className="relative shrink-0">
-            <div className="text-xl">{agent.emoji}</div>
+            <div><RoleIcon role={agent.role} size={24} /></div>
             {agent.online && (
               <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full border-2 border-white/10" />
             )}
@@ -191,7 +192,7 @@ export default function AgentInspector() {
           >
             <div className="flex items-center justify-between mb-3 border-b border-navy/5 pb-2">
               <h4 className="text-navy font-semibold text-xs">
-                {selectedAgent.emoji} {selectedAgent.name}
+                <RoleIcon role={selectedAgent.role} size={14} className="inline -mt-0.5 mr-1" />{selectedAgent.name}
               </h4>
               <button
                 onClick={() => setSelectedAgent(null)}

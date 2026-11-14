@@ -1,6 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
+import RoleIcon from '@/components/RoleIcon';
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -285,7 +286,7 @@ export default function RightPanel() {
                     <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${dot}`} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {agent && <span className="font-bold text-navy/70">{agent.emoji} {agent.name}</span>}
+                        {agent && <span className="font-bold text-navy/70"><RoleIcon role={agent.role} size={13} className="inline -mt-0.5 mr-1" />{agent.name}</span>}
                         <span className="text-[9px] font-mono text-navy/35 bg-white/5 px-1 rounded">{log.tool}</span>
                       </div>
                       <p className="text-navy/60 truncate mt-0.5">{log.action}</p>
@@ -396,7 +397,7 @@ export default function RightPanel() {
                     >
                       <div className="px-3 pb-3 pt-1 border-t border-navy/5">
                         <div className="flex items-center gap-2 text-[10px] text-navy/50 py-2">
-                          {author && <span className="font-bold">By {author.emoji} {author.name}</span>}
+                          {author && <span className="font-bold">By <RoleIcon role={author.role} size={13} className="inline -mt-0.5 mx-0.5" />{author.name}</span>}
                           {author && parentTask && <span>·</span>}
                           {parentTask && (
                             <button

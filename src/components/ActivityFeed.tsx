@@ -1,6 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
+import RoleIcon from '@/components/RoleIcon';
 import { useMemo, useRef, useEffect } from 'react';
 
 const TYPE_STYLES: Record<string, { color: string; label: string }> = {
@@ -47,7 +48,7 @@ export default function ActivityFeed() {
           const style = TYPE_STYLES[act.type] || { color: '#86868B', label: act.type };
           return (
             <div key={act.id} className="flex items-start gap-2 py-1.5 px-2 rounded-lg hover:bg-white/[0.03] transition-colors">
-              <span className="text-sm shrink-0 mt-0.5">{act.agentEmoji}</span>
+              <span className="text-sm shrink-0 mt-0.5"><RoleIcon role={act.agentRole} size={15} /></span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="text-navy font-semibold text-[11px]">{act.agentName}</span>

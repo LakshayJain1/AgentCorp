@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthUser } from '@/hooks/useAuthUser';
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useClerk } from '@clerk/nextjs';
 import ScrumMeeting from '@/components/ScrumMeeting';
 import { Play, Pause, Search, Command, X, UserPlus, Copy, Check, Send, Mail } from 'lucide-react';
 
@@ -14,6 +15,7 @@ export default function TopBar() {
   const { user, isLoading } = useAuthUser();
   const isSignedIn = !isLoading && !!user;
   const router = useRouter();
+  const { signOut } = useClerk();
   const simulation = useGameStore((s) => s.simulation);
   const setPaused = useGameStore((s) => s.setPaused);
   const agents = useGameStore((s) => s.agents);
@@ -206,9 +208,12 @@ export default function TopBar() {
               >
                 Reset
               </button>
-              <a href="/auth/logout" className="hidden md:inline text-[9px] text-navy/40 hover:text-navy/70 font-medium transition-colors">
+              <button
+                onClick={() => { void signOut({ redirectUrl: '/' }); }}
+                className="hidden md:inline text-[9px] text-navy/40 hover:text-navy/70 font-medium transition-colors cursor-pointer"
+              >
                 Sign out
-              </a>
+              </button>
             </div>
           </div>
         )}

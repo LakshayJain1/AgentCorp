@@ -1,6 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
+import RoleIcon from '@/components/RoleIcon';
 import { useMemo, useRef, useEffect } from 'react';
 
 const ROLE_COLORS: Record<string, string> = {
@@ -76,7 +77,7 @@ export default function ConversationPanel() {
                   style={{ borderColor: color, backgroundColor: `${color}15` }}
                   title={msg.fromName}
                 >
-                  {msg.fromEmoji}
+                  <RoleIcon role={msg.fromRole} size={14} />
                 </div>
               )}
               {!isNewSender && <div className="w-7 shrink-0" />}

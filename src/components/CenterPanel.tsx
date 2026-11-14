@@ -1,6 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
+import RoleIcon from '@/components/RoleIcon';
 import { centralOrchestrator } from '@/orchestrator/CentralOrchestrator';
 import { aiService } from '@/ai/AIService';
 import { useMemo, useRef, useEffect, useState } from 'react';
@@ -373,7 +374,7 @@ export default function CenterPanel() {
               >
                 {/* Avatar with Emoji background */}
                 <div className="shrink-0 w-8 h-8 rounded-full bg-surface shadow-sm border border-navy/5 flex items-center justify-center text-sm">
-                  {msg.fromEmoji}
+                  <RoleIcon role={msg.fromRole} size={16} />
                 </div>
                 
                 <div className="flex-1 max-w-[88%] sm:max-w-[80%]">
@@ -430,7 +431,7 @@ export default function CenterPanel() {
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition-colors cursor-pointer text-left"
                   >
-                    <span className="text-base leading-none">{agent.emoji}</span>
+                    <RoleIcon role={agent.role} size={18} />
                     <div>
                       <span className="text-[13px] font-semibold text-navy/90">{agent.name}</span>
                       <span className="text-[11px] text-navy/40 ml-1.5 capitalize">{agent.role}</span>

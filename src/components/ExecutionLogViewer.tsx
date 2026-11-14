@@ -16,7 +16,7 @@ export default function ExecutionLogViewer() {
   const agents = useGameStore((s) => s.agents);
   const agentMap = useMemo(() => {
     const m = new Map<string, string>();
-    for (const a of agents) m.set(a.id, `${a.emoji} ${a.name}`);
+    for (const a of agents) m.set(a.id, a.name);
     return m;
   }, [agents]);
 

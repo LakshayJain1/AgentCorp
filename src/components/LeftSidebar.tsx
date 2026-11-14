@@ -1,5 +1,6 @@
 'use client';
 
+import RoleIcon from '@/components/RoleIcon';
 import { useGameStore } from '@/store/gameStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
@@ -65,7 +66,7 @@ function AgentRow({ agent }: { agent: { id: string; name: string; role: string; 
             className="w-9 h-9 rounded-xl flex items-center justify-center text-sm shadow-sm bg-surface"
             style={{ border: `1px solid ${colorHex}26` }}
           >
-            {agent.emoji}
+            <RoleIcon role={agent.role} size={18} />
           </div>
           <div
             className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${agent.online ? 'bg-[#34C759]' : 'bg-white/15'}`}
@@ -192,7 +193,7 @@ export default function LeftSidebar() {
                     }}
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-white/5 text-left transition-colors cursor-pointer"
                   >
-                    <span className="text-base">{r.emoji}</span>
+                    <RoleIcon role={r.role} size={18} />
                     <div className="min-w-0">
                       <p className="text-[11px] font-bold text-navy">{r.label}</p>
                       <p className="text-[10px] text-navy/45 truncate">{r.description}</p>

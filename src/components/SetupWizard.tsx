@@ -1,6 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
+import RoleIcon from '@/components/RoleIcon';
 import BrandLogo from '@/components/BrandLogo'
 import { completeOnboarding } from '@/app/onboard/_actions';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -329,7 +330,7 @@ export default function SetupWizard() {
                   ].map((agent, i) => (
                     <div key={i} className={`flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r ${agent.color} border border-navy/5`}>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm">{agent.emoji}</span>
+                        <RoleIcon role={agent.role} size={16} />
                         <div className="leading-none">
                           <span className="text-xs font-semibold text-navy block">{agent.name}</span>
                           <span className="text-[9px] text-navy/55">{agent.role} Agent</span>
