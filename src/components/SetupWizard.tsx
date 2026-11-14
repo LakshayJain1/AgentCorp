@@ -217,14 +217,7 @@ export default function SetupWizard() {
 
     // 5. Explicitly navigate to /workspace — don't rely on the useEffect in onboard/page.tsx
     //    which may race against the store update.
-    //    If running inside Electron, redirect to the desktop-redirect route
-    //    which will trigger the deep link back to the desktop app.
-    const isElectron = typeof window !== 'undefined' && window.navigator.userAgent.includes('Electron');
-    if (isElectron) {
-      router.replace('/desktop-redirect');
-    } else {
-      router.replace('/workspace');
-    }
+    router.replace('/workspace');
   };
 
 
