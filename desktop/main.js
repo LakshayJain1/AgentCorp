@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain: rawIpcMain, shell, session, Menu, dialog, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain: rawIpcMain, shell, session, Menu, dialog, safeStorage, powerSaveBlocker, Tray, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -267,6 +267,9 @@ function createMainWindow() {
       sandbox: true, // bug #11 — preload only needs contextBridge/ipcRenderer
       webSecurity: true,
       allowRunningInsecureContent: false,
+      // Agent runs live in the renderer; Chromium must not throttle its timers
+      // when the window is hidden or minimised (C0c).
+      backgroundThrottling: false,
     },
     show: true,
     backgroundColor: '#FAFBFD',
@@ -328,6 +331,24 @@ function createMainWindow() {
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     log('RENDERER CRASHED:', JSON.stringify(details));
+  });
+
+  // C0c: closing the window mid-run must not silently kill the run.
+  mainWindow.on('close', (event) => {
+    if (forceQuit || activeRunCount === 0) return;
+    event.preventDefault();
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+      type: 'question',
+      buttons: ['Keep running in the background', 'Quit and stop the run', 'Cancel'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+      title: 'AgentCorp',
+      message: 'An agent run is still in progress',
+      detail: 'Hide the window and let it finish, or quit now and lose the run in progress.',
+    });
+    if (choice === 0) { ensureTray(); mainWindow.hide(); }
+    else if (choice === 1) { forceQuit = true; app.quit(); }
   });
 
   mainWindow.on('closed', () => { mainWindow = null; });
@@ -392,11 +413,20 @@ ipcMain.handle('auth:open-browser', (_event, url) => {
   openExternalSafe(url);
 }, LOCAL_OK);
 
+// ipcVersion lets the hosted web app (which updates instantly) tell when this
+// installed shell is too old for a tool, instead of failing mid-run (C0d).
+//   1 = fs read/write/search, allowlisted exec, BYOK keys
+//   2 = + fs:list, exec:run-approved (native approval), runs:set-active, checks on the picked folder
+const IPC_VERSION = 2;
+const IPC_FEATURES = ['fs', 'fs-list', 'exec', 'exec-approved', 'checks', 'runs', 'apikey'];
+
 ipcMain.handle('app:get-info', () => ({
   platform: process.platform,
   version: app.getVersion(),
   isDev,
   webUrl: WEB_URL,
+  ipcVersion: IPC_VERSION,
+  features: IPC_FEATURES,
 }), LOCAL_OK);
 
 // ─── Allowlisted command runner (bugs #3, #4) ───────────────────────
@@ -449,7 +479,9 @@ function runAllowed(spec, cwd, timeoutMs) {
       maxBuffer: 1024 * 512,
       env: safeEnv(),
       windowsHide: true,
-      shell: process.platform === 'win32',
+      // npm/npx are .cmd shims on Windows and need a shell; git does not, and a
+      // shell would split commit messages on spaces.
+      shell: spec.shell !== undefined ? spec.shell : process.platform === 'win32',
     }, (err, stdout, stderr) => {
       clearTimeout(timer);
       const out = `${stdout || ''}${stderr || ''}`.slice(-4000);
@@ -466,18 +498,16 @@ const ALLOWED_CHECKS = {
   test: { cmd: 'npx', args: ['vitest', 'run'] },
 };
 
-function workspaceDir(workspaceId) {
-  const safe = String(workspaceId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
-  if (!safe) return null;
-  return path.join(app.getPath('userData'), 'workspaces', safe);
-}
-
+// C0b: checks run in the SAME folder the agent edits through fs:* — the one the
+// user picked in the native dialog — never in a separate per-workspace clone.
+// `workspaceId` is accepted for backwards compatibility with older web builds
+// and ignored.
 ipcMain.handle('checks:run', async (_event, payload) => {
-  const { workspaceId, check } = payload || {};
+  const { check } = payload || {};
   const def = Object.prototype.hasOwnProperty.call(ALLOWED_CHECKS, check) ? ALLOWED_CHECKS[check] : null;
-  const cwd = workspaceDir(workspaceId);
-  if (!def || !cwd) return { success: false, error: 'denied: unknown check or workspace' };
-  if (!fs.existsSync(cwd)) return { success: false, error: 'denied: workspace not cloned on this machine' };
+  if (!def) return { success: false, error: 'denied: unknown check' };
+  const cwd = resolveWorkspacePath('.');
+  if (!cwd) return { success: false, error: 'denied: no workspace folder chosen' };
   const spec = resolveAllowedCommand(def.cmd, def.args);
   if (!spec) return { success: false, error: 'denied: command not allowed' };
   const r = await runAllowed(spec, cwd, 115000);
@@ -642,6 +672,166 @@ ipcMain.handle('exec:run', async (_event, payload) => {
   if (!spec) return { ok: false, error: `denied: '${String(cmd).slice(0, 40)}' with these arguments is not allowed` };
   return runAllowed(spec, cwd, 115000);
 });
+
+// ─── fs:list — directory listing inside the workspace (agents need to see structure) ─
+const LIST_SKIP = new Set(['node_modules', '.git', '.next', 'dist', 'build', 'out', '.turbo', 'coverage', '.vercel']);
+ipcMain.handle('fs:list', (_event, relDir) => {
+  const abs = resolveWorkspacePath(relDir || '.');
+  if (!abs) return { ok: false, error: 'denied: outside workspace or no workspace set' };
+  try {
+    const entries = fs.readdirSync(abs, { withFileTypes: true })
+      .filter((e) => !LIST_SKIP.has(e.name))
+      .slice(0, 300)
+      .map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
+    return { ok: true, entries };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+// ─── Tier-2 commands (C0e) ──────────────────────────────────────────
+// Tier 1 (resolveAllowedCommand above) runs without asking: type-checks, lint,
+// tests, fixed npm scripts. Tier 2 can change the machine or the repo
+// (installing packages, git add/commit, other npm scripts), so it ONLY runs
+// after a NATIVE dialog the user clicks — the web page cannot approve its own
+// request. Deny stays the default: anything not matched here is refused.
+// Never allowed: node -e, shell metacharacters, absolute paths, "..", git
+// config/push/reset/clean/checkout, arbitrary executables.
+const GIT_SUBCOMMANDS = new Set(['status', 'diff', 'log', 'add', 'commit']);
+const GIT_SAFE_FLAGS = new Set(['--stat', '--name-only', '--name-status', '--oneline', '--cached', '--staged', '--short', '-s', '-b', '--porcelain', '-n', '-m', '-A', '--all']);
+const NPM_INSTALL_FLAGS = new Set(['--save-dev', '-D', '--save-exact', '-E', '--no-audit', '--no-fund', '--legacy-peer-deps']);
+const COMMIT_MSG = /^[A-Za-z0-9 _.,:()'\/#@+!?-]{1,200}$/; // no ; | & $ ` < > \ or quotes: stays inert even if a shell is ever involved
+const NPM_RUN_NAME = /^[A-Za-z0-9:_-]{1,40}$/;
+const approvedKeys = new Set(); // session-only "allow this kind for this folder"
+
+function safePathArg(a) {
+  return typeof a === 'string' && SAFE_ARG.test(a) && !a.split('/').includes('..') && !a.startsWith('/') && !/^[A-Za-z]:/.test(a);
+}
+
+function resolveTier2Command(cmd, args) {
+  args = Array.isArray(args) ? args : [];
+  if (args.length === 0 || args.length > 24) return null;
+  const win = process.platform === 'win32';
+
+  if (cmd === 'git') {
+    const sub = args[0];
+    if (!GIT_SUBCOMMANDS.has(sub)) return null;
+    const rest = args.slice(1);
+    let expectMsg = false;
+    for (const a of rest) {
+      if (typeof a !== 'string' || a.length === 0 || a.length > 200 || a.includes('\0')) return null;
+      if (expectMsg) { if (!COMMIT_MSG.test(a)) return null; expectMsg = false; continue; }
+      if (a.startsWith('-')) {
+        if (!GIT_SAFE_FLAGS.has(a)) return null;
+        if (a === '-m') { if (sub !== 'commit') return null; expectMsg = true; }
+        continue;
+      }
+      if (!safePathArg(a)) return null;
+    }
+    if (expectMsg) return null;
+    if (sub === 'commit' && !rest.includes('-m')) return null; // never open an editor
+    return { file: 'git', args: [sub, ...rest], label: ['git', ...args].join(' '), key: `git:${sub}`, shell: false, timeout: 60000 };
+  }
+
+  if (cmd === 'npm') {
+    const sub = args[0];
+    if (sub === 'install' || sub === 'i' || sub === 'ci') {
+      const rest = args.slice(1);
+      for (const a of rest) {
+        if (typeof a !== 'string' || a.length > 100 || !SAFE_ARG.test(a)) return null;
+        if (a.startsWith('-')) { if (!NPM_INSTALL_FLAGS.has(a)) return null; continue; }
+        // package spec only: name, name@range, @scope/name — never URLs, git specs or paths
+        if (a.includes(':') || a.split('/').includes('..')) return null;
+        if (a.includes('/') && !a.startsWith('@')) return null;
+      }
+      // Lifecycle scripts of arbitrary packages are the main install-time attack
+      // surface, so they are always disabled here.
+      return { file: 'npm', args: [sub, '--ignore-scripts', ...rest], label: ['npm', ...args].join(' '), key: 'npm:install', shell: win, timeout: 300000 };
+    }
+    if (sub === 'run' && args.length === 2 && NPM_RUN_NAME.test(args[1]) && !NPM_SCRIPTS.has(args[1])) {
+      return { file: 'npm', args: ['run', args[1]], label: `npm run ${args[1]}`, key: `npm:run:${args[1]}`, shell: win, timeout: 115000 };
+    }
+  }
+  return null;
+}
+
+async function approveTier2(spec, cwd) {
+  const memo = `${workspaceRoot}::${spec.key}`;
+  if (approvedKeys.has(memo)) return true;
+  const opts = {
+    type: 'question',
+    buttons: ['Allow once', 'Allow this kind of command in this folder', 'Deny'],
+    defaultId: 2,
+    cancelId: 2,
+    noLink: true,
+    title: 'AgentCorp: approve command',
+    message: 'An agent wants to run a command on your computer',
+    detail: `${spec.label}\n\nFolder: ${cwd}${spec.args.includes('--ignore-scripts') ? '\n\nPackage install scripts are disabled for safety.' : ''}`,
+  };
+  const { response } = (mainWindow && !mainWindow.isDestroyed())
+    ? await dialog.showMessageBox(mainWindow, opts)
+    : await dialog.showMessageBox(opts);
+  if (response === 1) { approvedKeys.add(memo); return true; }
+  return response === 0;
+}
+
+ipcMain.handle('exec:run-approved', async (_event, payload) => {
+  const { cmd, args, relCwd } = payload || {};
+  const cwd = resolveWorkspacePath(relCwd || '.');
+  if (!cwd) return { ok: false, denied: true, error: 'denied: outside workspace or no workspace set' };
+  const spec = typeof cmd === 'string' ? resolveTier2Command(cmd, args) : null;
+  if (!spec) return { ok: false, denied: true, error: `denied: '${String(cmd).slice(0, 40)}' with these arguments is not allowed` };
+  if (!(await approveTier2(spec, cwd))) return { ok: false, denied: true, error: 'denied: the user declined this command' };
+  return runAllowed(spec, cwd, spec.timeout);
+});
+
+// ─── Keep-alive while agents are working (C0c) ──────────────────────
+// Runs live in the renderer, so the window must stay alive and the machine
+// awake while one is active: block system suspend, and offer to hide to the
+// tray instead of closing.
+let activeRunCount = 0;
+let powerBlockerId = null;
+let forceQuit = false;
+let tray = null;
+
+function showMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); }
+}
+
+function ensureTray() {
+  if (tray) return;
+  try {
+    const img = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')).resize({ width: 16, height: 16 });
+    tray = new Tray(img);
+    tray.setToolTip('AgentCorp: a run is in progress');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Show AgentCorp', click: showMainWindow },
+      { label: 'Quit', click: () => { forceQuit = true; app.quit(); } },
+    ]));
+    tray.on('click', showMainWindow);
+  } catch (e) {
+    log('tray failed:', e && e.message);
+  }
+}
+
+function destroyTray() {
+  if (tray) { try { tray.destroy(); } catch { /* ignore */ } tray = null; }
+}
+
+ipcMain.handle('runs:set-active', (_event, count) => {
+  const n = Number.isFinite(count) ? Math.max(0, Math.min(99, Math.floor(count))) : 0;
+  activeRunCount = n;
+  if (n > 0 && powerBlockerId === null) {
+    powerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+  } else if (n === 0) {
+    if (powerBlockerId !== null) { try { powerSaveBlocker.stop(powerBlockerId); } catch { /* ignore */ } powerBlockerId = null; }
+    // Finished while hidden: bring the result back to the user.
+    if (tray) { destroyTray(); showMainWindow(); }
+  }
+  return { ok: true };
+});
+
+app.on('before-quit', () => { forceQuit = true; });
 
 // ─── App lifecycle ──────────────────────────────────────────────────
 app.whenReady().then(() => {

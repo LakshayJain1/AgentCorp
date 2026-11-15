@@ -61,6 +61,14 @@ declare global {
   interface Window {
     agentcorpDesktop?: { available?: boolean };
     electronAPI?: {
+      getInfo?: () => Promise<{ platform?: string; version?: string; isDev?: boolean; webUrl?: string; ipcVersion?: number; features?: string[] }>;
+      apiKey?: {
+        get: (provider: string) => Promise<string | null>;
+        set: (provider: string, value: string) => Promise<boolean>;
+        listProviders: () => Promise<string[]>;
+      };
+      /** Reports whether agent runs are active so the shell can stay awake / ask before closing. */
+      runs?: { setActive: (count: number) => Promise<{ ok: boolean }> };
       workspace?: {
         setRoot: () => Promise<{ ok: boolean; root?: string; error?: string }>;
         getRoot: () => Promise<string | null>;
@@ -70,9 +78,14 @@ declare global {
         read: (relPath: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
         write: (relPath: string, content: string) => Promise<{ ok: boolean; error?: string }>;
         search: (pattern: string, relDir?: string) => Promise<{ ok: boolean; output?: string; error?: string }>;
+        list?: (relDir?: string) => Promise<{ ok: boolean; entries?: string[]; error?: string }>;
       };
+      runChecks?: (workspaceId: string, check: string) => Promise<{ success: boolean; check?: string; output?: string; error?: string }>;
+      listChecks?: () => Promise<string[]>;
       exec: {
         run: (cmd: string, args: string[], relCwd?: string) => Promise<{ ok: boolean; output?: string; error?: string }>;
+        /** Tier-2 commands (npm install, git …). The desktop shell shows a native approval dialog. */
+        runApproved?: (cmd: string, args: string[], relCwd?: string) => Promise<{ ok: boolean; output?: string; error?: string; denied?: boolean }>;
       };
     };
   }

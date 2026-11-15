@@ -20,6 +20,11 @@ interface RequestBody {
   action?: string;
   temperature?: number;
   model?: string;
+  /** When true the response is a text/event-stream of `{delta}` events instead of JSON. */
+  stream?: boolean;
+  maxTokens?: number;
+  /** Don't offer server-side integration tools (the agent loop gates those itself). */
+  noTools?: boolean;
 }
 
 interface ToolCallResult {
@@ -58,7 +63,7 @@ async function callOpenRouter(
 
   messages.push({ role: 'user', content: body.prompt });
 
-  const tools = listServerToolsAsOpenAI();
+  const tools = body.noTools ? [] : listServerToolsAsOpenAI();
 
   for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
     const response = await fetch(API_URL, {
@@ -71,7 +76,7 @@ async function callOpenRouter(
         model: body.model || 'openai/gpt-4o-mini',
         messages,
         temperature: body.temperature ?? 0.3,
-        max_tokens: 4096,
+        max_tokens: Math.min(body.maxTokens ?? 4096, 4096),
         ...(tools.length > 0 ? { tools } : {}),
       }),
     });
@@ -186,6 +191,93 @@ async function callGeminiFallback(body: RequestBody): Promise<string | null> {
   return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
 }
 
+const encoder = new TextEncoder();
+const sse = (obj: unknown): Uint8Array => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
+
+/**
+ * Streams plain assistant text from OpenRouter as SSE `{delta}` events.
+ * Server-side integration tools are intentionally not offered here: this path
+ * is for summaries and chat replies, where we want tokens on screen quickly.
+ * Falls back to Gemini (single delta) if OpenRouter is unavailable.
+ */
+function streamCompletion(body: RequestBody, openRouterKey: string): Response {
+  const messages: OpenRouterMessage[] = [];
+  if (body.systemPrompt) {
+    const contextStr = body.context
+      ? `\n\nAdditional context:\n${Object.entries(body.context).map(([k, v]) => `${k}: ${v}`).join('\n')}`
+      : '';
+    messages.push({ role: 'system', content: body.systemPrompt + contextStr });
+  }
+  messages.push({ role: 'user', content: body.prompt });
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let sent = false;
+      try {
+        if (openRouterKey) {
+          const upstream = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openRouterKey}` },
+            body: JSON.stringify({
+              model: body.model || 'openai/gpt-4o-mini',
+              messages,
+              temperature: body.temperature ?? 0.3,
+              max_tokens: body.maxTokens ?? 1024,
+              stream: true,
+            }),
+          });
+          if (upstream.ok && upstream.body) {
+            const reader = upstream.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            for (;;) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              let nl: number;
+              while ((nl = buffer.indexOf('\n')) >= 0) {
+                const line = buffer.slice(0, nl).trim();
+                buffer = buffer.slice(nl + 1);
+                if (!line.startsWith('data:')) continue;
+                const payload = line.slice(5).trim();
+                if (!payload || payload === '[DONE]') continue;
+                try {
+                  const delta = JSON.parse(payload)?.choices?.[0]?.delta?.content;
+                  if (typeof delta === 'string' && delta.length > 0) {
+                    controller.enqueue(sse({ delta }));
+                    sent = true;
+                  }
+                } catch { /* keep-alive comments / partial JSON */ }
+              }
+            }
+          } else {
+            console.error('OpenRouter stream error:', upstream.status, await upstream.text().catch(() => ''));
+          }
+        }
+        if (!sent && GEMINI_API_KEY) {
+          const text = await callGeminiFallback(body);
+          if (text) { controller.enqueue(sse({ delta: text.trim() })); sent = true; }
+        }
+        if (!sent) controller.enqueue(sse({ error: 'AI provider returned empty response' }));
+      } catch (err) {
+        console.error('AI stream error:', err);
+        controller.enqueue(sse({ error: 'stream failed' }));
+      } finally {
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+    },
+  });
+}
+
 export async function POST(req: NextRequest) {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -225,6 +317,8 @@ export async function POST(req: NextRequest) {
         mock: true,
       });
     }
+
+    if (body.stream === true) return streamCompletion(body, hasOpenRouter ? effectiveOpenRouterKey : '');
 
     // Resolve the caller's workspace once so provider tools can fetch their
     // decrypted token. Absent DB config is handled by getToken -> 503.

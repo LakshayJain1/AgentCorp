@@ -6,6 +6,7 @@ import { Agent, Task, SubTask, ValidationResult, GameEvent, SimulationState, Age
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
 import { configLoader } from '@/config/ConfigLoader';
 import { toOfficeLocations } from '@/game/pixi/PixiOfficeLayout';
+import { publishFromExecutionLog } from '@/engine/runBridge';
 
 const DEFAULT_TASK_TITLES = [
   'Analyze customer feedback', 'Fix API issue', 'Review compliance report', 'Prepare deployment',
@@ -79,7 +80,10 @@ export async function loadGameConfig(): Promise<void> {
           emoji: row.Emoji || '❓',
         };
       }
-      cachedAgentNames = names as Record<AgentRole, { name: string; color: number; emoji: string }>;
+      // The config table only lists some roles (sales/finance/ops are missing), but
+      // initAgents() creates all of them. Layer the config over the defaults so a
+      // missing row can never leave a role without a name.
+      cachedAgentNames = { ...DEFAULT_AGENT_NAMES, ...names } as Record<AgentRole, { name: string; color: number; emoji: string }>;
     }
 
     // Office locations table
@@ -95,6 +99,9 @@ export async function loadGameConfig(): Promise<void> {
         width: parseInt(r.Width || '80'),
         height: parseInt(r.Height || '60'),
       }));
+      // Same for desks: keep default locations for roles the config doesn't place.
+      const placed = new Set(cachedOfficeLocations.map((l) => l.role));
+      cachedOfficeLocations = [...cachedOfficeLocations, ...DEFAULT_OFFICE_LOCATIONS.filter((l) => !placed.has(l.role))];
     }
 
     // Extra developer names
@@ -782,6 +789,8 @@ export const useGameStore = create<GameStore>()(
   },
 
   addTaskExecutionLog: (taskId, log) => {
+    // Mirror into the unified run-event stream (chat steps block, execution log panel).
+    try { publishFromExecutionLog(taskId, log); } catch (e) { console.warn('[runEvents] mirror failed:', e); }
     set((state) => ({
       tasks: state.tasks.map((t) =>
         t.id === taskId ? { ...t, executionLogs: [...t.executionLogs.slice(-99), log] } : t,

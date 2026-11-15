@@ -2,15 +2,12 @@ import { Application, Ticker } from 'pixi.js';
 import { AgentManager } from './AgentManager';
 import { UIOverlay } from './UIOverlay';
 import { useGameStore } from '@/store/gameStore';
-import { centralOrchestrator } from '@/orchestrator/CentralOrchestrator';
-import { updateAgentMoods } from '@/systems/ConversationSystem';
 
 export class SimulationLoop {
   private app: Application;
   private agentManager: AgentManager;
   private uiOverlay: UIOverlay;
   private frameCount = 0;
-  private processing = false;
   private lastTime = 0;
   private running = false;
 
@@ -63,22 +60,8 @@ export class SimulationLoop {
     const adjustedDt = dt * speed;
     this.frameCount++;
 
-    // CentralOrchestrator tick (~30 frames at speed 1)
-    const orchestratorInterval = Math.max(1, Math.floor(30 / speed));
-    if (this.frameCount % orchestratorInterval === 0) {
-      if (!this.processing) {
-        this.processing = true;
-        centralOrchestrator.tick().finally(() => {
-          this.processing = false;
-        });
-      }
-    }
-
-    // Agent mood decay (energy-driven, no chatter)
-    const moodInterval = Math.max(1, Math.floor(20 / speed));
-    if (this.frameCount % moodInterval === 0) {
-      updateAgentMoods();
-    }
+    // NOTE: the orchestrator tick, mood decay and simulation metrics live in
+    // EngineRuntime now — this loop is visual only.
 
     // Update agents
     this.agentManager.update(adjustedDt, speed);
@@ -89,7 +72,6 @@ export class SimulationLoop {
     // Sync entities to store (every 6 frames = 10fps at 60fps)
     if (this.frameCount % 6 === 0) {
       this.syncAgentsToStore();
-      this.syncSimulationMetrics();
     }
 
     // Update UI
@@ -129,27 +111,5 @@ export class SimulationLoop {
 
   isRunning(): boolean {
     return this.running;
-  }
-
-  private syncSimulationMetrics(): void {
-    const store = useGameStore.getState();
-    const entities = this.agentManager.getAllAgents();
-    
-    // Calculate CPU usage based on active agents and their state
-    const activeAgents = entities.filter(a => a.workStatus !== 'idle').length;
-    const workingAgents = entities.filter(a => a.workStatus === 'coding' || a.workStatus === 'debugging' || a.workStatus === 'researching').length;
-    
-    // CPU usage: base 15% + 5% per active agent + 3% per working agent
-    const cpuUsage = Math.min(95, 15 + activeAgents * 5 + workingAgents * 3);
-    
-    // Memory usage: base 2.0 GB + 0.1 GB per agent + 0.05 GB per task
-    const memoryUsage = Math.min(8.0, 2.0 + entities.length * 0.1 + store.tasks.length * 0.05);
-    
-    // Update simulation metrics
-    store.updateSimulation({
-      cpuUsage: Math.round(cpuUsage),
-      memoryUsage: Number(memoryUsage.toFixed(1)),
-      tick: store.simulation.tick + 1,
-    });
   }
 }

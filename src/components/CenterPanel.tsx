@@ -4,6 +4,9 @@ import { useGameStore } from '@/store/gameStore';
 import RoleIcon from '@/components/RoleIcon';
 import { centralOrchestrator } from '@/orchestrator/CentralOrchestrator';
 import { aiService } from '@/ai/AIService';
+import RunSteps from '@/components/RunSteps';
+import ApprovalPrompts from '@/components/ApprovalPrompts';
+import { useRunStore } from '@/engine/runEvents';
 import { useMemo, useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -30,7 +33,8 @@ const GameCanvas = dynamic(() => import('@/game/GameCanvas'), {
 
 type ChatMessage =
   | { kind: 'agent'; id: string; fromName: string; fromEmoji: string; fromRole: string; toName: string; message: string; timestamp: number }
-  | { kind: 'user'; id: string; message: string; timestamp: number };
+  | { kind: 'user'; id: string; message: string; timestamp: number }
+  | { kind: 'run'; id: string; taskId: string; agentId?: string; message: string; timestamp: number };
 
 export default function CenterPanel() {
   const centerView = useGameStore((s) => s.centerView);
@@ -63,6 +67,10 @@ export default function CenterPanel() {
     ).slice(0, 6);
   }, [agents, mentionQuery]);
 
+  const runs = useRunStore((s) => s.runs);
+  const runOrder = useRunStore((s) => s.order);
+  const lastRunEventAt = useRunStore((s) => s.lastEventAt);
+
   const allMessages = useMemo(() => {
     const seen = new Set<string>();
     const msgs: ChatMessage[] = [];
@@ -87,8 +95,22 @@ export default function CenterPanel() {
     for (const um of userMessages) {
       msgs.push({ kind: 'user', id: um.id, message: um.message, timestamp: um.timestamp });
     }
+    // One inline "steps" block per run: what the team is doing, in the conversation itself.
+    for (const runId of runOrder) {
+      const run = runs[runId];
+      if (!run) continue;
+      msgs.push({
+        kind: 'run',
+        id: `run_${runId}`,
+        taskId: run.taskId,
+        agentId: run.agentId,
+        // Used as chat history for the AI, so a follow-up can refer to what the run produced.
+        message: run.summary ? `[${run.title}] ${run.summary}` : '',
+        timestamp: run.startedAt,
+      });
+    }
     return msgs.sort((a, b) => a.timestamp - b.timestamp);
-  }, [agents, userMessages]);
+  }, [agents, userMessages, runs, runOrder]);
 
   const filteredMessages = useMemo(() => {
     if (!selectedAgentId) return allMessages;
@@ -96,6 +118,7 @@ export default function CenterPanel() {
       if (m.kind === 'user') return true;
       const agent = agents.find((a) => a.id === selectedAgentId);
       if (!agent) return true;
+      if (m.kind === 'run') return m.agentId === agent.id;
       return m.fromName === agent.name || m.toName === agent.name;
     });
   }, [allMessages, selectedAgentId, agents]);
@@ -103,6 +126,13 @@ export default function CenterPanel() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [filteredMessages.length]);
+
+  // As a run streams steps/summary, follow it — but only if the reader is already near the bottom.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+  }, [lastRunEventAt]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -112,7 +142,7 @@ export default function CenterPanel() {
       : text;
     addUserMessage(fullText);
     // Build last 6 turns of history so the AI has conversational context
-    const history = allMessages.slice(-6).map((m) => ({
+    const history = allMessages.filter((m) => m.message).slice(-6).map((m) => ({
       role: m.kind === 'user' ? 'user' as const : 'agent' as const,
       text: m.message,
     }));
@@ -144,10 +174,11 @@ export default function CenterPanel() {
   };
 
   const handleExportChat = () => {
-    const lines = allMessages.map((m) => {
+    const lines = allMessages.flatMap((m) => {
       const time = new Date(m.timestamp).toLocaleString();
-      if (m.kind === 'user') return `[${time}] YOU: ${m.message}`;
-      return `[${time}] ${m.fromName} (${m.fromRole}) -> ${m.toName}: ${m.message}`;
+      if (m.kind === 'user') return [`[${time}] YOU: ${m.message}`];
+      if (m.kind === 'run') return m.message ? [`[${time}] RUN SUMMARY: ${m.message}`] : [];
+      return [`[${time}] ${m.fromName} (${m.fromRole}) -> ${m.toName}: ${m.message}`];
     });
     const blob = new Blob([`# AgentCorp Chat Export\n\n${lines.join('\n')}\n`], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
@@ -341,6 +372,9 @@ export default function CenterPanel() {
             </div>
           )}
           {filteredMessages.map((msg) => {
+            if (msg.kind === 'run') {
+              return <RunSteps key={msg.id} taskId={msg.taskId} />;
+            }
             if (msg.kind === 'user') {
               return (
                 <motion.div
@@ -397,6 +431,8 @@ export default function CenterPanel() {
             );
           })}
         </div>
+
+        <ApprovalPrompts />
 
         {/* Input Bar */}
         <div className="shrink-0 px-3 sm:px-5 py-3 sm:py-4 border-t glass-divider bg-white/[0.06] relative">
@@ -528,7 +564,8 @@ export default function CenterPanel() {
 
       {/* Office View - always mounted, hidden via CSS */}
       <div className={`flex-1 p-3 min-h-0 flex flex-col ${centerView === 'office' ? '' : 'hidden'}`}>
-        <GameCanvas />
+        {/* Mounted only while the Office tab is open: no WebGL context until someone looks at it. */}
+        {centerView === 'office' && <GameCanvas />}
       </div>
     </div>
   );

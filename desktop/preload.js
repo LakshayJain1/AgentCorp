@@ -35,11 +35,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     read: (relPath) => ipcRenderer.invoke('fs:read', relPath),
     write: (relPath, content) => ipcRenderer.invoke('fs:write', relPath, content),
     search: (pattern, relDir) => ipcRenderer.invoke('fs:search', pattern, relDir),
+    list: (relDir) => ipcRenderer.invoke('fs:list', relDir),
   },
 
   // Desktop exec — allowlisted tools only (tsc/eslint/vitest via npx, npm test/run <script>)
   exec: {
     run: (cmd, args, relCwd) => ipcRenderer.invoke('exec:run', { cmd, args, relCwd }),
+    // Tier 2 (npm install, git add/commit, other npm scripts): the main process
+    // shows a native approval dialog; this page cannot approve for itself.
+    runApproved: (cmd, args, relCwd) => ipcRenderer.invoke('exec:run-approved', { cmd, args, relCwd }),
+  },
+
+  // Tells the shell how many agent runs are active (keeps the machine awake and
+  // offers to hide to the tray instead of closing).
+  runs: {
+    setActive: (count) => ipcRenderer.invoke('runs:set-active', count),
   },
 
   // Platform

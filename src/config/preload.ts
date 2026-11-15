@@ -3,12 +3,19 @@ import { loadGameConfig } from '@/store/gameStore';
 import { loadIntentPatterns } from '@/ai/IntentClassifier';
 import { configLoader } from './ConfigLoader';
 
-let preloaded = false;
+let preloadPromise: Promise<void> | null = null;
 
-export async function preloadAllConfigs(): Promise<void> {
-  if (preloaded) return;
-  preloaded = true;
+/**
+ * Memoized by promise, not by flag: a second caller (React strict-mode double
+ * effect, engine restart) must wait for the first load to finish rather than
+ * return early while configs are still being parsed.
+ */
+export function preloadAllConfigs(): Promise<void> {
+  if (!preloadPromise) preloadPromise = doPreload();
+  return preloadPromise;
+}
 
+async function doPreload(): Promise<void> {
   try {
     // Fetch all config files in parallel
     await Promise.all([

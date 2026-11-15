@@ -12,6 +12,7 @@ import { useGameStore } from '@/store/gameStore';
 import { useOrgBroadcast } from '@/hooks/useOrgBroadcast';
 import { Users, MessageSquare, BarChart2 } from 'lucide-react';
 import { useAuthUser } from '@/hooks/useAuthUser';
+import { startEngine, stopEngine } from '@/engine/EngineRuntime';
 
 function WorkspacePageInner() {
   const router = useRouter();
@@ -33,6 +34,15 @@ function WorkspacePageInner() {
     if (useGameStore.persist.hasHydrated()) setHydrated(true);
     return unsub;
   }, []);
+
+  // The engine (agents, workers, orchestrator tick) is independent of the 2D
+  // office: it starts as soon as the workspace is ready, in viewer mode never.
+  const engineReady = hydrated && isInitialized && !!user && !inviteOrgId;
+  useEffect(() => {
+    if (!engineReady) return;
+    startEngine().catch((err) => console.error('[Workspace] engine failed to start:', err));
+    return () => stopEngine();
+  }, [engineReady]);
 
   // Signed out → email-code sign-in in onboarding. An invite link keeps its
   // workspace id so we come straight back to the invited workspace afterwards.

@@ -207,6 +207,15 @@ export interface TaskExecutionLog {
   status: 'running' | 'success' | 'error';
 }
 
+export interface TaskCriterion {
+  id: string;
+  text: string;
+  /** check = verified by running a project check, file = by looking for a file, llm = judged from the deliverable. */
+  kind: 'check' | 'file' | 'llm';
+  check?: 'typecheck' | 'lint' | 'test';
+  path?: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -228,6 +237,8 @@ export interface Task {
   parentTaskId: string | null;
   validationResult?: ValidationResult;
   plannerOutput?: string;
+  /** 2-5 checkable statements written at triage; QA verifies the work against them. */
+  acceptanceCriteria?: TaskCriterion[];
   // P4: per-task isolation on the USER's repo. When set, the planner ensures a
   // dedicated branch and all subtasks inherit repoRef {repo, ref: taskBranch}.
   repoScope?: { repo: string; base?: string };

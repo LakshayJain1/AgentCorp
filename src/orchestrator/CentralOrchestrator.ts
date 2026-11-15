@@ -21,6 +21,21 @@ import { MAX_VALIDATION_RETRIES } from './LoopTypes';
 import { aiService } from '@/ai/AIService';
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
 import { announceTaskHandoff } from '@/systems/ConversationSystem';
+import { streamAI } from '@/ai/stream';
+import { emitRun, publishFromChunk } from '@/engine/runBridge';
+import { useRunStore, type CriterionResult } from '@/engine/runEvents';
+import { runAgentLoop, type LoopResult, type LoopStatus } from '@/engine/AgentLoop';
+import { resolveTools } from '@/engine/tools';
+import { defaultBudget } from '@/engine/budget';
+import { explainLoopBlocker } from '@/engine/desktopCaps';
+import { modelAvailable } from '@/engine/model';
+import { generateCriteria, verifyCriteria, verdictOf, failureFeedback, type Criterion, type VerifyDeps } from '@/engine/criteria';
+import { registerRun, unregisterRun, setResumeHandler, discardInterruptedRun } from '@/engine/runControl';
+import { saveCheckpoint, loadCheckpoint, clearCheckpoint, type LoopCheckpoint } from '@/engine/runPersistence';
+import { detectExecutorEnv } from '@/execution/ToolExecutor';
+
+/** How many times QA may send a finished loop back to the agent before flagging it for a human. */
+const MAX_QA_RETRIES = 2;
 
 export class CentralOrchestrator {
   private planner: PlannerAgent;
@@ -49,6 +64,9 @@ export class CentralOrchestrator {
       }),
     });
     this.logStream = new ExecutionLogStream();
+    // Pipeline (planner/queue) progress feeds the same run-event stream the chat reads.
+    this.logStream.onChunk(publishFromChunk);
+    setResumeHandler((taskId) => this.resumeRun(taskId));
     console.log('[AgentCorp] CentralOrchestrator constructed');
   }
 
@@ -451,6 +469,13 @@ export class CentralOrchestrator {
             store.completeTask(parentTask.id);
           }
         }
+        emitRun(parentTask.id, {
+          kind: hasFailures ? 'run.failed' : 'run.finished',
+          agentId: agent.id,
+          status: hasFailures ? 'error' : 'success',
+          message: hasFailures ? 'Finished with failed subtasks' : 'All subtasks finished',
+          data: hasFailures ? undefined : { verdict: 'passed' },
+        });
         this.emit({
           type: 'status',
           data: { taskId: parentTask.id, status: hasFailures ? 'partial' : 'completed' },
@@ -473,6 +498,15 @@ export class CentralOrchestrator {
 
       store.updateSubtaskStatus(subtask.id, passed ? 'completed' : 'failed');
       store.updateSubtaskValidation(subtask.id, validation.result);
+      emitRun(subtask.parentTaskId, {
+        kind: 'validation.result',
+        subtaskId: subtask.id,
+        agentId: subtask.assignedAgentId ?? undefined,
+        status: passed ? 'success' : 'error',
+        message: `Validation ${passed ? 'passed' : 'failed'} (score ${validation.result.score})`,
+        detail: validation.result.details.join('\n'),
+        data: { stepId: `val_${subtask.id}_${validation.result.validatedAt}` },
+      });
 
       if (!passed) {
         const storeNow = useGameStore.getState();
@@ -497,6 +531,14 @@ export class CentralOrchestrator {
             currentSubTaskId: subtask.id,
           });
           this.taskQueue.reEnqueue(subtask, validation.result.details);
+          emitRun(subtask.parentTaskId, {
+            kind: 'retry',
+            subtaskId: subtask.id,
+            agentId: agent.id,
+            status: 'running',
+            message: `Retry #${currentRetries + 1}: "${subtask.description.slice(0, 50)}"`,
+            detail: validation.result.details.join('\n'),
+          });
           const parent = storeNow.tasks.find((t) => t.id === subtask.parentTaskId);
           const pm = storeNow.agents.find((a) => a.role === 'pm');
           if (parent && pm && pm.id !== agent.id) {
@@ -724,10 +766,257 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
   }
 
   /**
-   * Execute a task directly using AI, bypassing the full CEO/PM/Planner pipeline.
-   * Used for user-created tasks that should be handled immediately.
+   * Re-run an interrupted task. A tool loop continues from its last saved step;
+   * a single-shot task simply runs again.
    */
-  private async executeDirectTask(task: Task, forcedWorkerId?: string): Promise<void> {
+  async resumeRun(taskId: string): Promise<void> {
+    const store = useGameStore.getState();
+    const task = store.tasks.find((t) => t.id === taskId);
+    if (!task) {
+      await discardInterruptedRun(taskId);
+      return;
+    }
+    const cp = await loadCheckpoint(taskId);
+    const run = useRunStore.getState().runs[taskId];
+    useRunStore.getState().patchRun(taskId, { status: 'running', finishedAt: undefined, summary: '', summaryStreaming: false, verdict: undefined });
+    emitRun(taskId, {
+      kind: 'step.progress',
+      agentId: cp?.workerId ?? run?.agentId,
+      status: 'running',
+      message: cp ? `Resuming from step ${cp.step}` : 'Restarting the task',
+    });
+    await this.executeDirectTask(task, cp?.workerId ?? run?.agentId, { resume: cp ?? null, isResume: true });
+  }
+
+  /** Extra, mechanically checkable criteria grounded in what the workspace actually contains. */
+  private async detectMechanicalCriteria(task: Task): Promise<string[]> {
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+    const out: string[] = [];
+    if (!api) return out;
+    try {
+      if ((await api.fs.read('tsconfig.json')).ok) out.push('TypeScript typecheck passes');
+    } catch { /* no tsconfig */ }
+    try {
+      const pkg = await api.fs.read('package.json');
+      if (pkg.ok && /vitest/.test(pkg.content ?? '') && /\btests?\b/i.test(`${task.title} ${task.description}`)) out.push('All tests pass');
+    } catch { /* no package.json */ }
+    return out;
+  }
+
+  /** Summary + the changed files' contents, so the QA judge has real evidence to read. */
+  private async composeLoopDeliverable(result: LoopResult): Promise<string> {
+    const parts = [result.summary];
+    if (result.filesChanged.length > 0) {
+      parts.push(`Files changed:\n${result.filesChanged.map((f) => `- ${f}`).join('\n')}`);
+      const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+      for (const f of result.filesChanged.slice(0, 4)) {
+        try {
+          const r = await api?.fs.read(f);
+          if (r?.ok) parts.push(`--- ${f} ---\n${(r.content ?? '').slice(0, 3000)}`);
+        } catch { /* unreadable now; the path is still listed */ }
+      }
+    }
+    return parts.join('\n\n');
+  }
+
+  private async runLoopTask(a: {
+    task: Task;
+    worker: Agent;
+    criteria: Criterion[];
+    signal: AbortSignal;
+    resume: LoopCheckpoint | null;
+  }): Promise<{ content: string; results: CriterionResult[]; filesChanged: string[]; incomplete: boolean; status: LoopStatus; stopNote: string }> {
+    const { task, worker, criteria, signal } = a;
+    const env = detectExecutorEnv();
+    const tools = await resolveTools();
+    const budget = defaultBudget(env);
+    const goal = `${task.title}${task.description && task.description !== task.title ? `\n\n${task.description}` : ''}`;
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+    const deps: VerifyDeps = {
+      signal,
+      runCheck: api?.runChecks
+        ? async (c) => {
+            const r = await api.runChecks!('workspace', c);
+            return { ok: r.success, output: r.output ?? r.error ?? '' };
+          }
+        : undefined,
+      fileExists: api?.fs ? async (p) => (await api.fs.read(p)).ok : undefined,
+    };
+
+    let checkpoint = a.resume;
+    let feedback: string | undefined;
+    let result!: LoopResult;
+    let results: CriterionResult[] = [];
+    let content = '';
+
+    for (let round = checkpoint?.qaRound ?? 0; ; round++) {
+      result = await runAgentLoop({
+        taskId: task.id,
+        agentId: worker.id,
+        agentName: worker.name,
+        persona: 'a senior software engineer at AgentCorp',
+        goal,
+        criteria: criteria.map((c) => c.text),
+        tools,
+        budget,
+        env,
+        signal,
+        resume: checkpoint,
+        feedback,
+        onCheckpoint: (cp) => { void saveCheckpoint({ ...cp, qaRound: round }); },
+      });
+      content = await this.composeLoopDeliverable(result);
+      if (result.status === 'cancelled' || result.status === 'failed') break;
+
+      // Independent verification: checks are actually run, not asked about.
+      results = await verifyCriteria(criteria, content, task.title, deps);
+      const verdict = verdictOf(results);
+      const unmet = results.filter((r) => r.passed === false);
+      emitRun(task.id, {
+        kind: 'validation.result',
+        agentId: worker.id,
+        status: verdict === 'passed' ? 'success' : 'error',
+        message: verdict === 'passed' ? 'QA: all acceptance criteria met' : `QA: ${unmet.length} of ${results.length} criteria not met`,
+        detail: results.map((r) => `${r.passed === true ? 'PASS' : r.passed === false ? 'FAIL' : 'N/A '}  ${r.text}${r.evidence ? `\n      ${r.evidence}` : ''}`).join('\n'),
+        data: { stepId: `${task.id}_qa${round}`, criteria: results, budget: result.budget },
+      });
+
+      if (verdict === 'passed' || result.status !== 'finished' || round >= MAX_QA_RETRIES) break;
+      feedback = `QA checked your work and found problems:\n${failureFeedback(results)}\n\nFix these, re-run the relevant checks, then call finish again.`;
+      checkpoint = { ...result.checkpoint, qaRound: round + 1 };
+      emitRun(task.id, {
+        kind: 'retry',
+        agentId: worker.id,
+        status: 'running',
+        message: `Sending the work back to ${worker.name} (attempt ${round + 2})`,
+        detail: failureFeedback(results),
+      });
+    }
+
+    const incomplete = result.status !== 'finished';
+    return {
+      content,
+      results,
+      filesChanged: result.filesChanged,
+      incomplete,
+      status: result.status,
+      stopNote: result.stopReason ?? (result.status === 'failed' ? result.summary : ''),
+    };
+  }
+
+  private async runSingleShot(a: {
+    task: Task;
+    worker: Agent;
+    prompt: string;
+    deliverableType: string;
+    deliverableLang?: string;
+    criteria: Criterion[];
+    signal: AbortSignal;
+    modelOk: boolean;
+  }): Promise<{ content: string; results: CriterionResult[] }> {
+    const { task, worker, prompt, deliverableType, deliverableLang, criteria, signal, modelOk } = a;
+    const qa = async (text: string, stepId: string): Promise<CriterionResult[]> => {
+      if (!modelOk) {
+        // No AI reviewer (mock mode): report "not evaluated" rather than inventing a verdict.
+        return criteria.map((c) => ({ id: c.id, text: c.text, kind: c.kind, passed: null, evidence: 'not evaluated (no AI reviewer available)' }));
+      }
+      const results = await verifyCriteria(criteria, text, task.title, { signal });
+      const verdict = verdictOf(results);
+      emitRun(task.id, {
+        kind: 'validation.result',
+        agentId: worker.id,
+        status: verdict === 'passed' ? 'success' : 'error',
+        message: verdict === 'passed' ? 'QA: all acceptance criteria met' : `QA: ${results.filter((r) => r.passed === false).length} of ${results.length} criteria not met`,
+        detail: results.map((r) => `${r.passed === true ? 'PASS' : r.passed === false ? 'FAIL' : 'N/A '}  ${r.text}${r.evidence ? `\n      ${r.evidence}` : ''}`).join('\n'),
+        data: { stepId, criteria: results },
+      });
+      return results;
+    };
+
+    let content = await aiService.generateDeliverable(prompt, deliverableType, deliverableLang);
+    let results = await qa(content, `${task.id}_qa0`);
+
+    if (verdictOf(results) === 'needs_attention' && content && modelOk && !signal.aborted) {
+      emitRun(task.id, {
+        kind: 'retry',
+        agentId: worker.id,
+        status: 'running',
+        message: `Sending the work back to ${worker.name} (attempt 2)`,
+        detail: failureFeedback(results),
+      });
+      const second = await aiService.generateDeliverable(
+        `${prompt}\n\nA reviewer found problems with a previous attempt:\n${failureFeedback(results)}\n\nPrevious attempt:\n${content.slice(0, 4000)}\n\nWrite an improved, complete version that fixes every problem.`,
+        deliverableType,
+        deliverableLang,
+      );
+      if (second && second.length > 50) {
+        content = second;
+        results = await qa(content, `${task.id}_qa1`);
+      }
+    }
+    return { content, results };
+  }
+
+  /** Stream the closing note into the chat; falls back to a plain sentence if streaming is unavailable. */
+  private async streamRunSummary(a: {
+    task: Task;
+    worker: Agent;
+    content: string;
+    results: CriterionResult[];
+    attention: boolean;
+    filesChanged: string[];
+    stopNote: string;
+    signal: AbortSignal;
+  }): Promise<void> {
+    const { task, worker, content, results, attention, filesChanged, stopNote, signal } = a;
+    const unmet = results.filter((r) => r.passed === false);
+    const where = filesChanged.length > 0 ? 'in the workspace folder' : 'in the Projects folder';
+    const prompt =
+      'Write a short status note (2-4 sentences, plain language, no headings or bullet lists) to the user about a task you just worked on.\n' +
+      `Task: ${task.title}\n` +
+      `Outcome: ${attention ? 'needs the user\'s attention' : 'completed'}\n` +
+      (stopNote ? `Stopped early because: ${stopNote}\n` : '') +
+      (filesChanged.length ? `Files changed: ${filesChanged.join(', ')}\n` : '') +
+      (unmet.length ? `Unmet acceptance criteria: ${unmet.map((u) => u.text).join('; ')}\n` : '') +
+      `Start of the deliverable:\n${content.slice(0, 1200)}\n\n` +
+      `Say what was done, where to find it (${where}), and what needs the user's attention, if anything. Only state things supported by the facts above.`;
+
+    let emitted = false;
+    const push = (text: string) => {
+      emitRun(task.id, { kind: 'summary.delta', agentId: worker.id, message: text, data: emitted ? undefined : { replace: true } });
+      emitted = true;
+    };
+    const res = await streamAI({
+      prompt,
+      systemPrompt: `You are ${worker.name}, a ${worker.role} at AgentCorp, reporting back to the user.`,
+      temperature: 0.4,
+      maxTokens: 220,
+      signal,
+      onDelta: push,
+    });
+    if (!res.ok && !emitted) {
+      push(
+        attention
+          ? `I worked on "${task.title}" but it needs your review${stopNote ? ` (${stopNote})` : ''}${unmet.length ? `: ${unmet.map((u) => u.text).join('; ')}` : '.'} The work is ${where}.`
+          : `I finished "${task.title}". The result is ${where}.`,
+      );
+    }
+  }
+
+  /**
+   * Execute a task directly, bypassing the full CEO/PM/Planner pipeline.
+   *
+   * Developer tasks on the desktop app (with a workspace folder and an AI key)
+   * run as a tool loop: the agent reads and edits files and runs checks, and QA
+   * verifies the result against the ticket's acceptance criteria by actually
+   * running them. Everything else is a single-shot deliverable, which is also
+   * checked against the criteria.
+   */
+  private async executeDirectTask(
+    task: Task,
+    forcedWorkerId?: string,
+    opts: { resume?: LoopCheckpoint | null; isResume?: boolean } = {},
+  ): Promise<void> {
     console.log('[AgentCorp] executeDirectTask called for:', task.id, task.title);
     const store = useGameStore.getState();
 
@@ -761,6 +1050,7 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
         timestamp: Date.now(),
         streamId: `direct_${task.id}`,
       });
+      emitRun(task.id, { kind: 'run.failed', status: 'error', message: 'No available worker for this task', data: { title: task.title } });
       store.failTask(task.id);
       return;
     }
@@ -776,16 +1066,43 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
       streamId: `direct_${task.id}`,
     });
 
+    const ctrl = registerRun(task.id);
+    const signal = ctrl.signal;
+    const isDevTask = workerAgent.workerRole === 'developer' && (task.deliverableType ?? 'code') === 'code';
+    const [blocker, modelOk] = await Promise.all([explainLoopBlocker(), modelAvailable()]);
+    const useLoop = isDevTask && blocker === null && modelOk;
+
+    if (opts.isResume) {
+      useRunStore.getState().patchRun(task.id, { mode: useLoop ? 'loop' : 'direct' });
+    } else {
+      emitRun(task.id, {
+        kind: 'run.started',
+        agentId: workerAgent.id,
+        status: 'running',
+        message: 'Run started',
+        data: { title: task.title, mode: useLoop ? 'loop' : 'direct' },
+      });
+    }
+    if (isDevTask && !useLoop) {
+      emitRun(task.id, {
+        kind: 'step.progress',
+        agentId: workerAgent.id,
+        status: 'success',
+        message: `Single-shot mode: ${!modelOk ? 'no AI key available' : blocker ?? 'tool loop unavailable'}`,
+      });
+    }
+
     // ── Stage 1: Assign — PM hands task to worker, worker acknowledges ──────
     store.updateAgent(workerAgent.id, { currentTaskId: task.id, workStatus: 'thinking', mood: 'focused' });
     store.updateTask(task.id, { status: 'in_progress', assignedTo: workerAgent.id });
 
-    if (pm) {
-      this.agentSay(pm.id, workerAgent.id, `Hey ${workerAgent.name}, you're up! Working on: "${short}".`, 'communicating');
+    if (!opts.isResume) {
+      if (pm) {
+        this.agentSay(pm.id, workerAgent.id, `Hey ${workerAgent.name}, you're up! Working on: "${short}".`, 'communicating');
+      }
+      this.agentSay(workerAgent.id, pm?.id ?? workerAgent.id, `On it! Starting "${short}" now — I'll keep you posted.`, 'thinking');
+      await this.maybePushback(pm, workerAgent, short);
     }
-    this.agentSay(workerAgent.id, pm?.id ?? workerAgent.id, `On it! Starting "${short}" now — I'll keep you posted.`, 'thinking');
-
-    await this.maybePushback(pm, workerAgent, short);
 
     const logId = `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const startTs = Date.now();
@@ -810,13 +1127,49 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
         ? task.description
         : task.title;
 
+      // ── Acceptance criteria (written once per ticket, editable later) ────
+      let criteria: Criterion[] = (task.acceptanceCriteria ?? []) as Criterion[];
+      if (criteria.length === 0) {
+        const stepId = `${task.id}_criteria`;
+        emitRun(task.id, { kind: 'step.started', agentId: workerAgent.id, status: 'running', message: 'Defining acceptance criteria', data: { stepId } });
+        const mechanical = useLoop ? await this.detectMechanicalCriteria(task) : [];
+        criteria = await generateCriteria({ title: task.title, description: task.description, deliverableType, mechanical, signal });
+        store.updateTask(task.id, { acceptanceCriteria: criteria });
+        emitRun(task.id, {
+          kind: 'step.finished',
+          agentId: workerAgent.id,
+          status: 'success',
+          message: `Acceptance criteria set (${criteria.length})`,
+          data: { stepId, criteria: criteria.map((c) => ({ id: c.id, text: c.text, kind: c.kind, passed: null })) },
+        });
+      }
+      if (signal.aborted) throw new Error('cancelled');
+
       // ── Stage 2: Working ─────────────────────────────────────────────────
       store.updateAgent(workerAgent.id, { workStatus: 'coding' });
       this.agentSay(workerAgent.id, pm?.id ?? workerAgent.id, `Working through "${short}"… making solid progress.`, 'coding');
 
-      const content = await aiService.generateDeliverable(prompt, deliverableType, deliverableLang);
+      let content = '';
+      let results: CriterionResult[] = [];
+      let filesChanged: string[] = [];
+      let incomplete = false;
+      let stopNote = '';
+
+      if (useLoop) {
+        const out = await this.runLoopTask({ task, worker: workerAgent, criteria, signal, resume: opts.resume ?? null });
+        if (out.status === 'cancelled') throw new Error('cancelled');
+        if (out.status === 'failed') throw new Error(out.stopNote || 'the agent loop failed');
+        ({ content, results, filesChanged, incomplete, stopNote } = out);
+      } else {
+        const out = await this.runSingleShot({ task, worker: workerAgent, prompt, deliverableType, deliverableLang, criteria, signal, modelOk });
+        ({ content, results } = out);
+      }
+      if (signal.aborted) throw new Error('cancelled');
 
       if (content && content.length > 50) {
+        const verdict = verdictOf(results);
+        const attention = verdict === 'needs_attention' || incomplete;
+
         // ── Stage 3: Review — brief pause before marking complete ────────────
         store.updateTask(task.id, { status: 'review' });
         store.updateAgent(workerAgent.id, { workStatus: 'reviewing' });
@@ -824,7 +1177,7 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
 
         await new Promise((resolve) => setTimeout(resolve, 800));
 
-        // ── Stage 4: Complete ────────────────────────────────────────────────
+        // ── Stage 4: Complete (or flag for attention) ────────────────────────
         store.updateTask(task.id, { deliverable: content });
         store.addDeliverableProject({
           id: `project_${Date.now()}`,
@@ -836,18 +1189,27 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
           createdAt: Date.now(),
           completedBy: workerAgent.id,
         });
-        store.completeTask(task.id);
-        store.updateAgent(workerAgent.id, { currentTaskId: null, workStatus: 'idle', mood: 'happy' });
+        // A task whose checks failed, or whose run hit a limit, is not "completed":
+        // it stays in review so a person looks at it.
+        if (!attention) store.completeTask(task.id);
+        store.updateAgent(workerAgent.id, { currentTaskId: null, workStatus: 'idle', mood: attention ? 'frustrated' : 'happy' });
 
         if (pm) {
-          this.agentSay(pm.id, ceo?.id ?? pm.id, `${workerAgent.name} just wrapped up "${short}". Deliverable is live in the projects folder! ✅`, 'communicating');
+          this.agentSay(
+            pm.id,
+            ceo?.id ?? pm.id,
+            attention
+              ? `${workerAgent.name} delivered "${short}", but it needs a human look before it's done. ⚠️`
+              : `${workerAgent.name} just wrapped up "${short}". Deliverable is live in the projects folder! ✅`,
+            'communicating',
+          );
         }
 
         store.addTaskExecutionLog(task.id, {
           id: `${logId}_done`,
           taskId: task.id,
           agentId: workerAgent.id,
-          action: `Completed "${task.title}"`,
+          action: `${attention ? 'Delivered (needs attention)' : 'Completed'} "${task.title}"`,
           tool: 'generateDeliverable',
           input: task.title,
           output: `${content.length} chars — ${deliverableType}${deliverableLang ? ` (${deliverableLang})` : ''}`,
@@ -858,7 +1220,7 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
 
         this.emit({
           type: 'log',
-          data: { message: `Task "${task.title}" completed by ${workerAgent.name}` },
+          data: { message: `Task "${task.title}" ${attention ? 'delivered, needs attention' : 'completed'} by ${workerAgent.name}` },
           timestamp: Date.now(),
           streamId: `direct_${task.id}`,
         });
@@ -871,23 +1233,40 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
           message: `Direct task completed (${content.length} chars)`,
           timestamp: Date.now(),
         });
+
+        await this.streamRunSummary({ task, worker: workerAgent, content, results, attention, filesChanged, stopNote, signal });
+        emitRun(task.id, {
+          kind: 'run.finished',
+          agentId: workerAgent.id,
+          status: 'success',
+          message: attention ? 'Finished, needs attention' : 'Finished',
+          data: { verdict: attention ? 'needs_attention' : 'passed' },
+        });
+        void clearCheckpoint(task.id);
       } else {
         throw new Error('Empty or too short deliverable');
       }
     } catch (err) {
-      console.error('[AgentCorp] executeDirectTask failed:', err);
+      const cancelled = signal.aborted || String(err).includes('cancelled');
+      if (cancelled) console.info('[AgentCorp] run stopped by the user:', task.title);
+      else console.error('[AgentCorp] executeDirectTask failed:', err);
       store.failTask(task.id);
       store.updateAgent(workerAgent.id, { currentTaskId: null, workStatus: 'idle', mood: 'frustrated' });
 
       if (pm) {
-        this.agentSay(pm.id, ceo?.id ?? pm.id, `Heads up — ${workerAgent.name} hit a blocker on "${short}". Task failed.`, 'communicating');
+        this.agentSay(
+          pm.id,
+          ceo?.id ?? pm.id,
+          cancelled ? `Stopped "${short}" as requested.` : `Heads up — ${workerAgent.name} hit a blocker on "${short}". Task failed.`,
+          'communicating',
+        );
       }
 
       store.addTaskExecutionLog(task.id, {
         id: `${logId}_err`,
         taskId: task.id,
         agentId: workerAgent.id,
-        action: `Failed "${task.title}"`,
+        action: `${cancelled ? 'Stopped' : 'Failed'} "${task.title}"`,
         tool: 'generateDeliverable',
         input: task.title,
         output: String(err),
@@ -895,6 +1274,14 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
         timestamp: Date.now(),
         status: 'error',
       });
+      emitRun(task.id, {
+        kind: 'run.failed',
+        agentId: workerAgent.id,
+        status: 'error',
+        message: cancelled ? 'Stopped by you' : `Failed: ${err instanceof Error ? err.message : String(err)}`.slice(0, 200),
+        detail: String(err),
+      });
+      void clearCheckpoint(task.id);
 
       this.emit({
         type: 'log',
@@ -902,6 +1289,8 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
         timestamp: Date.now(),
         streamId: `direct_${task.id}`,
       });
+    } finally {
+      unregisterRun(task.id, ctrl);
     }
   }
 }

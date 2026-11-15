@@ -1,6 +1,7 @@
 import { ToolDefinition, ToolResult } from '@/agents/AgentTypes';
 import { WorkspaceScope } from '@/connectors/ConnectorTypes';
 import { ToolCapability, getToolExecutor, detectExecutorEnv } from '@/execution/ToolExecutor';
+import { aiHeaders } from '@/ai/headers';
 
 const FILE_EXEC_CAPABILITIES: ToolCapability[] = [
   'read_file',
@@ -14,17 +15,6 @@ const FILE_EXEC_CAPABILITIES: ToolCapability[] = [
 interface ToolHandler {
   definition: ToolDefinition;
   execute: (params: Record<string, string>) => Promise<ToolResult>;
-}
-
-// Reads the BYOK key from Electron storage when running on desktop.
-async function getByokApiKey(): Promise<string | null> {
-  try {
-    const api = typeof window !== 'undefined' ? (window as unknown as { electronAPI?: { apiKey?: { get: (p: string) => Promise<string | null> } } }).electronAPI : undefined;
-    if (!api?.apiKey) return null;
-    return await api.apiKey.get('openrouter') || await api.apiKey.get('gemini');
-  } catch {
-    return null;
-  }
 }
 
 class ToolRegistry {
@@ -42,15 +32,10 @@ class ToolRegistry {
         const start = performance.now();
         console.log('[AgentCorp] ask_agent executing — role:', agentRole, 'question length:', question?.length);
         try {
-          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-          // On desktop: attach the user's BYOK key so the API route uses it
-          if (detectExecutorEnv() === 'desktop') {
-            const byokKey = await getByokApiKey();
-            if (byokKey) headers['x-byok-key'] = byokKey;
-          }
+          // On desktop this attaches the user's own key so the API route uses it
           const res = await fetch('/api/ai', {
             method: 'POST',
-            headers,
+            headers: await aiHeaders(),
             body: JSON.stringify({ prompt: question, role: agentRole, action: 'chat' }),
           });
           console.log('[AgentCorp] /api/ai response status:', res.status);

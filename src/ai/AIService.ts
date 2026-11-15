@@ -2,6 +2,7 @@ import { AgentRole, AgentTrait, AIRequest, AIResponse } from '@/agents/AgentType
 import { buildSystemPrompt, getTaskPrompt } from './AgentPersonalities';
 import { configLoader } from '@/config/ConfigLoader';
 import { useGameStore } from '@/store/gameStore';
+import { aiHeaders } from './headers';
 
 function getCompanyContext(): string {
   try {
@@ -46,7 +47,7 @@ class AIService {
     try {
       const res = await fetch('/api/ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await aiHeaders(),
         body: JSON.stringify({ action: 'check' }),
       });
       const data = await res.json();
@@ -414,7 +415,7 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
         try {
           const res = await fetch('/api/ai', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: await aiHeaders(),
             body: JSON.stringify({
               systemPrompt: buildSystemPrompt(item.request.agentRole, item.request.agentName),
               prompt: item.request.prompt,

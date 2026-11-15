@@ -10,6 +10,7 @@ import {
   LayoutDashboard, Plug, PackageOpen, CalendarDays
 } from 'lucide-react';
 import ConnectorsTab from '@/components/ConnectorsTab';
+import ExecutionLogViewer from '@/components/ExecutionLogViewer';
 import { useIntegrations } from '@/hooks/useIntegrations';
 import { centralOrchestrator } from '@/orchestrator/CentralOrchestrator';
 
@@ -29,11 +30,6 @@ export default function RightPanel() {
   const onlineAgents = agents.filter((a) => a.online).length;
   const totalAgents = agents.length || 6;
   const completedTasksCount = tasks.filter((t) => t.status === 'completed').length;
-  const executionLogs = useMemo(() => {
-    const logs = tasks.flatMap((t) => t.executionLogs.map((l) => ({ ...l, taskTitle: t.title })));
-    return logs.sort((a, b) => b.timestamp - a.timestamp).slice(0, 15);
-  }, [tasks]);
-
   // Use real simulation metrics from the store
   const cpuUsage = simulation.cpuUsage;
   const memoryUsage = simulation.memoryUsage;
@@ -250,58 +246,8 @@ export default function RightPanel() {
         </div>
       </div>
 
-      {/* 2. Execution Log Section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-lg bg-white/5 flex items-center justify-center">
-              <FileText className="w-3.5 h-3.5 text-navy/60" />
-            </span>
-            <h3 className="text-sm font-bold text-navy font-display tracking-tight">Execution Log</h3>
-          </div>
-          <span className="text-[10px] text-navy/40 font-medium">{executionLogs.length} entries</span>
-        </div>
-
-        {/* Empty / Logs List State */}
-        <div className="bg-black/20 border border-navy/5 rounded-2xl p-4 shadow-sm min-h-[140px] flex items-center justify-center">
-          {executionLogs.length === 0 ? (
-            <div className="text-center py-4">
-              <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-2">
-                <FileText className="w-5 h-5 text-navy/40" />
-              </div>
-              <p className="text-xs font-bold text-navy/80">No logs yet</p>
-              <p className="text-[10px] text-navy/45 mt-1 max-w-[200px] mx-auto leading-normal">
-                Execution logs will appear here as agents process tasks.
-              </p>
-            </div>
-          ) : (
-            <div className="w-full space-y-1.5 max-h-[200px] overflow-y-auto glass-scrollbar">
-              {executionLogs.map((log, idx) => {
-                const dot = log.status === 'success' ? 'bg-emerald-400'
-                  : log.status === 'error' ? 'bg-rose-400'
-                  : 'bg-amber-400 animate-pulse';
-                const agent = agents.find((a) => a.id === log.agentId);
-                return (
-                  <div key={idx} className="flex items-start gap-2 text-[10px] py-1.5 px-2 rounded-xl hover:bg-white/4 transition-colors">
-                    <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${dot}`} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {agent && <span className="font-bold text-navy/70"><RoleIcon role={agent.role} size={13} className="inline -mt-0.5 mr-1" />{agent.name}</span>}
-                        <span className="text-[9px] font-mono text-navy/35 bg-white/5 px-1 rounded">{log.tool}</span>
-                      </div>
-                      <p className="text-navy/60 truncate mt-0.5">{log.action}</p>
-                      <p className="text-navy/35 text-[9px] truncate">{log.taskTitle}</p>
-                    </div>
-                    <span className="text-[9px] text-navy/25 shrink-0 mt-0.5">
-                      {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+      {/* 2. Execution Log Section — full record behind the inline chat steps */}
+      <ExecutionLogViewer />
 
       {/* 3. Deliverables Section */}
       <div className="space-y-3">
