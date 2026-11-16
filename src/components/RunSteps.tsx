@@ -108,7 +108,7 @@ export default function RunSteps({ taskId }: { taskId: string }) {
     run.status === 'running' ? 'Working'
     : run.status === 'blocked' ? 'Waiting for you'
     : run.status === 'interrupted' ? 'Interrupted'
-    : run.status === 'failed' ? 'Failed'
+    : run.status === 'failed' ? (run.stopped ? 'Stopped' : 'Failed')
     : run.verdict === 'needs_attention' ? 'Needs attention' : 'Done';
 
   const worker = agentOf(run.agentId);

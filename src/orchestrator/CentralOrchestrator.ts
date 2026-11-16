@@ -933,7 +933,9 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
       return results;
     };
 
-    let content = await aiService.generateDeliverable(prompt, deliverableType, deliverableLang);
+    const criteriaTexts = criteria.map((c) => c.text);
+    let content = await aiService.generateDeliverable(prompt, deliverableType, deliverableLang, { signal, criteria: criteriaTexts });
+    if (signal.aborted) throw new Error('cancelled');
     let results = await qa(content, `${task.id}_qa0`);
 
     if (verdictOf(results) === 'needs_attention' && content && modelOk && !signal.aborted) {
@@ -948,7 +950,9 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
         `${prompt}\n\nA reviewer found problems with a previous attempt:\n${failureFeedback(results)}\n\nPrevious attempt:\n${content.slice(0, 4000)}\n\nWrite an improved, complete version that fixes every problem.`,
         deliverableType,
         deliverableLang,
+        { signal, criteria: criteriaTexts },
       );
+      if (signal.aborted) throw new Error('cancelled');
       if (second && second.length > 50) {
         content = second;
         results = await qa(content, `${task.id}_qa1`);
@@ -979,7 +983,8 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
       (filesChanged.length ? `Files changed: ${filesChanged.join(', ')}\n` : '') +
       (unmet.length ? `Unmet acceptance criteria: ${unmet.map((u) => u.text).join('; ')}\n` : '') +
       `Start of the deliverable:\n${content.slice(0, 1200)}\n\n` +
-      `Say what was done, where to find it (${where}), and what needs the user's attention, if anything. Only state things supported by the facts above.`;
+      `Say what was done, where to find it (${where}), and what needs the user's attention, if anything. Only state things supported by the facts above. ` +
+      'If the task asked for something that is unsolved, unknowable or cannot honestly be guaranteed (for example a proof of an open problem), say plainly what could and could not be delivered; never describe an unsolved problem as solved.';
 
     let emitted = false;
     const push = (text: string) => {
@@ -1072,6 +1077,22 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
     const [blocker, modelOk] = await Promise.all([explainLoopBlocker(), modelAvailable()]);
     const useLoop = isDevTask && blocker === null && modelOk;
 
+    // ── Stage 1: Assign — PM hands task to worker, worker acknowledges ──────
+    store.updateAgent(workerAgent.id, { currentTaskId: task.id, workStatus: 'thinking', mood: 'focused' });
+    store.updateTask(task.id, { status: 'in_progress', assignedTo: workerAgent.id });
+
+    if (!opts.isResume) {
+      if (pm) {
+        this.agentSay(pm.id, workerAgent.id, `Hey ${workerAgent.name}, you're up! Working on: "${short}".`, 'communicating');
+      }
+      this.agentSay(workerAgent.id, pm?.id ?? workerAgent.id, `On it! Starting "${short}" now — I'll keep you posted.`, 'thinking');
+      await this.maybePushback(pm, workerAgent, short);
+      store.updateAgent(workerAgent.id, { workStatus: 'coding' });
+      this.agentSay(workerAgent.id, pm?.id ?? workerAgent.id, `Working through "${short}"… making solid progress.`, 'coding');
+    }
+
+    // The run block is created AFTER the hand-off chatter, so it (and its streamed
+    // summary) lands at the bottom of the conversation, not above later messages.
     if (opts.isResume) {
       useRunStore.getState().patchRun(task.id, { mode: useLoop ? 'loop' : 'direct' });
     } else {
@@ -1090,18 +1111,6 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
         status: 'success',
         message: `Single-shot mode: ${!modelOk ? 'no AI key available' : blocker ?? 'tool loop unavailable'}`,
       });
-    }
-
-    // ── Stage 1: Assign — PM hands task to worker, worker acknowledges ──────
-    store.updateAgent(workerAgent.id, { currentTaskId: task.id, workStatus: 'thinking', mood: 'focused' });
-    store.updateTask(task.id, { status: 'in_progress', assignedTo: workerAgent.id });
-
-    if (!opts.isResume) {
-      if (pm) {
-        this.agentSay(pm.id, workerAgent.id, `Hey ${workerAgent.name}, you're up! Working on: "${short}".`, 'communicating');
-      }
-      this.agentSay(workerAgent.id, pm?.id ?? workerAgent.id, `On it! Starting "${short}" now — I'll keep you posted.`, 'thinking');
-      await this.maybePushback(pm, workerAgent, short);
     }
 
     const logId = `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -1147,7 +1156,6 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
 
       // ── Stage 2: Working ─────────────────────────────────────────────────
       store.updateAgent(workerAgent.id, { workStatus: 'coding' });
-      this.agentSay(workerAgent.id, pm?.id ?? workerAgent.id, `Working through "${short}"… making solid progress.`, 'coding');
 
       let content = '';
       let results: CriterionResult[] = [];
@@ -1280,6 +1288,7 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
         status: 'error',
         message: cancelled ? 'Stopped by you' : `Failed: ${err instanceof Error ? err.message : String(err)}`.slice(0, 200),
         detail: String(err),
+        data: cancelled ? { stopped: true } : undefined,
       });
       void clearCheckpoint(task.id);
 

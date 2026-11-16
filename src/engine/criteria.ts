@@ -63,7 +63,11 @@ export async function generateCriteria(opts: {
   let texts: string[] = [];
   const reply = await callModel({
     label: 'criteria',
-    system: 'You write acceptance criteria for software and business tasks. Reply with a JSON array of strings only.',
+    system:
+      'You write acceptance criteria for software and business tasks. Reply with a JSON array of strings only. ' +
+      'Criteria must be achievable and honest. If the request asks for something that is unsolved, unknowable or cannot honestly be ' +
+      'guaranteed (a proof or definitive answer to an open problem, a guaranteed outcome, certainty about the future), do NOT write a ' +
+      'criterion that demands it. Instead require that the deliverable states clearly what is unresolved or uncertain and does not claim a solution.',
     prompt:
       `Task: ${opts.title}\n${opts.description && opts.description !== opts.title ? `Details: ${opts.description.slice(0, 600)}\n` : ''}` +
       `Deliverable type: ${opts.deliverableType ?? 'code'}\n\n` +
@@ -128,7 +132,9 @@ export async function verifyCriteria(
       label: 'judge',
       system:
         'You are a strict, independent QA reviewer. You judge ONLY from the deliverable text you are given. ' +
-        'If the deliverable does not clearly show a criterion is met, it is NOT met. Reply with JSON only.',
+        'If the deliverable does not clearly show a criterion is met, it is NOT met. ' +
+        'Treat as NOT met any deliverable that presents an open or unsolved problem as solved, or relies on invented proofs, ' +
+        'citations, quotes, data or results. Reply with JSON only.',
       prompt:
         `Task: ${title}\n\nDeliverable:\n${deliverable.slice(0, 6000)}\n\nCriteria:\n` +
         toJudge.map((c) => `${c.id}: ${c.text}`).join('\n') +

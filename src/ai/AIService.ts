@@ -93,6 +93,7 @@ class AIService {
     taskTitle: string,
     deliverableType: string,
     deliverableLang?: string,
+    opts?: { signal?: AbortSignal; criteria?: string[] },
   ): Promise<string> {
     const langHint = deliverableLang ? ` in ${deliverableLang}` : '';
 
@@ -270,20 +271,32 @@ For 3 channels — headline, body copy, and CTA (write the full copy, not a desc
 Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue), reporting cadence, and dashboard link placeholder.`,
     };
 
-    const prompt = promptMap[deliverableType] || promptMap.code;
+    let prompt = promptMap[deliverableType] || promptMap.code;
+    if (opts?.criteria && opts.criteria.length > 0) {
+      prompt += '\n\nThis work will be reviewed against these acceptance criteria, so satisfy each one honestly:\n' + opts.criteria.map((c) => '- ' + c).join('\n');
+    }
+    // Written deliverables must not fake certainty. (Code deliverables are raw code only, so no prose is added there.)
+    if (deliverableType !== 'code' && deliverableType !== 'config') {
+      prompt +=
+        '\n\nHonesty rule: if the request asks for something that is unsolved, unknowable or cannot honestly be guaranteed ' +
+        '(for example a proof or definitive answer to an open scientific or mathematical problem), say so plainly near the start and ' +
+        'explain what IS known. Never invent proofs, derivations, citations, quotes, data or results, and never present an open problem as solved.';
+    }
 
     try {
       const res = await fetch('/api/ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await aiHeaders(),
         body: JSON.stringify({ prompt, temperature: 0.7 }),
+        signal: opts?.signal,
       });
       const data = await res.json();
       if (data.content && data.content.length > 20) {
         return data.content.trim();
       }
-    } catch {
-      // fall through
+    } catch (err) {
+      // A user-initiated stop must not silently turn into a mock deliverable.
+      if (opts?.signal?.aborted) throw err;
     }
 
     return this.getMockDeliverable(taskTitle, deliverableType, deliverableLang);
@@ -368,7 +381,7 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
 
       const res = await fetch('/api/ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await aiHeaders(),
         body: JSON.stringify({
           prompt,
           temperature: 0.8,

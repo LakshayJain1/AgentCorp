@@ -72,6 +72,8 @@ export interface RunMeta {
   /** Streamed final answer. Appended to by `summary.delta` events. */
   summary: string;
   summaryStreaming: boolean;
+  /** True when the user pressed Stop (shown as Stopped rather than Failed). */
+  stopped?: boolean;
   /** 'needs_attention' when it finished but acceptance criteria were not all met. */
   verdict?: 'passed' | 'needs_attention';
   criteria?: CriterionResult[];
@@ -169,6 +171,7 @@ export const useRunStore = create<RunStoreState>((set) => ({
           break;
         case 'run.failed':
           next.status = 'failed';
+          if (event.data?.stopped) next.stopped = true;
           next.finishedAt = event.timestamp;
           next.summaryStreaming = false;
           break;
