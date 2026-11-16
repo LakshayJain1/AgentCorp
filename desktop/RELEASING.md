@@ -6,15 +6,16 @@ publish it. No installer binaries are committed to git.
 ## Cut a release
 
 1. Test locally first: `npm run desktop:dev` (Windows, macOS and Linux; no extra tools needed).
-2. Bump `version` in `desktop/package.json` (e.g. `2.3.0`) and commit it to `main`.
+2. Bump `version` in `desktop/package.json` (e.g. `1.0.0-beta.2`) and commit it to `main`.
 3. Tag and push the tag. The tag **must** equal `v` + the package version, or the workflow stops with a clear error:
    ```
-   git tag v2.3.0
-   git push origin v2.3.0
+   git tag v1.0.0-beta.2
+   git push origin v1.0.0-beta.2
    ```
 4. Watch **Actions → Release desktop app**. It builds Windows and macOS in parallel (about 5–10 minutes).
-5. Open **Releases**. You'll find a draft `v2.3.0` with the installers attached. Download one, install it, check it.
-6. Write the release notes and click **Publish release**.
+5. Open **Releases**. You'll find a draft `v1.0.0-beta.2` with the installers attached. Download one, install it, check it.
+6. Write the release notes. While the version has a `-beta` suffix, tick **Set as a pre-release**, then click **Publish release**.
+   (The website's Download button serves pre-releases too.)
 
 You can also run the workflow by hand (Actions → Run workflow) to check that the build works without tagging.
 

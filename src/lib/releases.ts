@@ -26,6 +26,21 @@ export interface LatestRelease {
   assets?: unknown;
 }
 
+/**
+ * First installer named `assetName` across a list of releases (newest first),
+ * skipping drafts. Unlike GitHub's "latest" endpoint this includes pre-releases,
+ * which matters while the app ships as 1.0.0-beta.N.
+ */
+export function pickAssetFromReleases(releases: unknown, assetName: string, repo = RELEASES_REPO): string | null {
+  if (!Array.isArray(releases)) return null;
+  for (const r of releases as Array<LatestRelease & { draft?: unknown }>) {
+    if (!r || typeof r !== 'object' || r.draft === true) continue;
+    const url = pickAssetUrl(r, assetName, repo);
+    if (url) return url;
+  }
+  return null;
+}
+
 /** Where to send people when there is nothing to download yet. */
 export function releasesPageUrl(repo = RELEASES_REPO): string {
   return `https://github.com/${repo}/releases`;

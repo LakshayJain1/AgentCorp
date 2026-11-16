@@ -1,6 +1,6 @@
 {
   "name": "agentcorp",
-  "version": "2.3.0",
+  "version": "1.0.0-beta.1",
   "description": "AgentCorp — Autonomous Multi-Agent Workspace",
   "main": "main.js",
   "author": "AgentCorp",
