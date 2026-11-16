@@ -3,6 +3,7 @@ import { toolRegistry } from '@/runtime/ToolRegistry';
 import { requestApproval } from './approvals';
 import { askUser } from './questions';
 import { getDesktopCaps, type DesktopFeature } from './desktopCaps';
+import { evaluate, formatNumber } from '@/lib/calc';
 
 /**
  * Typed tools for the agent loop (C0a/C1).
@@ -220,6 +221,22 @@ const webFetch: AgentTool = {
   },
 };
 
+const calculate: AgentTool = {
+  name: 'calculate',
+  description:
+    'Evaluate an arithmetic expression exactly and return the number. ALWAYS use this for sums, totals, averages, percentages and any multi-step arithmetic instead of working it out yourself. ' +
+    'Supports + - * / % ^, parentheses, 15% literals, and abs, round(x, decimals), floor, ceil, sqrt, min, max, sum(a, b, ...), avg(a, b, ...).',
+  tier: 'web', risk: 'read',
+  params: { expression: { description: 'e.g. "1200.50 - 150.25 + 980" or "round(avg(4, 8, 15), 2)"', required: true } },
+  async run({ expression }) {
+    try {
+      return { ok: true, output: `${expression.trim()} = ${formatNumber(evaluate(expression))}` };
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : 'could not evaluate the expression');
+    }
+  },
+};
+
 /** Connector actions leave the sandbox, so each call needs the user's OK (or a standing "always allow"). */
 function externalTool(name: string, description: string, params: Record<string, ToolParam>, summarize: (a: Record<string, string>) => string): AgentTool {
   return {
@@ -287,7 +304,7 @@ const finish: AgentTool = {
 
 export const ALL_TOOLS: AgentTool[] = [
   listFiles, readFile, writeFile, searchFiles, runCheck, runCommand,
-  webFetch, slackPost, linearCreate, askUserTool,
+  webFetch, calculate, slackPost, linearCreate, askUserTool,
   finish,
 ];
 
