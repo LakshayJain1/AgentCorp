@@ -11,7 +11,10 @@
     "desktop:dev": "node scripts/desktop-dev.mjs",
     "desktop:build": "next build && cd desktop && npm run build",
     "desktop:build:mac": "next build && cd desktop && npm run build:mac",
-    "desktop:build:win": "next build && cd desktop && npm run build:win"
+    "desktop:build:win": "next build && cd desktop && npm run build:win",
+    "bench": "node --disable-warning=ExperimentalWarning --import ./bench/register.mjs bench/run.mts",
+    "bench:report": "node --disable-warning=ExperimentalWarning bench/report.mts",
+    "bench:selftest": "node --disable-warning=ExperimentalWarning --import ./bench/register.mjs bench/selftest.mts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.25",
