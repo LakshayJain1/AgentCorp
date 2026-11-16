@@ -86,6 +86,7 @@ function buildSystem(p: LoopParams): string {
     '- Change files with write_file, always giving the COMPLETE new file content.',
     '- Verify your work with run_check (when available) and fix failures you see. Never claim a check passed unless you saw it pass.',
     '- If a tool returns an error, change your approach. Do not repeat the same failing call.',
+    '- If the task is ambiguous in a way you cannot settle yourself, you may use ask_user (when available) with ONE clear question. Do not ask about things you can find out by looking.',
     `- When the task is complete, or you cannot make further progress, call ${FINISH_TOOL_NAME} with an honest summary (what you did, which files, what is not done).`,
     '- Output the JSON object only: no prose, no markdown fences.',
   ].join('\n');
@@ -249,8 +250,12 @@ export async function runAgentLoop(p: LoopParams): Promise<LoopResult> {
       kind: 'tool.call', agentId: p.agentId, status: 'running', message: label,
       detail: action.thought, data: { stepId, tool: tool.name, budget: budget.snapshot() },
     });
-    if (tool.risk === 'external') {
-      emitRun(p.taskId, { kind: 'blocked', agentId: p.agentId, status: 'running', message: `Waiting for your approval: ${label}`, data: { stepId } });
+    if (tool.blocking) {
+      emitRun(p.taskId, {
+        kind: 'blocked', agentId: p.agentId, status: 'running',
+        message: tool.name === 'ask_user' ? 'Waiting for your answer' : `Waiting for your approval: ${label}`,
+        data: { stepId },
+      });
     }
 
     const waitStart = Date.now();
@@ -265,7 +270,7 @@ export async function runAgentLoop(p: LoopParams): Promise<LoopResult> {
     } catch (e) {
       result = { ok: false, output: '', error: `tool crashed: ${String(e).slice(0, 300)}` };
     }
-    if (tool.risk === 'external') budget.excludeMs(Date.now() - waitStart);
+    if (tool.blocking) budget.excludeMs(Date.now() - waitStart);
 
     const observation = result.ok
       ? (result.output || '(no output)')

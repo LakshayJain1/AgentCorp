@@ -1,6 +1,7 @@
 import { detectExecutorEnv } from '@/execution/ToolExecutor';
 import { toolRegistry } from '@/runtime/ToolRegistry';
 import { requestApproval } from './approvals';
+import { askUser } from './questions';
 import { getDesktopCaps, type DesktopFeature } from './desktopCaps';
 
 /**
@@ -45,6 +46,8 @@ export interface AgentTool {
   params: Record<string, ToolParam>;
   /** Desktop shell feature this tool needs; hidden if the installed shell lacks it. */
   requires?: DesktopFeature;
+  /** Waits on the user (approval or answer): the run shows as blocked and the wait doesn't count against the time budget. */
+  blocking?: boolean;
   run(args: Record<string, string>, ctx: ToolContext): Promise<AgentToolResult>;
 }
 
@@ -220,7 +223,7 @@ const webFetch: AgentTool = {
 /** Connector actions leave the sandbox, so each call needs the user's OK (or a standing "always allow"). */
 function externalTool(name: string, description: string, params: Record<string, ToolParam>, summarize: (a: Record<string, string>) => string): AgentTool {
   return {
-    name, description, tier: 'web', risk: 'external', params,
+    name, description, tier: 'web', risk: 'external', blocking: true, params,
     async run(args, ctx) {
       const decision = await requestApproval({
         taskId: ctx.taskId,
@@ -251,6 +254,26 @@ const linearCreate = externalTool(
   (a) => `create a Linear issue "${(a.title ?? '').slice(0, 60)}"`,
 );
 
+const askUserTool: AgentTool = {
+  name: 'ask_user',
+  description:
+    'Ask the person a question and wait for the answer. Use it sparingly: only when the task is ambiguous in a way you cannot settle by ' +
+    'reading the code or files, or a decision is genuinely theirs to make. Ask ONE clear question; offer options when there are a few obvious choices.',
+  tier: 'web', risk: 'read', blocking: true,
+  params: {
+    question: { description: 'One clear, specific question', required: true },
+    options: { description: 'Optional quick-reply choices separated by | (e.g. "Postgres|SQLite|Not sure")' },
+  },
+  async run({ question, options }, ctx) {
+    const q = question.trim().slice(0, 500);
+    if (q.length < 5) return fail('the question is empty');
+    const opts = (options ?? '').split('|').map((o) => o.trim().slice(0, 80)).filter(Boolean).slice(0, 6);
+    const answer = await askUser({ taskId: ctx.taskId, agentId: ctx.agentId, question: q, options: opts }, ctx.signal);
+    if (answer === null) return fail('the question was cancelled before the user answered');
+    return { ok: true, output: `The user answered: ${answer}` };
+  },
+};
+
 export const FINISH_TOOL_NAME = 'finish';
 const finish: AgentTool = {
   name: FINISH_TOOL_NAME,
@@ -264,7 +287,7 @@ const finish: AgentTool = {
 
 export const ALL_TOOLS: AgentTool[] = [
   listFiles, readFile, writeFile, searchFiles, runCheck, runCommand,
-  webFetch, slackPost, linearCreate,
+  webFetch, slackPost, linearCreate, askUserTool,
   finish,
 ];
 

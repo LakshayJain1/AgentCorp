@@ -6,6 +6,7 @@ import { centralOrchestrator } from '@/orchestrator/CentralOrchestrator';
 import { aiService } from '@/ai/AIService';
 import RunSteps from '@/components/RunSteps';
 import ApprovalPrompts from '@/components/ApprovalPrompts';
+import QuestionPrompts from '@/components/QuestionPrompts';
 import { useRunStore } from '@/engine/runEvents';
 import { useMemo, useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -432,6 +433,7 @@ export default function CenterPanel() {
           })}
         </div>
 
+        <QuestionPrompts />
         <ApprovalPrompts />
 
         {/* Input Bar */}

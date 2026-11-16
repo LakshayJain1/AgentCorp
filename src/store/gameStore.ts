@@ -7,6 +7,7 @@ import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
 import { configLoader } from '@/config/ConfigLoader';
 import { toOfficeLocations } from '@/game/pixi/PixiOfficeLayout';
 import { publishFromExecutionLog } from '@/engine/runBridge';
+import { dedupeSnapshotsByRole } from './agentSnapshots';
 
 const DEFAULT_TASK_TITLES = [
   'Analyze customer feedback', 'Fix API issue', 'Review compliance report', 'Prepare deployment',
@@ -503,8 +504,9 @@ export const useGameStore = create<GameStore>()(
   _agentSnapshots: [],
 
   initAgents: () => {
-    const snapshots = get()._agentSnapshots;
-    if (snapshots && snapshots.length > 0) {
+    // Heal state saved by older builds that persisted duplicate seats.
+    const snapshots = dedupeSnapshotsByRole(get()._agentSnapshots ?? []);
+    if (snapshots.length > 0) {
       // Restore persisted agents if available
       const restored = snapshots.map((snap) => {
         const base = createAgent(snap.role ?? 'engineer');
@@ -945,7 +947,9 @@ export const useGameStore = create<GameStore>()(
     if (developersCount > 1) {
       const devNames = EXTRA_DEV_NAMES();
       const devColors = EXTRA_DEV_COLORS();
-      for (let i = 1; i < developersCount; i++) {
+      // initAgents() may have restored engineers from a previous session; only add the missing ones.
+      const haveEngineers = Math.max(1, get().agents.filter((a) => a.role === 'engineer').length);
+      for (let i = haveEngineers; i < developersCount; i++) {
         const devName = devNames[(i - 1) % devNames.length];
         const extraAgent: import('@/agents/AgentTypes').Agent = {
           id: generateId('agent'),
@@ -996,6 +1000,8 @@ export const useGameStore = create<GameStore>()(
       { role: 'ops', workerRole: 'ops_worker', emoji: '⚙️' },
     ];
     for (const biz of bizRoles) {
+      // initAgents() already seats these roles; never create a second one.
+      if (get().agents.some((a) => a.role === biz.role)) continue;
       const info = AGENT_NAMES()[biz.role];
       const location = toOfficeLocations().find(l => l.id === biz.role + '_desk' || l.role === biz.role);
       const bizAgent: import('@/agents/AgentTypes').Agent = {

@@ -2,6 +2,7 @@ import { useGameStore } from '@/store/gameStore';
 import { centralOrchestrator } from '@/orchestrator/CentralOrchestrator';
 import { useRunStore } from './runEvents';
 import { useApprovalStore } from './approvals';
+import { useQuestionStore } from './questions';
 import { useActiveRuns } from './runControl';
 import { wipeRunStorage } from './runPersistence';
 
@@ -17,6 +18,7 @@ export function installDevHandle(getStatus: () => unknown): void {
     game: useGameStore,
     runs: useRunStore,
     approvals: useApprovalStore,
+    questions: useQuestionStore,
     active: useActiveRuns,
     orchestrator: centralOrchestrator,
     wipeRunStorage,
