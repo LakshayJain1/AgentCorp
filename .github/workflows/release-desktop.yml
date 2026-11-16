@@ -1,0 +1,55 @@
+name: Release desktop app
+
+# Pushing a tag like v2.3.0 builds the installers on GitHub's runners and attaches
+# them to a DRAFT release. Nothing is public until you review the draft on the
+# Releases page and click "Publish release".
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to create the draft release and upload assets
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match desktop/package.json
+        run: |
+          PKG="v$(node -p "require('./desktop/package.json').version")"
+          echo "tag=$GITHUB_REF_NAME  package.json=$PKG"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "$GITHUB_REF_NAME" != "$PKG" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match desktop/package.json version $PKG. Bump the version, commit, then tag."
+            exit 1
+          fi
+
+  build:
+    needs: check-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            flags: --win
+          - os: macos-latest
+            flags: --mac
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - name: Build and upload to the draft release
+        run: npx electron-builder ${{ matrix.flags }} --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No code-signing certificates are configured yet: build unsigned.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
