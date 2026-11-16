@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "desktop:install": "cd desktop && npm install",
-    "desktop:dev": "concurrently \"next dev\" \"cd desktop && npm run dev\"",
+    "desktop:dev": "node scripts/desktop-dev.mjs",
     "desktop:build": "next build && cd desktop && npm run build",
     "desktop:build:mac": "next build && cd desktop && npm run build:mac",
     "desktop:build:win": "next build && cd desktop && npm run build:win"
