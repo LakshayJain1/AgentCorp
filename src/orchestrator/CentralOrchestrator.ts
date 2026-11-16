@@ -33,6 +33,7 @@ import { generateCriteria, verifyCriteria, verdictOf, failureFeedback, type Crit
 import { registerRun, unregisterRun, setResumeHandler, discardInterruptedRun } from '@/engine/runControl';
 import { saveCheckpoint, loadCheckpoint, clearCheckpoint, type LoopCheckpoint } from '@/engine/runPersistence';
 import { detectExecutorEnv } from '@/execution/ToolExecutor';
+import { aiFetch } from '@/ai/transport';
 
 /** How many times QA may send a finished loop back to the agent before flagging it for a human. */
 const MAX_QA_RETRIES = 2;
@@ -650,7 +651,7 @@ export class CentralOrchestrator {
     let sprintTasks: string[] = [];
 
     try {
-      const res = await fetch('/api/ai', {
+      const res = await aiFetch({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -728,10 +729,11 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
 
     try {
       const systemPrompt = `You are ${agent.name}, an AI agent at AgentCorp with access to integration tools.\nThe user has asked you to perform an action. Use your tools to do it immediately.\nAfter completing it, reply with a brief confirmation including specific details (ticket URL, message timestamp, etc.).\nDo not describe what you plan to do — just do it.`;
-      const res = await fetch('/api/ai', {
+      const res = await aiFetch({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ systemPrompt, prompt: description }),
+        needsServerTools: true, // Slack/Linear actions run on the server's connector tools
       });
       const data = (await res.json().catch(() => null)) as {
         content?: string | null;

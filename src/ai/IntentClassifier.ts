@@ -1,5 +1,6 @@
 import { configLoader } from '@/config/ConfigLoader';
 import { useGameStore } from '@/store/gameStore';
+import { aiFetch } from '@/ai/transport';
 
 export interface IntentResult {
   type: 'internal' | 'needs_credentials' | 'chat' | 'action';
@@ -169,7 +170,7 @@ Respond with valid JSON only — no markdown, no explanation:
 {"type": "chat", "chatReply": "your short warm CEO reply"}
 {"type": "needs_credentials", "ticketTitle": "Short Title"}`;
 
-    const res = await fetch('/api/ai', {
+    const res = await aiFetch({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, temperature: 0.2 }),

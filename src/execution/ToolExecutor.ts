@@ -1,4 +1,5 @@
 import { ToolResult } from '@/agents/AgentTypes';
+import type { AiBridge } from '@/ai/byokTypes';
 
 // P0 seam: capability names agents may request. Backends decide what actually runs.
 // - Vercel serverless: direct fs/exec CANNOT work (read-only fs except ephemeral /tmp,
@@ -62,11 +63,8 @@ declare global {
     agentcorpDesktop?: { available?: boolean };
     electronAPI?: {
       getInfo?: () => Promise<{ platform?: string; version?: string; isDev?: boolean; webUrl?: string; ipcVersion?: number; features?: string[] }>;
-      apiKey?: {
-        get: (provider: string) => Promise<string | null>;
-        set: (provider: string, value: string) => Promise<boolean>;
-        listProviders: () => Promise<string[]>;
-      };
+      /** Bring-your-own-key AI. The key lives in the desktop shell; nothing here can read it back. */
+      ai?: AiBridge;
       /** Reports whether agent runs are active so the shell can stay awake / ask before closing. */
       runs?: { setActive: (count: number) => Promise<{ ok: boolean }> };
       workspace?: {

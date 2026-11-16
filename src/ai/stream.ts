@@ -1,5 +1,6 @@
 import { aiHeaders } from './headers';
 import { getTestModel } from '@/engine/model';
+import { aiFetch } from '@/ai/transport';
 
 export interface StreamResult {
   ok: boolean;
@@ -37,7 +38,7 @@ export async function streamAI(opts: {
     return { ok: true, text: full };
   }
   try {
-    const res = await fetch('/api/ai', {
+    const res = await aiFetch({
       method: 'POST',
       headers: await aiHeaders(),
       body: JSON.stringify({

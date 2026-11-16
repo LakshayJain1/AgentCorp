@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
 import type { UseIntegrations } from '@/hooks/useIntegrations';
+import AiKeySettings from '@/components/AiKeySettings';
 
 interface OAuthConnectorDef {
   id: 'github' | 'slack' | 'linear' | 'vercel' | 'notion';
@@ -188,6 +189,7 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
 
   return (
     <div className="space-y-3 text-navy">
+      <AiKeySettings />
       <div className="p-4 rounded-xl bg-surface border border-navy/5 soft-shadow relative overflow-hidden">
         <div className="absolute top-0 right-0 w-28 h-28 bg-violet-500/15 rounded-full blur-2xl pointer-events-none" />
         <div className="flex items-start justify-between">

@@ -2,6 +2,7 @@ import { ToolDefinition, ToolResult } from '@/agents/AgentTypes';
 import { WorkspaceScope } from '@/connectors/ConnectorTypes';
 import { ToolCapability, getToolExecutor, detectExecutorEnv } from '@/execution/ToolExecutor';
 import { aiHeaders } from '@/ai/headers';
+import { aiFetch } from '@/ai/transport';
 
 const FILE_EXEC_CAPABILITIES: ToolCapability[] = [
   'read_file',
@@ -33,7 +34,7 @@ class ToolRegistry {
         console.log('[AgentCorp] ask_agent executing — role:', agentRole, 'question length:', question?.length);
         try {
           // On desktop this attaches the user's own key so the API route uses it
-          const res = await fetch('/api/ai', {
+          const res = await aiFetch({
             method: 'POST',
             headers: await aiHeaders(),
             body: JSON.stringify({ prompt: question, role: agentRole, action: 'chat' }),

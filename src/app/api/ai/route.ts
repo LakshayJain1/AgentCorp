@@ -285,28 +285,25 @@ export async function POST(req: NextRequest) {
   try {
     const body: RequestBody = await req.json();
 
-    // BYOK: desktop app sends the user's own key in x-byok-key header.
-    // It takes precedence over server env vars so Vercel env never needed for desktop users.
-    const byokKey = req.headers.get('x-byok-key') || '';
+    // BYOK keys are never accepted here: the desktop app calls the provider directly from the
+    // user's computer (desktop/ai-providers.js), so a user's key never reaches this server.
 
     if (body.action === 'check') {
-      const hasKey = byokKey.length > 0 || OPENROUTER_API_KEY.length > 0 || GEMINI_API_KEY.length > 0;
+      const hasKey = OPENROUTER_API_KEY.length > 0 || GEMINI_API_KEY.length > 0;
       return NextResponse.json({
         available: hasKey,
         configured: hasKey,
-        provider: byokKey.length > 0 ? 'byok' : OPENROUTER_API_KEY.length > 0 ? 'openrouter' : GEMINI_API_KEY.length > 0 ? 'gemini' : 'none',
-        message: byokKey.length > 0
-          ? 'Using your own API key'
-          : OPENROUTER_API_KEY.length > 0
-            ? 'OpenRouter API key is configured'
-            : GEMINI_API_KEY.length > 0
-              ? 'Gemini API key is configured (fallback)'
-              : 'No API key set. Using mock AI responses.',
+        provider: OPENROUTER_API_KEY.length > 0 ? 'openrouter' : GEMINI_API_KEY.length > 0 ? 'gemini' : 'none',
+        message: OPENROUTER_API_KEY.length > 0
+          ? 'OpenRouter API key is configured'
+          : GEMINI_API_KEY.length > 0
+            ? 'Gemini API key is configured (fallback)'
+            : 'No API key set. Using mock AI responses.',
       });
     }
 
-    // Resolve which key to use: BYOK > server OpenRouter > server Gemini
-    const effectiveOpenRouterKey = byokKey.length > 0 ? byokKey : OPENROUTER_API_KEY;
+    // Server keys only: OpenRouter, then Gemini as the fallback.
+    const effectiveOpenRouterKey = OPENROUTER_API_KEY;
     const hasOpenRouter = effectiveOpenRouterKey.length > 0;
     const hasGemini = GEMINI_API_KEY.length > 0;
 

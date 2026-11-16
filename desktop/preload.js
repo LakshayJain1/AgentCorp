@@ -15,11 +15,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listChecks: () => ipcRenderer.invoke('checks:list'),
   runChecks: (workspaceId, check) => ipcRenderer.invoke('checks:run', { workspaceId, check }),
 
-  // BYOK: user-supplied API keys stored locally, never sent to Vercel
-  apiKey: {
-    get: (provider) => ipcRenderer.invoke('apikey:get', provider),
-    set: (provider, value) => ipcRenderer.invoke('apikey:set', provider, value),
-    listProviders: () => ipcRenderer.invoke('apikey:list-providers'),
+  // BYOK: the user's own AI key. It is stored and used only in the main process; there is
+  // deliberately no call that returns it. `run` sends one request straight to the provider.
+  ai: {
+    status: () => ipcRenderer.invoke('ai:status'),
+    save: (input) => ipcRenderer.invoke('ai:save', input),
+    setModel: (model) => ipcRenderer.invoke('ai:set-model', model),
+    clear: () => ipcRenderer.invoke('ai:clear'),
+    test: () => ipcRenderer.invoke('ai:test'),
+    // run({prompt, system?, temperature?, maxTokens?, stream?}, onDelta?) -> { cancel(), result: Promise<{ok, content?, error?}> }
+    run: (req, onDelta) => {
+      const id = 'ai_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+      const handler = (_e, msg) => { if (msg && msg.id === id && typeof msg.delta === 'string' && onDelta) onDelta(msg.delta); };
+      ipcRenderer.on('ai:event', handler);
+      const result = ipcRenderer.invoke('ai:run', { ...req, id })
+        .catch((e) => ({ ok: false, error: String((e && e.message) || e) }))
+        .finally(() => ipcRenderer.removeListener('ai:event', handler));
+      return { cancel: () => { ipcRenderer.invoke('ai:cancel', id).catch(() => {}); }, result };
+    },
   },
 
   // Workspace: set the local directory agents can read/write

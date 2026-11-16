@@ -1,5 +1,6 @@
 import { AgentRole, DeliverableType } from '@/agents/AgentTypes';
 import { useGameStore } from '@/store/gameStore';
+import { aiFetch } from '@/ai/transport';
 
 export interface TaskClassification {
   agentRole: AgentRole;
@@ -76,7 +77,7 @@ Respond with ONLY valid JSON, no markdown, no explanation:
 {"agentRole": "sales", "deliverableType": "pitch", "deliverableLang": "markdown"}`;
 
   try {
-    const res = await fetch('/api/ai', {
+    const res = await aiFetch({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, temperature: 0.1 }),

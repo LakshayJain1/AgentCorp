@@ -1,5 +1,6 @@
 import { aiService } from '@/ai/AIService';
 import { aiHeaders } from '@/ai/headers';
+import { aiFetch } from '@/ai/transport';
 
 /**
  * Single entry point for non-streaming model calls made by the engine
@@ -60,7 +61,7 @@ export async function callModel(opts: {
     return typeof out === 'string' ? out : null;
   }
   try {
-    const res = await fetch('/api/ai', {
+    const res = await aiFetch({
       method: 'POST',
       headers: await aiHeaders(),
       body: JSON.stringify({

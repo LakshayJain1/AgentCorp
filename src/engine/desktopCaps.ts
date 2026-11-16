@@ -9,7 +9,7 @@ import { detectExecutorEnv } from '@/execution/ToolExecutor';
  * missing rather than failing in the middle of a run.
  */
 
-export type DesktopFeature = 'fs' | 'fs-list' | 'exec' | 'exec-approved' | 'checks' | 'runs' | 'apikey';
+export type DesktopFeature = 'fs' | 'fs-list' | 'exec' | 'exec-approved' | 'checks' | 'runs' | 'ai';
 
 export interface DesktopCaps {
   isDesktop: boolean;
@@ -27,7 +27,7 @@ const FEATURE_LABEL: Record<DesktopFeature, string> = {
   'exec-approved': 'running approved commands (npm install, git)',
   checks: 'running type-check, lint and tests',
   runs: 'keeping runs alive in the background',
-  apikey: 'using your own API key',
+  ai: 'using your own AI key',
 };
 
 /** Features the autonomous developer loop needs in order to be useful. */
@@ -44,7 +44,7 @@ function detectFeatures(): Set<DesktopFeature> {
   if (has(api.exec?.runApproved)) out.add('exec-approved');
   if (has(api.runChecks)) out.add('checks');
   if (has(api.runs?.setActive)) out.add('runs');
-  if (api.apiKey && has(api.apiKey.get)) out.add('apikey');
+  if (has(api.ai?.run) && has(api.ai?.status)) out.add('ai');
   return out;
 }
 

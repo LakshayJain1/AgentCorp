@@ -435,8 +435,9 @@ ipcMain.handle('auth:open-browser', (_event, url) => {
 // installed shell is too old for a tool, instead of failing mid-run (C0d).
 //   1 = fs read/write/search, allowlisted exec, BYOK keys
 //   2 = + fs:list, exec:run-approved (native approval), runs:set-active, checks on the picked folder
-const IPC_VERSION = 2;
-const IPC_FEATURES = ['fs', 'fs-list', 'exec', 'exec-approved', 'checks', 'runs', 'apikey'];
+//   3 = + direct BYOK calls from the main process (ai:*); the old apikey:get is gone
+const IPC_VERSION = 3;
+const IPC_FEATURES = ['fs', 'fs-list', 'exec', 'exec-approved', 'checks', 'runs', 'ai'];
 
 ipcMain.handle('app:get-info', () => ({
   platform: process.platform,
@@ -535,28 +536,103 @@ ipcMain.handle('checks:run', async (_event, payload) => {
 
 ipcMain.handle('checks:list', () => Object.keys(ALLOWED_CHECKS));
 
-// ─── BYOK: per-user API key storage ─────────────────────────────────
-// Keys are stored locally in userData, encrypted with the OS keystore, and
-// never sent to Vercel servers (bug #9).
-const apiKeyPath = path.join(app.getPath('userData'), 'apikeys.json');
+// ─── BYOK: the user's own AI key ────────────────────────────────────
+// The key is encrypted with the OS keystore and only ever used HERE, in the main
+// process: requests go straight from this machine to the provider. It is never
+// sent to the hosted site or any AgentCorp server, and no IPC returns it to the
+// page (the page is served by the website, so it must not be able to read it).
+// Provider, model and endpoint are saved together with the key, so a page can't
+// re-point a stored key at another host without knowing the key.
+const aiProviders = require('./ai-providers');
+const aiConfigPath = path.join(app.getPath('userData'), 'ai-config.json');
+const aiRuns = new Map(); // run id -> AbortController
+const MAX_AI_RUNS = 8;
 
-function loadApiKeys() { return readSecure(apiKeyPath) || {}; }
-function saveApiKeys(keys) { return writeSecure(apiKeyPath, keys); }
+function loadAiConfig() {
+  const c = readSecure(aiConfigPath);
+  if (!c || typeof c !== 'object') return null;
+  const v = aiProviders.validateConfig(c);
+  return v.ok ? v.cfg : null;
+}
 
-const PROVIDER_RE = /^[a-z0-9_-]{1,32}$/;
+function aiStatus() {
+  const cfg = loadAiConfig();
+  return {
+    configured: !!cfg,
+    provider: cfg ? cfg.provider : null,
+    model: cfg ? cfg.model : null,
+    baseUrl: cfg && cfg.provider === 'custom' ? cfg.baseUrl : null,
+    keyHint: cfg ? aiProviders.keyHint(cfg.key) : '',
+    providers: aiProviders.publicProviders(),
+  };
+}
 
-ipcMain.handle('apikey:get', (_event, provider) => {
-  if (typeof provider !== 'string' || !PROVIDER_RE.test(provider)) return null;
-  const keys = loadApiKeys();
-  return Object.prototype.hasOwnProperty.call(keys, provider) ? keys[provider] : null;
+const AI_ID_RE = /^[A-Za-z0-9_-]{6,64}$/;
+
+ipcMain.handle('ai:status', () => aiStatus());
+
+ipcMain.handle('ai:save', (_event, input) => {
+  const v = aiProviders.validateConfig(input);
+  if (!v.ok) return { ok: false, error: v.error };
+  if (!writeSecure(aiConfigPath, v.cfg)) return { ok: false, error: 'Could not store the key securely on this computer (OS keystore unavailable).' };
+  log('ai: saved config for provider', v.cfg.provider);
+  return { ok: true, status: aiStatus() };
 });
-ipcMain.handle('apikey:set', (_event, provider, value) => {
-  if (typeof provider !== 'string' || !PROVIDER_RE.test(provider)) return false;
-  const keys = loadApiKeys();
-  if (value) { keys[provider] = String(value).slice(0, 512); } else { delete keys[provider]; }
-  return saveApiKeys(keys);
+
+ipcMain.handle('ai:set-model', (_event, model) => {
+  const cfg = loadAiConfig();
+  const m = aiProviders.cleanModel(model);
+  if (!cfg) return { ok: false, error: 'no key saved yet' };
+  if (!m) return { ok: false, error: 'invalid model name' };
+  if (!writeSecure(aiConfigPath, { ...cfg, model: m })) return { ok: false, error: 'could not save' };
+  return { ok: true, status: aiStatus() };
 });
-ipcMain.handle('apikey:list-providers', () => Object.keys(loadApiKeys()));
+
+ipcMain.handle('ai:clear', () => {
+  try { fs.rmSync(aiConfigPath, { force: true }); } catch { /* already gone */ }
+  log('ai: key removed');
+  return { ok: true, status: aiStatus() };
+});
+
+ipcMain.handle('ai:test', async () => {
+  const cfg = loadAiConfig();
+  if (!cfg) return { ok: false, error: 'no key saved yet' };
+  const started = Date.now();
+  const r = await aiProviders.complete(cfg, { prompt: 'Reply with the single word: ok', temperature: 0, maxTokens: 8 });
+  log('ai: test', cfg.provider, r.ok ? 'ok' : `failed ${r.status || ''}`);
+  return { ok: r.ok, error: r.error, ms: Date.now() - started, model: cfg.model };
+});
+
+// One request. With stream:true, text arrives as 'ai:event' messages to the calling window.
+ipcMain.handle('ai:run', async (event, req) => {
+  const cfg = loadAiConfig();
+  if (!cfg) return { ok: false, error: 'No AI key saved. Add one in Integrations.' };
+  const id = req && req.id;
+  if (typeof id !== 'string' || !AI_ID_RE.test(id)) return { ok: false, error: 'invalid request id' };
+  if (aiRuns.size >= MAX_AI_RUNS) return { ok: false, error: 'too many AI requests at once' };
+  const ac = new AbortController();
+  aiRuns.set(id, ac);
+  try {
+    if (req.stream === true) {
+      const sender = event.sender;
+      const r = await aiProviders.stream(cfg, req, (delta) => {
+        if (!sender.isDestroyed()) sender.send('ai:event', { id, delta });
+      }, { signal: ac.signal });
+      return { ok: r.ok, error: r.error, content: r.ok ? undefined : r.content };
+    }
+    const r = await aiProviders.complete(cfg, req, { signal: ac.signal });
+    if (!r.ok) log('ai: request failed', cfg.provider, r.status || '');
+    return r;
+  } finally {
+    aiRuns.delete(id);
+  }
+});
+
+ipcMain.handle('ai:cancel', (_event, id) => {
+  const ac = typeof id === 'string' ? aiRuns.get(id) : null;
+  if (ac) ac.abort();
+  return { ok: true };
+});
 
 // ─── Desktop file executor (sandboxed to workspace) ─────────────────
 // Agents on the desktop can read, write, and search files — but only within a

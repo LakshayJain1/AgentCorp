@@ -23,6 +23,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "ai-providers.js",
       "index.html",
       "signin.html",
       "assets/icon.png"

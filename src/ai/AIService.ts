@@ -3,6 +3,7 @@ import { buildSystemPrompt, getTaskPrompt } from './AgentPersonalities';
 import { configLoader } from '@/config/ConfigLoader';
 import { useGameStore } from '@/store/gameStore';
 import { aiHeaders } from './headers';
+import { aiFetch, BYOK_CHANGED_EVENT } from '@/ai/transport';
 
 function getCompanyContext(): string {
   try {
@@ -37,6 +38,15 @@ class AIService {
   private hasApiKey = false;
   private initPromise: Promise<boolean> | null = null;
 
+  /**
+   * Forget the cached "is an AI key available?" answer. Needed when the user saves or removes their own
+   * key (BYOK): otherwise a "no key" answer cached at startup keeps agents on canned replies until reload.
+   */
+  resetKeyCheck(): void {
+    this.apiKeyChecked = false;
+    this.initPromise = null;
+  }
+
   async checkApiKey(): Promise<boolean> {
     if (this.apiKeyChecked) return this.hasApiKey;
     this.initPromise = this.initPromise || this._checkApiKey();
@@ -45,7 +55,7 @@ class AIService {
 
   private async _checkApiKey(): Promise<boolean> {
     try {
-      const res = await fetch('/api/ai', {
+      const res = await aiFetch({
         method: 'POST',
         headers: await aiHeaders(),
         body: JSON.stringify({ action: 'check' }),
@@ -284,7 +294,7 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
     }
 
     try {
-      const res = await fetch('/api/ai', {
+      const res = await aiFetch({
         method: 'POST',
         headers: await aiHeaders(),
         body: JSON.stringify({ prompt, temperature: 0.7 }),
@@ -379,7 +389,7 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
         ? `Generate an AgentCorp product task title based on this idea: "${customPrompt}". The task must be an analysis, QA review, audit, or documentation of existing AgentCorp code with no code modification. Format: verb + component/system + purpose. Return ONLY the title.`
         : 'Generate an AgentCorp product task title. It must be an analysis, QA review, audit, or documentation of an existing AgentCorp component (EventLog, GameStore, API routes, ConversationPanel, AgentRuntime, ToolRegistry, TaskSystem, HR system, Phaser scene, memory system, task queue, validator, etc.). No code modification. Examples: "Analyze the Zustand store for missing error handling" or "Review the API route security" or "Document the agent state machine". Return ONLY the title.';
 
-      const res = await fetch('/api/ai', {
+      const res = await aiFetch({
         method: 'POST',
         headers: await aiHeaders(),
         body: JSON.stringify({
@@ -426,7 +436,7 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
         item.resolve({ content: this.getMockResponse(item.request) });
       } else {
         try {
-          const res = await fetch('/api/ai', {
+          const res = await aiFetch({
             method: 'POST',
             headers: await aiHeaders(),
             body: JSON.stringify({
@@ -514,3 +524,7 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
 }
 
 export const aiService = new AIService();
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(BYOK_CHANGED_EVENT, () => aiService.resetKeyCheck());
+}
