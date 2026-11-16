@@ -85,7 +85,9 @@ export async function loadPersonalitiesFromConfig(): Promise<void> {
         catchphrases: cSection ? configLoader.parseBulletList(cSection) : DEFAULT_PERSONALITIES[role].catchphrases,
       };
     }
-    cachedPersonalities = personalities as Record<AgentRole, AgentTrait>;
+    // Roles missing from the config file (or whose section did not parse) keep their built-in personality;
+    // without this, buildSystemPrompt() crashed for them and agents answered with canned lines.
+    cachedPersonalities = { ...DEFAULT_PERSONALITIES, ...personalities } as Record<AgentRole, AgentTrait>;
   } catch {
     cachedPersonalities = DEFAULT_PERSONALITIES;
   }
