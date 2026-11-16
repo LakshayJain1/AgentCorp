@@ -34,6 +34,8 @@ import { registerRun, unregisterRun, setResumeHandler, discardInterruptedRun } f
 import { saveCheckpoint, loadCheckpoint, clearCheckpoint, type LoopCheckpoint } from '@/engine/runPersistence';
 import { detectExecutorEnv } from '@/execution/ToolExecutor';
 import { aiFetch } from '@/ai/transport';
+import { searchWeb } from '@/engine/webSearch';
+import { formatResultsForModel } from '@/lib/search';
 
 /** How many times QA may send a finished loop back to the agent before flagging it for a human. */
 const MAX_QA_RETRIES = 2;
@@ -906,6 +908,41 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
     };
   }
 
+  /**
+   * Look the topic up on the web first and hand the model real sources. Shows up in the run's steps like any
+   * other tool call. If search is unavailable the work still proceeds, with an explicit "do not invent sources" rule.
+   */
+  private async groundResearchPrompt(a: { task: Task; worker: Agent; prompt: string; signal: AbortSignal }): Promise<string> {
+    const { task, worker, prompt, signal } = a;
+    const query = task.title.replace(/\s+/g, ' ').trim().slice(0, 200);
+    const stepId = `${task.id}_search`;
+    const noSources =
+      '\n\nNo live web sources were available for this task. Do not invent URLs, quotes, statistics or citations. ' +
+      'Write from general knowledge and say plainly which points you could not verify.';
+
+    emitRun(task.id, { kind: 'tool.call', agentId: worker.id, status: 'running', message: `web_search ${query}`, data: { stepId, tool: 'web_search' } });
+    const r = await searchWeb(query, { maxResults: 6, signal });
+    if (signal.aborted) return prompt;
+    if (!r.ok || r.results.length === 0) {
+      emitRun(task.id, {
+        kind: 'tool.result', agentId: worker.id, status: 'error',
+        message: r.ok ? 'web_search: no results' : `web_search: ${r.error}`,
+        data: { stepId, tool: 'web_search' },
+      });
+      return prompt + noSources;
+    }
+    emitRun(task.id, {
+      kind: 'tool.result', agentId: worker.id, status: 'success', message: `web_search ${query}`,
+      detail: formatResultsForModel(query, r.results).slice(0, 4000), data: { stepId, tool: 'web_search' },
+    });
+    return (
+      prompt +
+      '\n\n' + formatResultsForModel(query, r.results) +
+      '\n\nUse these sources where they help. Cite the URL for every claim you take from them. Snippets are short and may be incomplete: ' +
+      'if they do not cover something, say so plainly instead of guessing. Never invent a link or a quote.'
+    );
+  }
+
   private async runSingleShot(a: {
     task: Task;
     worker: Agent;
@@ -916,7 +953,9 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
     signal: AbortSignal;
     modelOk: boolean;
   }): Promise<{ content: string; results: CriterionResult[] }> {
-    const { task, worker, prompt, deliverableType, deliverableLang, criteria, signal, modelOk } = a;
+    const { task, worker, deliverableType, deliverableLang, criteria, signal, modelOk } = a;
+    // Research work is written from real search results (and told never to invent links), not from memory alone.
+    const prompt = worker.workerRole === 'research_worker' && modelOk ? await this.groundResearchPrompt({ task, worker, prompt: a.prompt, signal }) : a.prompt;
     const qa = async (text: string, stepId: string): Promise<CriterionResult[]> => {
       if (!modelOk) {
         // No AI reviewer (mock mode): report "not evaluated" rather than inventing a verdict.
