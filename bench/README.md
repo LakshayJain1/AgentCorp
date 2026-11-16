@@ -34,6 +34,7 @@ or `BENCH_MODEL`. A full `--repeat 3` run is roughly 40 attempts and a few hundr
 | Tool definitions, argument validation, path rules (`tools.ts`) | The desktop shell: a temp folder plus a fake `window.electronAPI` with the same confinement rules as `desktop/main.js` |
 | Run-event stream (`runEvents.ts`) | `run_check test` / `npm test` run `node --test`, not vitest, so no install step is needed |
 | | `web_fetch` can only reach a local fixture server, so research tasks are repeatable and never touch the real internet |
+| | `web_search` answers from a per-task fixture (`search` in `tasks.mts`), or reports "not set up" when a task has none |
 
 Not covered yet: the desktop shell's own IPC handlers (`desktop/main.js`), approval dialogs,
 `ask_user`, connector tools (Slack/Linear), the orchestrator/planner path, and criteria generation / QA.

@@ -87,6 +87,9 @@ export const REFERENCES: Record<string, Reference> = {
   'research-not-published': {
     summary: 'The Enterprise page does not publish a price; it says to contact sales. Source: {{BASE}}/enterprise',
   },
+  'research-search-verify': {
+    summary: 'Nimbus is cheaper: $9 per seat per month versus $12 for Orbit. Sources: {{BASE}}/nimbus-pricing and {{BASE}}/orbit-pricing',
+  },
   'sales-outreach': {
     apply: (ws) => ws.write('email.md',
       'Subject: Faster delivery planning for Northwind Logistics\n\nHi,\n\nPlanning routes by hand eats hours every week. RouteIQ cuts delivery planning time so your team can focus on exceptions instead of spreadsheets. ' +

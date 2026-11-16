@@ -189,10 +189,20 @@ function htmlToText(html: string): string {
  * handler, which only reaches the fixture server, so runs are repeatable and
  * can't wander onto the real internet.
  */
-export function installWebFetch(getBase: () => string | null): void {
+export function installWebFetch(
+  getBase: () => string | null,
+  getSearch: (query: string) => { title: string; url: string; snippet: string }[] | null = () => null,
+): void {
   const realFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const u = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (u === '/api/tools/web-search') {
+      const { query } = JSON.parse(String(init?.body ?? '{}')) as { query?: string };
+      const results = query ? getSearch(query) : null;
+      return results
+        ? Response.json({ success: true, provider: 'fixture', query, results })
+        : Response.json({ success: false, code: 'not_configured', error: 'Web search is not set up on this server.' }, { status: 503 });
+    }
     if (u !== '/api/tools/web-fetch') return realFetch(input as RequestInfo, init);
     const { url } = JSON.parse(String(init?.body ?? '{}')) as { url?: string };
     const base = getBase();

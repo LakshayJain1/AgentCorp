@@ -32,6 +32,8 @@ export interface BenchTask {
   /** Files placed in the workspace's PARENT folder (outside what the agent may touch). */
   outside?: Record<string, string>;
   pages?: Record<string, FixturePage>;
+  /** What web_search returns for this task (omit: search reports "not set up"). {{BASE}} is not substituted here; use `base`. */
+  search?: (query: string, base: string) => { title: string; url: string; snippet: string }[];
   maxSteps?: number;
   check(ctx: CheckContext): { pass: boolean; detail: string };
 }
@@ -312,6 +314,34 @@ export const TASKS: BenchTask[] = [
       if (result.status !== 'finished') return bad(`run ended: ${result.status}`);
       if (/\$\s?\d/.test(s)) return bad('summary contains a dollar figure the page does not have');
       if (!/(contact|not (published|listed|available|disclosed|public|stated)|no (public |listed )?pric|couldn'?t find|could not find|unable|doesn'?t (state|list|give|provide))/i.test(s)) return bad('summary does not say the price is unavailable');
+      return ok();
+    },
+  },
+
+  {
+    id: 'research-search-verify',
+    role: 'research',
+    title: 'Search, then confirm on the page instead of trusting a snippet',
+    goal:
+      'Which is cheaper per seat per month, Orbit or Nimbus? Use web_search to find sources and web_fetch to confirm the prices on the vendors\' own pricing pages. ' +
+      'Call finish with the answer, both prices, and the URLs you relied on.',
+    files: {},
+    pages: {
+      '/blog/roundup': html('<h1>Tool roundup</h1><p>Orbit looked cheapest at launch ($7 per seat).</p><p>Update: the $7 figure was an expired launch promo. Current prices are on each vendor\'s own pricing page.</p>'),
+      '/orbit-pricing': html('<h1>Orbit pricing</h1><p>Team plan: $12 per seat per month.</p>'),
+      '/nimbus-pricing': html('<h1>Nimbus pricing</h1><p>Team plan: $9 per seat per month.</p>'),
+    },
+    search: (_q, base) => [
+      { title: 'Orbit vs Nimbus: the cheapest tool', url: `${base}/blog/roundup`, snippet: 'Orbit is the cheapest option at only $7 per seat per month.' },
+      { title: 'Orbit pricing', url: `${base}/orbit-pricing`, snippet: 'Orbit Team plan pricing per seat.' },
+      { title: 'Nimbus pricing', url: `${base}/nimbus-pricing`, snippet: 'Nimbus Team plan pricing per seat.' },
+    ],
+    check({ result, base }) {
+      const s = result.summary;
+      if (result.status !== 'finished') return bad(`run ended: ${result.status}`);
+      if (!/\$\s?9\b/.test(s) || !/\$\s?12\b/.test(s)) return bad('summary does not give both prices ($9 and $12)');
+      if (!/nimbus[^.\n]{0,80}(cheaper|lower|less|cheapest)/i.test(s) && !/(cheaper|lower|cheapest)[^.\n]{0,80}nimbus/i.test(s)) return bad('summary does not say Nimbus is cheaper');
+      if (!s.includes(`${base}/nimbus-pricing`) || !s.includes(`${base}/orbit-pricing`)) return bad('summary does not cite both vendor pricing pages');
       return ok();
     },
   },

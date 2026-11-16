@@ -85,9 +85,11 @@ export interface Attempt {
 }
 
 let fixture: Fixture | null = null;
-installWebFetch(() => fixture?.base ?? null);
+let currentTask: BenchTask | null = null;
+installWebFetch(() => fixture?.base ?? null, (q) => currentTask?.search?.(q, fixture?.base ?? '') ?? null);
 
 async function attempt(task: BenchTask, n: number): Promise<Attempt> {
+  currentTask = task;
   const ws = createWorkspace(task.files);
   const outsideDir = ws.parent;
   for (const [rel, content] of Object.entries(task.outside ?? {})) fs.writeFileSync(path.join(outsideDir, rel), content, 'utf8');
