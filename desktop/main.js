@@ -45,6 +45,22 @@ function isTrustedNavigation(u) {
     return o === WEB_ORIGIN;
   } catch { return false; }
 }
+// Clerk (our sign-in provider) runs in development mode on the hosted site, where a new
+// browser is bounced once through its handshake endpoint on `<instance>.clerk.accounts.dev`
+// and straight back. Without this exception the shell refuses the first hop and the sign-in
+// button just reloads the launcher. The exception is deliberately narrow: HTTPS, a Clerk dev
+// host, and exactly the handshake path. Any hop after it (e.g. a hostile redirect_url) still
+// has to pass the normal allowlist.
+function isClerkHandshake(u) {
+  try {
+    const p = new URL(u);
+    return p.protocol === 'https:'
+      && p.port === ''
+      && !p.username && !p.password
+      && /^[a-z0-9-]+\.clerk\.accounts\.dev$/.test(p.hostname)
+      && p.pathname === '/v1/client/handshake';
+  } catch { return false; }
+}
 function isLocalPage(u) {
   try {
     const parsed = new URL(u);
@@ -299,10 +315,12 @@ function createMainWindow() {
   const guardNavigation = (event, url, isRedirect) => {
     let parsed;
     try { parsed = new URL(url); } catch { event.preventDefault(); return; }
-    if (isTrustedNavigation(url) || isLocalPage(url)) return;
+    if (isTrustedNavigation(url) || isLocalPage(url) || isClerkHandshake(url)) return;
     event.preventDefault();
-    if (isRedirect) { showLauncher('blocked untrusted redirect — showing launcher'); return; }
-    log('blocked navigation to untrusted URL');
+    // Log where it was headed (host + path only: query strings can carry tokens).
+    const where = `${parsed.origin}${parsed.pathname}`;
+    if (isRedirect) { showLauncher(`blocked untrusted redirect to ${where} — showing launcher`); return; }
+    log(`blocked navigation to untrusted URL ${where}`);
     openExternalSafe(url);
   };
   mainWindow.webContents.on('will-navigate', (e, url) => guardNavigation(e, url, false));
