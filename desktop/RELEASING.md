@@ -20,22 +20,35 @@ You can also run the workflow by hand (Actions → Run workflow) to check that t
 
 ## Stable download links
 
-Installer names have no version in them, so these links always point at the newest published release:
+The website's Download button goes through `/api/download/windows` (and `/windows-portable`). That route looks up the
+newest **published** release on GitHub and redirects to the installer. If there is no published release yet it sends the
+visitor to the Releases page, so the button can never serve a broken file. Installers are never stored in git or in the
+Vercel deployment.
 
-| File | Link |
-|---|---|
-| Windows installer | `https://github.com/LakshayJain1/AgentCorp/releases/latest/download/AgentCorp-Setup.exe` |
-| Windows portable | `https://github.com/LakshayJain1/AgentCorp/releases/latest/download/AgentCorp-Portable.exe` |
-| macOS | `https://github.com/LakshayJain1/AgentCorp/releases/latest/download/AgentCorp.dmg` |
+## Code signing (Windows)
 
-Point the buttons in `src/app/download/page.tsx` at these **after** the first release is published. Until then
-the page keeps serving `public/downloads/`, so the download buttons never break.
+Builds are **unsigned** today, so Windows SmartScreen says "Windows protected your PC" until the user clicks
+*More info -> Run anyway*. The workflow signs automatically as soon as these repository secrets exist
+(Settings -> Secrets and variables -> Actions):
+
+- `WIN_CSC_LINK`: the `.pfx` certificate, base64-encoded (`certutil -encode cert.pfx cert.b64` on Windows)
+- `WIN_CSC_KEY_PASSWORD`: its password
+
+Ways to get a certificate (check current prices and rules before buying):
+
+| Option | Cost | Notes |
+|---|---|---|
+| **SignPath Foundation** | Free for qualifying open-source projects | Apply at signpath.org. Needs a genuinely open-source project with an OSI licence file (this repo has none yet; only `"license": "MIT"` in `desktop/package.json`). Signing happens through their GitHub Action, not a `.pfx`, so the workflow needs a SignPath step instead of the secrets above. |
+| **OV certificate** from a certificate authority | Paid, yearly | Works for individuals in any country. Many CAs now ship the key on a hardware token or a cloud service, which changes how CI signs, so ask the CA about CI/cloud signing before buying. |
+| **EV certificate** | Paid, more expensive | Removes the SmartScreen warning immediately. OV certificates build reputation over time. |
+| **Microsoft Artifact Signing** (formerly Trusted Signing) | Paid Azure subscription | Individual developers only in the USA and Canada (organisations in the USA, Canada, EU and UK). |
+
+Signing removes the "unknown publisher" label; SmartScreen reputation for a new OV certificate still takes a while to build.
+
+macOS needs an Apple Developer account (paid yearly) for signing and notarization. Until then the macOS build is not offered
+on the website.
 
 ## Good to know
 
-- **Unsigned builds.** There's no code-signing certificate yet. Windows SmartScreen shows "unknown publisher"
-  and macOS Gatekeeper may block the app until the user right-clicks → Open. Signing needs a paid certificate
-  (Windows) and an Apple Developer account (macOS).
-- **No auto-update yet.** Nothing in the app checks for new versions (no `electron-updater`). The download page's
-  "Auto-updates" line isn't true until that's added. The `publish` config here is the groundwork for it.
+- **No auto-update yet.** Nothing in the app checks for new versions (no `electron-updater`).
 - **Private repos.** If the repo ever goes private, anonymous visitors can't download release files.

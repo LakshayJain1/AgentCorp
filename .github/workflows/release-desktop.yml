@@ -48,8 +48,20 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
       - name: Build and upload to the draft release
-        run: npx electron-builder ${{ matrix.flags }} --publish always
+        shell: bash
+        run: |
+          if [ -z "$WIN_CSC_LINK" ]; then
+            unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
+            echo "No Windows signing certificate configured: building UNSIGNED."
+          else
+            echo "Windows signing certificate found: the installer will be signed."
+          fi
+          npx electron-builder ${{ matrix.flags }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # No code-signing certificates are configured yet: build unsigned.
+          # macOS signing is not set up (needs an Apple Developer account): build unsigned.
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # Optional Windows signing. Add repository secrets WIN_CSC_LINK (base64 of the .pfx)
+          # and WIN_CSC_KEY_PASSWORD to turn this on; see desktop/RELEASING.md.
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}

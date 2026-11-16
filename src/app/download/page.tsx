@@ -20,8 +20,8 @@ const DOWNLOADS: Record<Platform, { label: string; icon: React.ReactNode; format
   win: {
     label: 'Windows',
     icon: <Laptop className="w-5 h-5" />,
-    formats: ['.exe installer', '.portable'],
-    url: '/downloads/AgentCorp-Setup-2.2.1.exe',
+    formats: ['.exe installer', 'portable .exe'],
+    url: '/api/download/windows',
   },
   linux: {
     label: 'Linux',
@@ -33,7 +33,7 @@ const DOWNLOADS: Record<Platform, { label: string; icon: React.ReactNode; format
     label: 'Download',
     icon: <Monitor className="w-5 h-5" />,
     formats: [],
-    url: '/downloads/AgentCorp-Setup-2.2.1.exe',
+    url: '/api/download/windows',
   },
 }
 
@@ -111,7 +111,6 @@ export default function DownloadPage() {
             </p>
             <a
               href={detected.url}
-              download
               className="btn-primary text-sm px-8 py-3.5"
             >
               <Download className="w-4 h-4" />
@@ -121,21 +120,25 @@ export default function DownloadPage() {
             {platform === 'win' && (
               <div className="mt-5 flex items-center justify-center gap-4">
                 <a
-                  href="/downloads/AgentCorp-Setup-2.2.1.exe"
-                  download
+                  href="/api/download/windows"
                   className="text-xs text-white hover:text-white font-medium underline underline-offset-2"
                 >
                   Installer (.exe)
                 </a>
                 <span className="text-navy/20">|</span>
                 <a
-                  href="/downloads/AgentCorp-2.2.1.exe"
-                  download
+                  href="/api/download/windows-portable"
                   className="text-xs text-white hover:text-white font-medium underline underline-offset-2"
                 >
                   Portable (.exe)
                 </a>
               </div>
+            )}
+            {platform === 'win' && (
+              <p className="mt-4 text-[11px] text-navy/40 max-w-sm mx-auto leading-relaxed">
+                The installer isn&apos;t code-signed yet, so Windows may show &ldquo;Windows protected your PC&rdquo;.
+                Choose <span className="text-navy/60">More info</span>, then <span className="text-navy/60">Run anyway</span>.
+              </p>
             )}
             {detected.formats.length > 0 && (
               <p className="text-xs text-navy/40 mt-4">
@@ -161,7 +164,6 @@ export default function DownloadPage() {
                 <a
                   key={p}
                   href={dl.url}
-                  download
                   className={`group flex flex-col items-center gap-3 p-7 rounded-3xl border transition-all duration-300 ${
                     p === platform
                       ? 'glass border-white/25 shadow-none'
@@ -200,7 +202,7 @@ export default function DownloadPage() {
             'Same workspace as the web app',
             'Native window controls & shortcuts',
             'Runs locally — your code stays on your machine',
-            'Auto-updates when new versions release',
+            'New versions are published on GitHub Releases',
             'Deep link auth — sign in on web, continue in app',
             'System tray support (coming soon)',
           ].map((feature, i) => (
