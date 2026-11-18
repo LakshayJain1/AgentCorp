@@ -7,6 +7,8 @@ import { useAuthUser } from '@/hooks/useAuthUser';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, ArrowUpRight, Plus, Monitor, Menu, X } from 'lucide-react';
 import HeroOrchestrationPanel from '@/components/HeroOrchestrationPanel';
+import JsonLd from '@/components/JsonLd';
+import { FAQS } from '@/lib/seo';
 
 // Conicorn motion: quick, plain `ease`, nothing slower than ~0.35s for UI.
 const EASE = { duration: 0.35, ease: 'easeOut' } as const;
@@ -74,12 +76,7 @@ export default function LandingPage() {
     { num: '06', title: 'Validation & Push', desc: 'QA runs compilers, lints routes, and issues pull request approval.', detail: 'Checks: tsc, eslint' },
   ];
 
-  const faqs = [
-    { q: 'How does AgentCorp write code locally?', a: 'AgentCorp runs inside a secure local sandbox workspace. It reads files, decomposes architectural needs, compiles via tsc, and automatically fixes syntax errors, committing directly to your local workspace once validation passes.' },
-    { q: 'What keeps agents from writing buggy code?', a: 'Our integrated Quality Assurance (QA) loop runs automated tests and lints (eslint) on every iteration. If an error is detected, the stack trace is fed back to the developer agent to debug.' },
-    { q: 'Can I customise the agent roles?', a: 'Yes! During onboarding, you define the company name, goals, and role structures. You can adjust agent energy conservation settings, morale triggers, and local connector access settings.' },
-    { q: 'Do I need online accounts to use AgentCorp?', a: 'No. You can run AgentCorp entirely locally. To use advanced AI features, configure your Gemini API Key or OpenRouter fallback token in your local .env.local file.' },
-  ];
+  const faqs = FAQS;
 
   const navLinks = [
     { href: '#how', label: 'How it works' },
@@ -93,6 +90,13 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-paper text-white antialiased overflow-x-hidden font-sans">
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: FAQS.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+        }}
+      />
 
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[999] focus:bg-white focus:text-[#1A1A1A] focus:px-4 focus:py-2 focus:rounded-full">Skip to content</a>
 
