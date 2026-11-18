@@ -3,12 +3,20 @@ import { getUserId } from '@/lib/session';
 import { getToken } from '@/lib/integrations/token-service';
 import { getServerTool, listServerToolsAsOpenAI } from '@/lib/integrations/tools';
 import { resolveWorkspace } from '@/lib/workspace';
+import { postWithFallback, resolveModels } from '@/lib/ai/openrouterFallback';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-const FALLBACK_MODEL = 'gemini-2.0-flash';
+// Which OpenRouter model(s) answer when the caller does not name one. Unset = the paid default. A local
+// .env.local can list free ":free" models, comma-separated: if one is rate-limited the next is tried.
+// Production keeps its own environment untouched.
+const MODELS_ENV = process.env.OPENROUTER_MODEL;
+
+// The "-latest" alias keeps working when Google retires a specific model (gemini-2.0-flash 404'd in prod).
+// Override with GEMINI_MODEL to pin one.
+const FALLBACK_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const FALLBACK_URL = `https://generativelanguage.googleapis.com/v1beta/models/${FALLBACK_MODEL}:generateContent`;
 
 const MAX_TOOL_TURNS = 3;
@@ -66,20 +74,19 @@ async function callOpenRouter(
   const tools = body.noTools ? [] : listServerToolsAsOpenAI();
 
   for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: body.model || 'openai/gpt-4o-mini',
+    const { response, model, skipped } = await postWithFallback(
+      fetch,
+      API_URL,
+      { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      {
         messages,
         temperature: body.temperature ?? 0.3,
         max_tokens: Math.min(body.maxTokens ?? 4096, 4096),
         ...(tools.length > 0 ? { tools } : {}),
-      }),
-    });
+      },
+      resolveModels(body.model, MODELS_ENV),
+    );
+    if (skipped.length > 0) console.warn(`[ai] ${skipped.map((k) => `${k.model} ${k.status}`).join(', ')} -> answered by ${model}`);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -103,12 +110,12 @@ async function callOpenRouter(
       toolCalls.map(async (call) => {
         const tool = getServerTool(call.function.name);
         let result = '';
+        let args: Record<string, string> = {};
         if (!tool) {
           result = `Error: unknown tool ${call.function.name}`;
         } else if (!workspaceId) {
           result = `Error: workspace not available for tool execution`;
         } else {
-          let args: Record<string, string> = {};
           try {
             args = JSON.parse(call.function.arguments || '{}') as Record<string, string>;
           } catch {
@@ -119,7 +126,7 @@ async function callOpenRouter(
             if (!token) {
               result = `Error: ${tool.provider} is not connected. Connect it in Integrations tab.`;
             } else {
-              result = await tool.run(token, args);
+              result = await tool.run(token, args, { workspaceId });
             }
           } catch (e) {
             result = `Error executing tool: ${e instanceof Error ? e.message : String(e)}`;
@@ -131,6 +138,8 @@ async function callOpenRouter(
           tool_call_id: call.id,
           content: result,
         });
+        // Report what actually ran so the UI can show it (this array used to stay empty).
+        executed.push({ id: call.id, name: call.function.name, args, result });
       }),
     );
   }
@@ -215,17 +224,13 @@ function streamCompletion(body: RequestBody, openRouterKey: string): Response {
       let sent = false;
       try {
         if (openRouterKey) {
-          const upstream = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openRouterKey}` },
-            body: JSON.stringify({
-              model: body.model || 'openai/gpt-4o-mini',
-              messages,
-              temperature: body.temperature ?? 0.3,
-              max_tokens: body.maxTokens ?? 1024,
-              stream: true,
-            }),
-          });
+          const { response: upstream } = await postWithFallback(
+            fetch,
+            API_URL,
+            { 'Content-Type': 'application/json', Authorization: `Bearer ${openRouterKey}` },
+            { messages, temperature: body.temperature ?? 0.3, max_tokens: body.maxTokens ?? 1024, stream: true },
+            resolveModels(body.model, MODELS_ENV),
+          );
           if (upstream.ok && upstream.body) {
             const reader = upstream.body.getReader();
             const decoder = new TextDecoder();

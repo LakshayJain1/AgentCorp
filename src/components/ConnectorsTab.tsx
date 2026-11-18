@@ -112,6 +112,52 @@ interface ConnectorsTabProps {
   integrations: UseIntegrations;
 }
 
+/** Opt-in: mirror each new task's progress to a Linear issue (comments, status). Off by default. */
+function LinearMirrorSwitch() {
+  const enabled = useGameStore((s) => s.linearMirror.enabled);
+  const autopilot = useGameStore((s) => Boolean(s.linearMirror.autopilot));
+  const setLinearMirror = useGameStore((s) => s.setLinearMirror);
+  const setLinearAutopilot = useGameStore((s) => s.setLinearAutopilot);
+  return (
+    <div className="space-y-1.5">
+    <label className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/[0.04] border border-navy/10 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={enabled}
+        onChange={(e) => setLinearMirror(e.target.checked)}
+        className="mt-0.5 accent-emerald-500 cursor-pointer"
+        aria-label="Mirror tasks to Linear"
+      />
+      <span className="text-[10px] leading-relaxed text-navy/70">
+        <strong className="text-navy">Mirror tasks to Linear</strong>
+        <span className="block text-navy/50">
+          Each task you create from now on gets a Linear issue; assignment, progress, QA and the result are posted as
+          comments (with the agent&apos;s name) and the status follows. Existing tasks are not touched.
+        </span>
+      </span>
+    </label>
+    {enabled && (
+      <label className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/[0.04] border border-navy/10 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={autopilot}
+          onChange={(e) => setLinearAutopilot(e.target.checked)}
+          className="mt-0.5 accent-emerald-500 cursor-pointer"
+          aria-label="Linear autopilot"
+        />
+        <span className="text-[10px] leading-relaxed text-navy/70">
+          <strong className="text-navy">Autopilot</strong>
+          <span className="block text-navy/50">
+            Off: you approve each task before anything is written to Linear. On: agents write without asking.
+            Changes made in Linear (status, comments) are picked up about every 30 seconds either way.
+          </span>
+        </span>
+      </label>
+    )}
+    </div>
+  );
+}
+
 export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
   const [active, setActive] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -348,6 +394,7 @@ export default function ConnectorsTab({ integrations }: ConnectorsTabProps) {
                               ? ` · token refreshes before ${new Date(connection.expiresAt).toLocaleTimeString()}`
                               : ' · token does not expire'}
                           </p>
+                          {connector.id === 'linear' && <LinearMirrorSwitch />}
                           <button
                             onClick={() => handleDisconnect(connector.id, connector.label)}
                             disabled={isBusy}

@@ -243,6 +243,30 @@ export interface Task {
   // dedicated branch and all subtasks inherit repoRef {repo, ref: taskBranch}.
   repoScope?: { repo: string; base?: string };
   taskBranch?: string;
+  /** Integrations-tab providers this task is waiting on; it resumes by itself once they are connected. */
+  awaitingIntegrations?: string[];
+  /** Pasted secrets still to ask for, one at a time, after the integrations are connected. */
+  pendingSecrets?: { key: string; label: string; reason: string }[];
+  /** Linear mirror state (only present when the task is being mirrored to a Linear issue). */
+  linear?: LinearSync;
+}
+
+export interface LinearSync {
+  /** Linear identifier such as "AGE-8"; accepted wherever the tools take an issue id. */
+  identifier: string;
+  url: string;
+  /** 'skipped' = the operator declined to mirror this task; nothing is written for it. */
+  syncState: 'pending' | 'synced' | 'failed' | 'skipped';
+  lastError?: string;
+  /** The last status the app itself wrote, so a poll never mistakes our own move for a human's. */
+  lastWrittenStatus?: string;
+  /** Status Linear reported at the last poll (Linear -> app). */
+  remoteStatus?: string;
+  /** Fingerprints of human comments already seen in Linear, so each is announced once. */
+  remoteSeen?: string[];
+  remoteCheckedAt?: number;
+  /** Idempotency keys of the writes already confirmed, so a reload never re-sends them. */
+  doneKeys: string[];
 }
 
 export interface ConversationMessage {

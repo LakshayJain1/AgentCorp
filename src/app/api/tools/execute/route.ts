@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const output = await tool.run(token, body.params ?? {});
+    const output = await tool.run(token, body.params ?? {}, { workspaceId });
     return NextResponse.json({ success: true, output });
   } catch (err) {
     if (err instanceof ToolInputError) {

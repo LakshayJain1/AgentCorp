@@ -10,7 +10,8 @@ import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXTS = ['.ts', '.tsx', '.mts', '/index.ts', '/index.tsx'];
-const STUBS = new Map([
+// Set LOADER_NO_STUBS=1 to load the real modules (used by tests that exercise the real game store).
+const STUBS = process.env.LOADER_NO_STUBS ? new Map() : new Map([
   ['src/engine/runBridge.ts', 'bench/stubs/runBridge.ts'],
   ['src/engine/model.ts', 'bench/stubs/model.ts'],
   ['src/runtime/ToolRegistry.ts', 'bench/stubs/ToolRegistry.ts'],
@@ -23,6 +24,10 @@ function tryResolve(base) {
 }
 
 export async function resolve(specifier, context, next) {
+  // `server-only` throws outside Next's server bundle; real-module tests treat it as an empty module.
+  if (specifier === 'server-only' && process.env.LOADER_NO_STUBS) {
+    return { url: 'data:text/javascript,export{}', shortCircuit: true };
+  }
   let base = null;
   if (specifier.startsWith('@/')) base = path.join(root, 'src', specifier.slice(2));
   else if ((specifier.startsWith('./') || specifier.startsWith('../')) && context.parentURL?.startsWith('file:')) {

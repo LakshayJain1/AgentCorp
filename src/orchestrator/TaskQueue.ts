@@ -1,6 +1,7 @@
 import { useGameStore } from '@/store/gameStore';
 import { SubTask, Task, WorkerRole } from '@/agents/AgentTypes';
 import { BaseWorkerAgent } from '@/agents/BaseWorkerAgent';
+import { normalizeDependencies, resolveDependencyRef } from './dependencies';
 
 interface QueueItem {
   subtask: SubTask;
@@ -12,6 +13,8 @@ interface QueueItem {
 export class TaskQueue {
   private queue: QueueItem[] = [];
   private inProgress = new Set<string>();
+  private warnedDeps = new Set<string>();
+  private failedJobs = new Set<string>();
 
   enqueue(subtask: SubTask, priority: number = 0): void {
     if (this.queue.some((q) => q.subtask.id === subtask.id)) return;
@@ -42,53 +45,72 @@ export class TaskQueue {
 
     for (let i = this.queue.length - 1; i >= 0; i--) {
       const item = this.queue[i];
-      if (this.inProgress.has(item.subtask.id)) {
+      // One bad job must not stop the others (or throw out of the orchestrator tick).
+      try {
+        if (this.inProgress.has(item.subtask.id)) {
+          this.queue.splice(i, 1);
+          continue;
+        }
+
+        if (!this.areDependenciesMet(item.subtask)) continue;
+
+        const availableWorker = this.findWorker(workers, item.subtask.assignedRole);
+        if (!availableWorker) continue;
+
+        const agent = store.agents.find((a) => a.id === availableWorker.id);
+        if (!agent || agent.currentSubTaskId) continue;
+
+        this.inProgress.add(item.subtask.id);
         this.queue.splice(i, 1);
-        continue;
+
+        store.updateSubtaskStatus(item.subtask.id, 'assigned');
+        store.updateSubtaskAgent(item.subtask.id, agent.id);
+
+        store.updateAgent(agent.id, {
+          currentSubTaskId: item.subtask.id,
+          fsmState: 'thinking',
+        });
+
+        store.addEvent({
+          id: `assign_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: Date.now(),
+          type: 'subtask',
+          message: `Assigned "${item.subtask.description.slice(0, 50)}..." to ${agent.name}`,
+          agentId: agent.id,
+          taskId: item.subtask.parentTaskId,
+        });
+
+        availableWorker.assignSubtask(item.subtask);
+      } catch (err) {
+        const id = item.subtask.id;
+        this.inProgress.delete(id);
+        if (!this.failedJobs.has(id)) {
+          this.failedJobs.add(id);
+          console.error(`[AgentCorp] dispatch failed for subtask ${id}; skipping it this tick:`, err);
+        }
       }
-
-      if (!this.areDependenciesMet(item.subtask)) continue;
-
-      const availableWorker = this.findWorker(workers, item.subtask.assignedRole);
-      if (!availableWorker) continue;
-
-      const agent = store.agents.find((a) => a.id === availableWorker.id);
-      if (!agent || agent.currentSubTaskId) continue;
-
-      this.inProgress.add(item.subtask.id);
-      this.queue.splice(i, 1);
-
-      store.updateSubtaskStatus(item.subtask.id, 'assigned');
-      store.updateSubtaskAgent(item.subtask.id, agent.id);
-
-      store.updateAgent(agent.id, {
-        currentSubTaskId: item.subtask.id,
-        fsmState: 'thinking',
-      });
-
-      store.addEvent({
-        id: `assign_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        timestamp: Date.now(),
-        type: 'subtask',
-        message: `Assigned "${item.subtask.description.slice(0, 50)}..." to ${agent.name}`,
-        agentId: agent.id,
-        taskId: item.subtask.parentTaskId,
-      });
-
-      availableWorker.assignSubtask(item.subtask);
     }
   }
 
   private areDependenciesMet(subtask: SubTask): boolean {
-    if (!subtask.dependencies || subtask.dependencies.length === 0) return true;
+    // Normalize at read time too: persisted or older subtasks may still hold
+    // numbers/objects from the planner. Never throw from here.
+    const deps = normalizeDependencies(subtask.dependencies);
+    if (deps.length === 0) return true;
 
     const store = useGameStore.getState();
     const parentTask = store.tasks.find((t) => t.id === subtask.parentTaskId);
     if (!parentTask) return false;
 
-    for (const depRef of subtask.dependencies) {
+    for (const depRef of deps) {
       const depSub = this.resolveDependency(parentTask, depRef);
-      if (!depSub || depSub.status !== 'completed') return false;
+      if (!depSub) {
+        // A reference that points at nothing can never complete; blocking on it
+        // would wedge the subtask forever. Ignore it and say so once.
+        this.warnUnresolvable(subtask.id, depRef);
+        continue;
+      }
+      if (depSub.status !== 'completed') return false;
     }
     return true;
   }
@@ -100,14 +122,14 @@ export class TaskQueue {
    * parsed the timestamp instead of the index and dependencies silently failed.
    */
   private resolveDependency(parentTask: Task, depRef: string): SubTask | undefined {
-    const byId = parentTask.subtasks.find((s) => s.id === depRef);
-    if (byId) return byId;
-    const m = depRef.match(/^sub_(\d+)$/);
-    if (m) {
-      const idx = parseInt(m[1], 10);
-      return parentTask.subtasks[idx];
-    }
-    return undefined;
+    return resolveDependencyRef(parentTask.subtasks, depRef);
+  }
+
+  private warnUnresolvable(subtaskId: string, depRef: string): void {
+    const key = `${subtaskId}->${depRef}`;
+    if (this.warnedDeps.has(key)) return;
+    this.warnedDeps.add(key);
+    console.warn(`[AgentCorp] subtask ${subtaskId} has an unresolvable dependency "${depRef}"; ignoring it.`);
   }
 
   private findWorker(

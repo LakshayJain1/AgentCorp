@@ -80,7 +80,8 @@ Respond with ONLY valid JSON, no markdown, no explanation:
     const res = await aiFetch({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, temperature: 0.1 }),
+      // The answer is one small JSON object; don't reserve the default 4096 output tokens (a low balance 402s on that).
+      body: JSON.stringify({ prompt, temperature: 0.1, maxTokens: 150 }),
     });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

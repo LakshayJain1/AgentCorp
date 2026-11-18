@@ -1,6 +1,7 @@
 import { configLoader } from '@/config/ConfigLoader';
 import { useGameStore } from '@/store/gameStore';
 import { aiFetch } from '@/ai/transport';
+import { guardAction, providersMentioned, PROVIDER_LABELS } from '@/ai/actionGuard';
 
 export interface IntentResult {
   type: 'internal' | 'needs_credentials' | 'chat' | 'action';
@@ -8,11 +9,18 @@ export interface IntentResult {
   confidence: number;
   chatReply?: string;
   ticketTitle?: string;
+  /** Integrations the server reports connected at classification time (used to route credential requests). */
+  connectedProviders?: string[];
+}
+
+/** Forget the cached connection list (call right after the user connects an integration). */
+export function invalidateConnectedProviders(): void {
+  serverConnected = null;
 }
 
 /** Tools available per connected provider, shown to the LLM classifier. */
 const PROVIDER_TOOLS: Record<string, string[]> = {
-  linear: ['create_issue', 'list_teams'],
+  linear: ['create_issue', 'get_issue', 'comment_on_issue', 'update_issue_status', 'add_label', 'assign_issue', 'list_teams', 'list_workflow_states'],
   slack: ['post_message'],
   vercel: ['list_deployments', 'get_user'],
   github: ['read_file', 'propose_file', 'list_checks', 'ensure_branch'],
@@ -33,6 +41,63 @@ function getConnectedProviders(): string[] {
   } catch {
     return [];
   }
+}
+
+let serverConnected: { at: number; list: string[] } | null = null;
+const CONNECTED_TTL_MS = 10_000;
+const CONNECTED_TIMEOUT_MS = 4_000;
+
+/**
+ * The server's integration store is the source of truth. The persisted `connectors`
+ * flags in the game store go stale (onboarding left GitHub/Vercel "connected" with no
+ * OAuth behind them) and only re-sync when the Integrations tab is opened, so ask the
+ * server directly, repair the store with the answer, and fall back to the last server
+ * answer (then the local flags) if it cannot be reached. Cached briefly and time-boxed
+ * so the lookup never holds up a chat message for long.
+ */
+async function resolveConnectedProviders(): Promise<string[]> {
+  if (serverConnected && Date.now() - serverConnected.at < CONNECTED_TTL_MS) return serverConnected.list;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), CONNECTED_TIMEOUT_MS);
+  try {
+    const res = await fetch('/api/integrations', { cache: 'no-store', signal: ctrl.signal });
+    if (res.ok) {
+      const data = (await res.json()) as { connections?: Array<{ provider: string; accountId?: string | null }> };
+      if (Array.isArray(data.connections)) {
+        try { useGameStore.getState().syncOAuthConnections(data.connections); } catch { /* headless */ }
+        serverConnected = { at: Date.now(), list: data.connections.map((c) => c.provider) };
+        return serverConnected.list;
+      }
+    }
+  } catch {
+    // offline, timed out, or headless: fall through
+  } finally {
+    clearTimeout(timer);
+  }
+  return serverConnected?.list ?? getConnectedProviders();
+}
+
+/**
+ * Put the integrations the message names (and that are not connected) first in the
+ * credential request, so the user is told "Linear connection" rather than a generic
+ * "API Credentials" that matched an unrelated word like "login".
+ */
+function withProviderKeys(
+  keys: { key: string; label: string; reason: string }[],
+  text: string,
+  connected: string[],
+): { key: string; label: string; reason: string }[] {
+  const out = [...keys];
+  for (const p of providersMentioned(text).filter((m) => !connected.includes(m))) {
+    if (out.some((k) => k.key.startsWith(`${p}_`))) continue;
+    const label = PROVIDER_LABELS[p] ?? p;
+    out.unshift({
+      key: `${p}_connection`,
+      label: `${label} connection`,
+      reason: `${label} is not connected. Connect it in the Integrations tab so the team can act on it.`,
+    });
+  }
+  return out;
 }
 
 interface KeywordEntry {
@@ -173,7 +238,8 @@ Respond with valid JSON only — no markdown, no explanation:
     const res = await aiFetch({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, temperature: 0.2 }),
+      // One small JSON object (+ a short chatReply); don't reserve the default 4096 output tokens.
+      body: JSON.stringify({ prompt, temperature: 0.2, maxTokens: 400 }),
     });
 
     if (!res.ok) throw new Error('AI classify failed');
@@ -205,7 +271,7 @@ export async function classifyIntent(
 ): Promise<IntentResult> {
   console.log('[AgentCorp] classifyIntent called with:', text);
 
-  const connectedProviders = getConnectedProviders();
+  const connectedProviders = await resolveConnectedProviders();
   console.log('[AgentCorp] connected providers:', connectedProviders);
 
   // Single LLM call: model sees integration context and decides intent type.
@@ -222,27 +288,44 @@ export async function classifyIntent(
   }
 
   if (llmType === 'action') {
-    console.log('[AgentCorp] intent = action (LLM decision)');
+    // The LLM does not reliably honour "only valid if connected": verify it.
+    const guard = guardAction(text, connectedProviders);
+    if (!guard.downgrade) {
+      console.log('[AgentCorp] intent = action (LLM decision)');
+      const resolvedTitle = resolveTitle(ticketTitle, text);
+      return { type: 'action', requiredKeys: [], confidence: 0.95, ticketTitle: resolvedTitle };
+    }
+
     const resolvedTitle = resolveTitle(ticketTitle, text);
-    return { type: 'action', requiredKeys: [], confidence: 0.95, ticketTitle: resolvedTitle };
+    const keys = withProviderKeys(await detectRequiredKeys(text), text, connectedProviders);
+    if (keys.length === 0) {
+      keys.push({
+        key: 'integration_connection',
+        label: 'An integration connection',
+        reason: 'This needs a connected integration (Linear, Slack, Vercel, GitHub or Notion). Connect one in the Integrations tab.',
+      });
+    }
+    console.log('[AgentCorp] intent = needs_credentials (action downgraded: integration not connected), title =', resolvedTitle);
+    return { type: 'needs_credentials', requiredKeys: keys, confidence: 0.9, ticketTitle: resolvedTitle, connectedProviders };
   }
 
   const resolvedTitle = resolveTitle(ticketTitle, text);
 
   if (llmType === 'needs_credentials') {
     // Still run credential detection to populate requiredKeys for the UI prompt.
-    const matchedKeys = await detectRequiredKeys(text);
+    const matchedKeys = withProviderKeys(await detectRequiredKeys(text), text, connectedProviders);
     console.log('[AgentCorp] intent = needs_credentials, title =', resolvedTitle);
     return {
       type: 'needs_credentials',
       requiredKeys: matchedKeys,
       confidence: matchedKeys.length > 0 ? 0.9 : 0.7,
       ticketTitle: resolvedTitle,
+      connectedProviders,
     };
   }
 
   // llmType === 'task' — check if it references unconnected services needing creds.
-  const matchedKeys = await detectRequiredKeys(text);
+  const matchedKeys = withProviderKeys(await detectRequiredKeys(text), text, connectedProviders);
   const hasExternalIndicators =
     /\b(connect|integrate|push|send\s*to|post\s*to|upload|publish|host)\b/i.test(text);
 
@@ -257,6 +340,7 @@ export async function classifyIntent(
         requiredKeys: matchedKeys,
         confidence: matchedKeys.length > 0 ? 0.9 : 0.5,
         ticketTitle: resolvedTitle,
+        connectedProviders,
       };
     }
   }

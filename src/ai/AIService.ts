@@ -1,3 +1,4 @@
+import { AI_UNAVAILABLE_MESSAGE } from '@/ai/aiMessages';
 import { AgentRole, AgentTrait, AIRequest, AIResponse } from '@/agents/AgentTypes';
 import { buildSystemPrompt, getTaskPrompt } from './AgentPersonalities';
 import { configLoader } from '@/config/ConfigLoader';
@@ -28,6 +29,22 @@ interface QueueItem {
   request: AIRequest;
   resolve: (value: AIResponse) => void;
 }
+
+/** Thrown when the AI provider is down or out of credit, so callers fail honestly instead of shipping canned text. */
+export class AIUnavailableError extends Error {
+  constructor(detail?: string) {
+    super(`AI is unavailable right now${detail ? ` (${detail})` : ''}. Please try again shortly.`);
+    this.name = 'AIUnavailableError';
+  }
+}
+
+export { AI_UNAVAILABLE_MESSAGE };
+
+/**
+ * Canned replies exist for local development without a key. In production they would
+ * pass off a broken backend as a working one, so there a failure is reported instead.
+ */
+const mockAllowed = (): boolean => process.env.NODE_ENV !== 'production';
 
 class AIService {
   private queue: QueueItem[] = [];
@@ -109,6 +126,7 @@ class AIService {
 
     await this.checkApiKey();
     if (!this.hasApiKey) {
+      if (!mockAllowed()) throw new AIUnavailableError('no AI key configured');
       return await this.getMockDeliverable(taskTitle, deliverableType, deliverableLang);
     }
 
@@ -304,9 +322,13 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
       if (data.content && data.content.length > 20) {
         return data.content.trim();
       }
+      // A key is configured but the provider gave nothing: fail the run instead of delivering a template.
+      if (!data.content) throw new AIUnavailableError(typeof data.error === 'string' ? data.error : 'empty response');
     } catch (err) {
       // A user-initiated stop must not silently turn into a mock deliverable.
       if (opts?.signal?.aborted) throw err;
+      if (err instanceof AIUnavailableError) throw err;
+      throw new AIUnavailableError('request failed');
     }
 
     return this.getMockDeliverable(taskTitle, deliverableType, deliverableLang);
@@ -433,7 +455,11 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
       const item = this.queue.shift()!;
 
       if (!this.hasApiKey) {
-        item.resolve({ content: this.getMockResponse(item.request) });
+        item.resolve(
+          mockAllowed()
+            ? { content: this.getMockResponse(item.request) }
+            : { content: AI_UNAVAILABLE_MESSAGE, error: 'no_ai_key' },
+        );
       } else {
         try {
           const res = await aiFetch({
@@ -446,9 +472,17 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
             }),
           });
           const data = await res.json();
-          item.resolve({ content: data.content || this.getMockResponse(item.request), error: data.error, toolCalls: data.toolCalls });
-        } catch {
-          item.resolve({ content: this.getMockResponse(item.request), error: 'API call failed' });
+          if (data.content) {
+            item.resolve({ content: data.content, error: data.error, toolCalls: data.toolCalls });
+          } else {
+            // A key is configured but the provider returned nothing (402 no credit, 429, outage...).
+            // Say so; do not impersonate the agent with a canned line.
+            console.error('[AIService] provider returned no content:', data.error ?? res.status);
+            item.resolve({ content: AI_UNAVAILABLE_MESSAGE, error: data.error || 'AI provider returned no content' });
+          }
+        } catch (err) {
+          console.error('[AIService] AI call failed:', err);
+          item.resolve({ content: AI_UNAVAILABLE_MESSAGE, error: 'API call failed' });
         }
       }
 

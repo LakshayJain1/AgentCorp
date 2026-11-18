@@ -14,7 +14,11 @@
     "desktop:build:win": "next build && cd desktop && npm run build:win",
     "bench": "node --disable-warning=ExperimentalWarning --import ./bench/register.mjs bench/run.mts",
     "bench:report": "node --disable-warning=ExperimentalWarning bench/report.mts",
-    "bench:selftest": "node --disable-warning=ExperimentalWarning --import ./bench/register.mjs bench/selftest.mts"
+    "bench:selftest": "node --disable-warning=ExperimentalWarning --import ./bench/register.mjs bench/selftest.mts",
+    "test:unit": "node --disable-warning=ExperimentalWarning --test tests/*.test.mts",
+    "test:store": "node --disable-warning=ExperimentalWarning --import ./tests/register-real.mjs --test tests/*.store.mts",
+    "test:int": "node --disable-warning=ExperimentalWarning --import ./tests/register-real.mjs --test tests/*.int.mts",
+    "test": "npm run test:unit && npm run test:store && npm run test:int"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.25",

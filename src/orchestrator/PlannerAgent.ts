@@ -1,6 +1,7 @@
 import { useGameStore } from '@/store/gameStore';
 import { Task, SubTask, WorkerRole } from '@/agents/AgentTypes';
 import { aiService } from '@/ai/AIService';
+import { sanitizePlannedDependencies } from './dependencies';
 
 interface PlannerOutput {
   breakdown: PlannerSubtask[];
@@ -85,10 +86,10 @@ export class PlannerAgent {
       assignedRole: item.assignableRoles[0] || null,
       assignedAgentId: null,
       estimatedEffort: item.estimatedEffort,
-      // Dependencies from the LLM are logical indices like "sub_0". We'll
-      // store them as-is and have the TaskQueue look up the subtask by index
-      // within the parent's subtask list.
-      dependencies: item.dependencies,
+      // The LLM returns indices as numbers, numeric strings, "sub_0" or objects.
+      // Normalize to canonical "sub_<n>" strings and drop refs that can never be
+      // met (self / out of range); the TaskQueue resolves them by index.
+      dependencies: sanitizePlannedDependencies(item.dependencies, idx, plan.breakdown.length),
       acceptanceCriteria: item.acceptanceCriteria,
       verifyCommand: item.verifyCommand ?? (taskBranch && task.repoScope
         ? `ci:${task.repoScope.repo}@${taskBranch}`

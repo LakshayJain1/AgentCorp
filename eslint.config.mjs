@@ -13,6 +13,11 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Test doubles (fake Linear transport, store pokes) are deliberately loosely typed.
+  {
+    files: ["tests/**/*.mts"],
+    rules: { "@typescript-eslint/no-explicit-any": "off" },
+  },
 ]);
 
 export default eslintConfig;

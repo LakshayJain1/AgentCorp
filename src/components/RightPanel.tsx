@@ -2,7 +2,7 @@
 
 import { useGameStore } from '@/store/gameStore';
 import RoleIcon from '@/components/RoleIcon';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Cpu, Database, Users, CheckSquare, FileText,
@@ -23,7 +23,9 @@ export default function RightPanel() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [listCollapsed, setListCollapsed] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'integrations'>('overview');
+  // Lives in the store so other parts of the app (e.g. the "Connect X" prompt) can open the Integrations tab.
+  const activeTab = useGameStore((s) => s.rightPanelTab);
+  const setActiveTab = useGameStore((s) => s.setRightPanelTab);
   const [sprintLoading, setSprintLoading] = useState(false);
 
   // Dynamic values
@@ -131,6 +133,14 @@ export default function RightPanel() {
 
   const integrations = useIntegrations();
   const connectedCount = integrations.connections.length;
+
+  // Keep the store in step with the server whichever tab is open (and after an OAuth redirect back
+  // to /workspace), so tasks waiting on an integration resume as soon as it is connected.
+  const syncOAuthConnections = useGameStore((s) => s.syncOAuthConnections);
+  useEffect(() => {
+    if (integrations.loading || integrations.error) return;
+    syncOAuthConnections(integrations.connections);
+  }, [integrations.loading, integrations.error, integrations.connections, syncOAuthConnections]);
 
   return (
     <div className="w-full lg:w-1/4 shrink-0 h-full min-h-0 flex flex-col glass-panel bg-black/20 border-l">

@@ -1,4 +1,4 @@
-import { useGameStore } from '@/store/gameStore';
+import { useGameStore, setIntegrationResumeHandler } from '@/store/gameStore';
 import { Agent, AgentActivity, SubTask, StreamEvent, Task } from '@/agents/AgentTypes';
 import { PlannerAgent } from './PlannerAgent';
 import { TaskQueue } from './TaskQueue';
@@ -14,11 +14,12 @@ import { ResearchAgent } from '@/agents/ResearchAgent';
 import { SalesAgent } from '@/agents/SalesAgent';
 import { FinanceAgent } from '@/agents/FinanceAgent';
 import { OpsAgent } from '@/agents/OpsAgent';
-import { classifyIntent, formatTicketTitle } from '@/ai/IntentClassifier';
+import { classifyIntent, formatTicketTitle, invalidateConnectedProviders } from '@/ai/IntentClassifier';
+import { routeCredentialKeys } from '@/ai/credentialRouting';
 import { classifyTask } from '@/ai/TaskClassifier';
 import { LoopOrchestrator } from './LoopOrchestrator';
 import { MAX_VALIDATION_RETRIES } from './LoopTypes';
-import { aiService } from '@/ai/AIService';
+import { aiService, AIUnavailableError } from '@/ai/AIService';
 import { AGENT_PERSONALITIES } from '@/ai/AgentPersonalities';
 import { announceTaskHandoff } from '@/systems/ConversationSystem';
 import { streamAI } from '@/ai/stream';
@@ -70,6 +71,14 @@ export class CentralOrchestrator {
     // Pipeline (planner/queue) progress feeds the same run-event stream the chat reads.
     this.logStream.onChunk(publishFromChunk);
     setResumeHandler((taskId) => this.resumeRun(taskId));
+    // A task that was waiting for an integration is unblocked: re-submit its original request so it is
+    // classified again with the integration connected (an `action` can now actually run).
+    setIntegrationResumeHandler((task) => {
+      invalidateConnectedProviders(); // the 10s cache may still say "not connected"
+      this.handleUserRequest(task.description || task.title).catch((err) =>
+        console.error('[AgentCorp] resuming after integration connect failed:', err),
+      );
+    });
     console.log('[AgentCorp] CentralOrchestrator constructed');
   }
 
@@ -301,17 +310,23 @@ export class CentralOrchestrator {
       const newTask = useGameStore.getState().tasks[useGameStore.getState().tasks.length - 1];
       const taskId = newTask?.id;
 
-      if (pm && ceo) {
-        store.sendMessage(pm.id, ceo.id, `Ticket "${ticketTitle}" requires external credentials (${intent.requiredKeys.map((k) => k.label).join(', ')}). Awaiting credentials.`);
-      }
-
-      for (const key of intent.requiredKeys) {
-        store.requestCredential(
-          taskId || `intent_${Date.now()}`,
-          key.reason,
-          key.key,
-          key.label,
-        );
+      // Integrations that live in the Integrations tab are connected there (OAuth), never pasted.
+      // Only real secrets (cloud, database, Stripe...) get the paste prompt.
+      const { integrations, secrets } = routeCredentialKeys(intent.requiredKeys, intent.connectedProviders ?? []);
+      if (integrations.length > 0 && taskId) {
+        store.requestIntegrations(taskId, integrations, secrets);
+      } else if (secrets.length > 0) {
+        if (pm && ceo) {
+          store.sendMessage(pm.id, ceo.id, `Ticket "${ticketTitle}" requires external credentials (${secrets.map((k) => k.label).join(', ')}). Awaiting credentials.`);
+        }
+        // Ask one at a time: a single prompt slot, so the rest wait on the task.
+        if (taskId) store.updateTask(taskId, { pendingSecrets: secrets.slice(1) });
+        store.requestCredential(taskId || `intent_${Date.now()}`, secrets[0].reason, secrets[0].key, secrets[0].label);
+      } else if (newTask) {
+        // Everything the request named is already connected: nothing is missing, just do the work.
+        this.executeDirectTask(newTask).catch((err) => {
+          console.error('[AgentCorp] direct task execution failed:', err);
+        });
       }
       this.emit({
         type: 'log',
@@ -734,7 +749,8 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
       const res = await aiFetch({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemPrompt, prompt: description }),
+        // A tool call plus a one-line confirmation never needs the default 4096-token reservation (which fails on a low balance).
+        body: JSON.stringify({ systemPrompt, prompt: description, maxTokens: 1024 }),
         needsServerTools: true, // Slack/Linear actions run on the server's connector tools
       });
       const data = (await res.json().catch(() => null)) as {
@@ -744,8 +760,14 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
       } | null;
 
       const toolCalls = data?.toolCalls ?? [];
+      // If the AI itself failed (no credit, provider down) say that, not "check your integrations".
+      const aiFailed = !data || Boolean(data.error);
       const reply = data?.content
-        || (toolCalls.length > 0 ? `Done. ${toolCalls.map((t) => t.result).join(' ')}` : 'Could not complete the action — check your integrations are connected.');
+        || (toolCalls.length > 0
+          ? `Done. ${toolCalls.map((t) => t.result).join(' ')}`
+          : aiFailed
+            ? '⚠️ The AI service is unavailable right now, so I couldn\'t run that. Please try again in a moment.'
+            : 'I didn\'t run any tool for that. Tell me which integration to use, or check it is connected.');
 
       store.sendMessage(agent.id, agent.id, reply);
       this.reportToolCalls(agent.id, toolCalls);
@@ -987,12 +1009,18 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
         message: `Sending the work back to ${worker.name} (attempt 2)`,
         detail: failureFeedback(results),
       });
-      const second = await aiService.generateDeliverable(
-        `${prompt}\n\nA reviewer found problems with a previous attempt:\n${failureFeedback(results)}\n\nPrevious attempt:\n${content.slice(0, 4000)}\n\nWrite an improved, complete version that fixes every problem.`,
-        deliverableType,
-        deliverableLang,
-        { signal, criteria: criteriaTexts },
-      );
+      let second = '';
+      try {
+        second = await aiService.generateDeliverable(
+          `${prompt}\n\nA reviewer found problems with a previous attempt:\n${failureFeedback(results)}\n\nPrevious attempt:\n${content.slice(0, 4000)}\n\nWrite an improved, complete version that fixes every problem.`,
+          deliverableType,
+          deliverableLang,
+          { signal, criteria: criteriaTexts },
+        );
+      } catch (err) {
+        // The provider dropped during the retry: keep the first attempt (and its QA verdict) rather than failing the whole run.
+        if (!(err instanceof AIUnavailableError)) throw err;
+      }
       if (signal.aborted) throw new Error('cancelled');
       if (second && second.length > 50) {
         content = second;

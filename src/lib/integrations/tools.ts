@@ -1,6 +1,8 @@
 import 'server-only';
 
 import type { ProviderId } from './providers/types';
+import { LinearClient, type LinearIssue } from './linear/client';
+import { LinearError, describeLinearError } from './linear/errors';
 
 /**
  * Server-side tool gateway. Each tool runs with the caller's decrypted token
@@ -14,13 +16,18 @@ export class ToolInputError extends Error {
   }
 }
 
+/** Per-call context. `workspaceId` scopes deterministic ids so idempotent writes stay stable across token refreshes. */
+export interface ToolContext {
+  workspaceId?: string;
+}
+
 export interface ServerTool {
   name: string;
   provider: ProviderId;
   description: string;
-  /** Same shape as AgentTypes.ToolDefinition.parameters. */
+  /** Same shape as AgentTypes.ToolDefinition.parameters. A value containing "optional" marks the param optional. */
   parameters: Record<string, string>;
-  run(token: string, args: Record<string, string>): Promise<string>;
+  run(token: string, args: Record<string, string>, ctx?: ToolContext): Promise<string>;
 }
 
 function assertParams(args: Record<string, string>, ...keys: string[]): void {
@@ -50,71 +57,134 @@ async function slackPostMessage(token: string, args: Record<string, string>): Pr
   return `posted to ${json.channel ?? args.channel} (ts=${json.ts ?? 'unknown'})`;
 }
 
-async function linearListTeams(token: string): Promise<string> {
-  const res = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: `{ teams { nodes { id name key } } }` }),
-    cache: 'no-store',
-  });
-  const json = (await res.json().catch(() => null)) as
-    | { data?: { teams?: { nodes?: { id: string; name: string; key: string }[] } }; errors?: { message?: string }[] }
-    | null;
-  if (!res.ok || json?.errors?.length) {
-    throw new Error(`Linear team fetch failed (${json?.errors?.[0]?.message ?? res.status})`);
+// ── Linear ──────────────────────────────────────────────────────────────────
+// All Linear tools go through LinearClient: typed errors, bounded retries on 429/5xx/network,
+// and idempotent writes when an `idempotencyKey` is given (see src/lib/integrations/linear).
+
+function linearClient(token: string, ctx?: ToolContext): LinearClient {
+  return new LinearClient({ token, namespace: ctx?.workspaceId });
+}
+
+/** Linear failures become readable tool errors: bad input -> 400, everything else -> 502. Never contains the token. */
+async function linearCall<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof LinearError) {
+      const message = describeLinearError(err);
+      throw err.kind === 'validation' ? new ToolInputError(message) : new Error(message);
+    }
+    throw err;
   }
-  const teams = json?.data?.teams?.nodes ?? [];
+}
+
+function describeIssue(i: LinearIssue): string {
+  const bits = [`${i.identifier} "${i.title}"`, i.state ? `[${i.state.name}]` : '', i.url];
+  if (i.labels.length) bits.push(`labels: ${i.labels.map((l) => l.name).join(', ')}`);
+  if (i.assignee) bits.push(`assignee: ${i.assignee.name}`);
+  return bits.filter(Boolean).join(' ');
+}
+
+async function linearListTeams(token: string, _args: Record<string, string>, ctx?: ToolContext): Promise<string> {
+  const teams = await linearCall(() => linearClient(token, ctx).listTeams());
   if (teams.length === 0) return 'No Linear teams found.';
   return teams.map((t) => `${t.name} — id: ${t.id} (key: ${t.key})`).join('\n');
 }
 
-async function linearCreateIssue(token: string, args: Record<string, string>): Promise<string> {
-  assertParams(args, 'title');
-  // If teamId not provided, auto-pick the first team
-  let teamId = args.teamId?.trim();
-  if (!teamId) {
-    const teamsText = await linearListTeams(token);
-    const match = teamsText.match(/id:\s*([a-f0-9-]{36})/i);
-    if (!match) throw new ToolInputError('No Linear teams found — connect a workspace first.');
-    teamId = match[1];
-  }
-  const res = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query: `mutation IssueCreate($input: IssueCreateInput!) {
-        issueCreate(input: $input) {
-          success
-          issue { id identifier url }
-        }
-      }`,
-      variables: {
-        input: {
-          teamId,
-          title: args.title,
-          ...(args.description ? { description: args.description } : {}),
-        },
-      },
-    }),
-    cache: 'no-store',
+async function linearListWorkflowStates(token: string, args: Record<string, string>, ctx?: ToolContext): Promise<string> {
+  return linearCall(async () => {
+    const c = linearClient(token, ctx);
+    const team = await c.resolveTeam(args.teamId);
+    const states = await c.listWorkflowStates(team.id);
+    return `${team.name} (${team.key}) workflow states:\n` + states.map((s) => `- ${s.name} (${s.type})`).join('\n');
   });
-  const json = (await res.json().catch(() => null)) as
-    | {
-        data?: { issueCreate?: { success?: boolean; issue?: { identifier?: string; url?: string } } };
-        errors?: { message?: string }[];
+}
+
+async function linearCreateIssue(token: string, args: Record<string, string>, ctx?: ToolContext): Promise<string> {
+  assertParams(args, 'title');
+  return linearCall(async () => {
+    const c = linearClient(token, ctx);
+    const team = await c.resolveTeam(args.teamId); // id, key, name, or the first team when omitted
+    const names = (args.labels ?? '').split(',').map((n) => n.trim()).filter(Boolean);
+    const labelIds: string[] = [];
+    const skipped: string[] = [];
+    for (const name of names) {
+      try {
+        labelIds.push((await c.ensureLabel(team.id, name)).id);
+      } catch (err) {
+        // Existing labels are used; creating new ones needs a permission the connected app may not have.
+        // A missing label must not stop the issue itself, so skip it and say so.
+        if (err instanceof LinearError && err.kind === 'validation') skipped.push(name);
+        else throw err;
       }
-    | null;
-  if (!res.ok || json?.errors?.length) {
-    throw new Error(`Linear rejected the issue (${json?.errors?.[0]?.message ?? res.status})`);
-  }
-  const issue = json?.data?.issueCreate?.issue;
-  if (!json?.data?.issueCreate?.success || !issue) {
-    throw new Error('Linear did not create the issue');
-  }
-  return `created ${issue.identifier ?? 'issue'} ${issue.url ?? ''}`.trim();
+    }
+    const { issue, replayed } = await c.createIssue({
+      teamId: team.id,
+      title: args.title,
+      description: args.description?.trim() || undefined,
+      labelIds,
+      idempotencyKey: args.idempotencyKey?.trim() || undefined,
+    });
+    const note = skipped.length
+      ? ` (labels skipped: ${skipped.join(', ')}. They don't exist and this app isn't allowed to create labels in the team; create them in Linear first.)`
+      : '';
+    return `${replayed ? 'already existed' : 'created'} ${describeIssue(issue)}${note}`;
+  });
+}
+
+async function linearGetIssue(token: string, args: Record<string, string>, ctx?: ToolContext): Promise<string> {
+  assertParams(args, 'issueId');
+  return linearCall(async () => {
+    const issue = await linearClient(token, ctx).getIssue(args.issueId.trim());
+    if (!issue) throw new LinearError('not_found', `issue ${args.issueId}`);
+    const lines = [describeIssue(issue)];
+    if (issue.description) lines.push(`description: ${issue.description.slice(0, 500)}`);
+    for (const cm of issue.comments.slice(-5)) lines.push(`comment: ${cm.body.slice(0, 200)}`);
+    return lines.join('\n');
+  });
+}
+
+async function linearUpdateIssueStatus(token: string, args: Record<string, string>, ctx?: ToolContext): Promise<string> {
+  assertParams(args, 'issueId', 'status');
+  return linearCall(async () => {
+    const { issue, changed } = await linearClient(token, ctx).updateIssueStatus(args.issueId.trim(), args.status);
+    return `${changed ? 'moved' : 'already in'} ${issue.state?.name ?? args.status}: ${describeIssue(issue)}`;
+  });
+}
+
+async function linearCommentOnIssue(token: string, args: Record<string, string>, ctx?: ToolContext): Promise<string> {
+  assertParams(args, 'issueId', 'body');
+  return linearCall(async () => {
+    const c = linearClient(token, ctx);
+    const issue = await c.getIssue(args.issueId.trim());
+    if (!issue) throw new LinearError('not_found', `issue ${args.issueId}`);
+    // One Linear app posts for everyone, so the agent's name goes in the comment itself.
+    const author = args.author?.trim();
+    const body = author ? `**${author}:** ${args.body}` : args.body;
+    const r = await c.createComment({ issueId: issue.id, body, idempotencyKey: args.idempotencyKey?.trim() || undefined });
+    return `${r.replayed ? 'comment already existed on' : 'commented on'} ${issue.identifier}${r.url ? ` ${r.url}` : ''}`;
+  });
+}
+
+async function linearAddLabel(token: string, args: Record<string, string>, ctx?: ToolContext): Promise<string> {
+  assertParams(args, 'issueId', 'label');
+  return linearCall(async () => {
+    const c = linearClient(token, ctx);
+    const issue = await c.getIssue(args.issueId.trim());
+    if (!issue) throw new LinearError('not_found', `issue ${args.issueId}`);
+    if (!issue.team) throw new LinearError('validation', 'issue has no team to attach a label to');
+    const label = await c.ensureLabel(issue.team.id, args.label.trim());
+    await c.addLabel(issue.id, label.id);
+    return `labelled ${issue.identifier} with "${label.name}"`;
+  });
+}
+
+async function linearAssignIssue(token: string, args: Record<string, string>, ctx?: ToolContext): Promise<string> {
+  assertParams(args, 'issueId', 'assigneeId');
+  return linearCall(async () => {
+    const issue = await linearClient(token, ctx).assignIssue(args.issueId.trim(), args.assigneeId.trim());
+    return `assigned ${describeIssue(issue)}`;
+  });
 }
 
 async function vercelListDeployments(token: string, args: Record<string, string>): Promise<string> {
@@ -263,16 +333,73 @@ const TOOLS: ServerTool[] = [
   {
     name: 'linear_list_teams',
     provider: 'linear',
-    description: 'List all Linear teams in the connected workspace, returning each team name and id.',
+    description: 'List all Linear teams in the connected workspace, returning each team name, id and key.',
     parameters: {},
     run: linearListTeams,
   },
   {
+    name: 'linear_list_workflow_states',
+    provider: 'linear',
+    description: 'List the workflow states (e.g. Todo, In Progress, Done) of a Linear team.',
+    parameters: { teamId: 'string (optional: team id, key or name; defaults to the first team)' },
+    run: linearListWorkflowStates,
+  },
+  {
     name: 'linear_create_issue',
     provider: 'linear',
-    description: 'Create a Linear issue. Call linear_list_teams first if you do not know the teamId — or omit teamId to auto-pick the first team.',
-    parameters: { title: 'string', description: 'string (optional)', teamId: 'string (optional — auto-picked if omitted)' },
+    description:
+      'Create a Linear issue. Omit teamId to use the first team. Pass `labels` as comma-separated names (created if missing). ' +
+      'Pass the same idempotencyKey to retry safely: a repeat returns the existing issue instead of creating a duplicate.',
+    parameters: {
+      title: 'string',
+      description: 'string (optional)',
+      teamId: 'string (optional: team id, key or name)',
+      labels: 'string (optional: comma-separated label names)',
+      idempotencyKey: 'string (optional: makes the create safe to retry)',
+    },
     run: linearCreateIssue,
+  },
+  {
+    name: 'linear_get_issue',
+    provider: 'linear',
+    description: 'Read a Linear issue (state, labels, assignee, latest comments) by id or identifier like ENG-12.',
+    parameters: { issueId: 'string (id or identifier such as ENG-12)' },
+    run: linearGetIssue,
+  },
+  {
+    name: 'linear_update_issue_status',
+    provider: 'linear',
+    description: 'Move a Linear issue to a workflow state by name ("In Progress", "Done") or common word (todo, review, done, canceled).',
+    parameters: { issueId: 'string (id or identifier such as ENG-12)', status: 'string' },
+    run: linearUpdateIssueStatus,
+  },
+  {
+    name: 'linear_comment_on_issue',
+    provider: 'linear',
+    description:
+      'Comment on a Linear issue. Pass `author` (e.g. "Mike (Engineer)") so the comment shows which agent wrote it. ' +
+      'Pass the same idempotencyKey to retry safely without a duplicate comment.',
+    parameters: {
+      issueId: 'string (id or identifier such as ENG-12)',
+      body: 'string (markdown)',
+      author: 'string (optional: agent name shown at the start of the comment)',
+      idempotencyKey: 'string (optional: makes the comment safe to retry)',
+    },
+    run: linearCommentOnIssue,
+  },
+  {
+    name: 'linear_add_label',
+    provider: 'linear',
+    description: 'Add a label (by name, created in the issue\'s team if missing) to a Linear issue.',
+    parameters: { issueId: 'string (id or identifier such as ENG-12)', label: 'string' },
+    run: linearAddLabel,
+  },
+  {
+    name: 'linear_assign_issue',
+    provider: 'linear',
+    description: 'Assign a Linear issue to a workspace member by their Linear user id.',
+    parameters: { issueId: 'string (id or identifier such as ENG-12)', assigneeId: 'string (Linear user id)' },
+    run: linearAssignIssue,
   },
   {
     name: 'vercel_list_deployments',
@@ -342,7 +469,7 @@ export function listServerToolsAsOpenAI(): Array<{
       parameters: {
         type: 'object',
         properties: Object.fromEntries(Object.keys(t.parameters).map((k) => [k, { type: 'string' }])),
-        required: Object.keys(t.parameters),
+        required: Object.entries(t.parameters).filter(([, d]) => !/optional/i.test(d)).map(([k]) => k),
       },
     },
   }));

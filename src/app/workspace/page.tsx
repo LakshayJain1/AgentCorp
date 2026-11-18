@@ -6,6 +6,7 @@ import LeftSidebar from '@/components/LeftSidebar';
 import CenterPanel from '@/components/CenterPanel';
 import RightPanel from '@/components/RightPanel';
 import CredentialDialog from '@/components/CredentialDialog';
+import LinearMirrorBridge from '@/components/LinearMirrorBridge';
 import WorkspaceViewer from '@/components/WorkspaceViewer';
 import { useEffect, useState, Suspense } from 'react';
 import { useGameStore } from '@/store/gameStore';
@@ -112,6 +113,7 @@ function WorkspacePageInner() {
       </nav>
 
       <CredentialDialog />
+      <LinearMirrorBridge />
     </div>
   );
 }

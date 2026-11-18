@@ -8,6 +8,7 @@ import { configLoader } from '@/config/ConfigLoader';
 import { toOfficeLocations } from '@/game/pixi/PixiOfficeLayout';
 import { publishFromExecutionLog } from '@/engine/runBridge';
 import { dedupeSnapshotsByRole } from './agentSnapshots';
+import { PROVIDER_LABELS } from '@/ai/actionGuard';
 
 const DEFAULT_TASK_TITLES = [
   'Analyze customer feedback', 'Fix API issue', 'Review compliance report', 'Prepare deployment',
@@ -339,6 +340,26 @@ export interface CredentialRequest {
   value?: string;
 }
 
+export type RightPanelTab = 'overview' | 'integrations';
+
+export type PendingSecret = { key: string; label: string; reason: string };
+
+/** Shown when a task is blocked on integrations that live in the Integrations tab. */
+export interface IntegrationPrompt {
+  taskId: string;
+  taskTitle: string;
+  providers: string[];
+}
+
+/**
+ * Called when a task that was waiting on an integration is unblocked. The orchestrator registers it
+ * (the store cannot import the orchestrator without a cycle) and re-submits the original request.
+ */
+let integrationResumeHandler: ((task: Task) => void) | null = null;
+export function setIntegrationResumeHandler(fn: ((task: Task) => void) | null): void {
+  integrationResumeHandler = fn;
+}
+
 export interface UserMessage {
   id: string;
   message: string;
@@ -355,6 +376,11 @@ interface GameStore {
   selectedAgentId: string | null;
   selectedTaskId: string | null;
   credentialRequest: CredentialRequest | null;
+  integrationPrompt: IntegrationPrompt | null;
+  rightPanelTab: RightPanelTab;
+  /** Mirror each task's lifecycle to a Linear issue. Off until the operator turns it on. */
+  /** autopilot: write without asking first (otherwise each task's first write needs approval). */
+  linearMirror: { enabled: boolean; enabledAt: number; autopilot?: boolean };
   deliverableProjects: DeliverableProject[];
   userMessages: UserMessage[];
   centerView: CenterView;
@@ -377,6 +403,16 @@ interface GameStore {
   requestCredential: (taskId: string, reason: string, credentialKey: string, credentialLabel: string) => void;
   provideCredential: (credentialKey: string, value: string) => void;
   dismissCredentialRequest: () => void;
+  /** Task needs integrations from the Integrations tab (OAuth), not a pasted token. */
+  requestIntegrations: (taskId: string, providers: string[], secrets?: PendingSecret[]) => void;
+  /** Hide the prompt, keep the task waiting, and open the Integrations tab. */
+  deferIntegrationPrompt: () => void;
+  cancelIntegrationTask: () => void;
+  setRightPanelTab: (tab: RightPanelTab) => void;
+  setLinearMirror: (enabled: boolean) => void;
+  setLinearAutopilot: (autopilot: boolean) => void;
+  /** Resume every task whose awaited integrations are all in `connectedProviders`. */
+  resumeIntegrationTasks: (connectedProviders: string[]) => void;
 
   // New Runtime API
   pushAgentActivity: (agentId: string, activity: AgentActivity) => void;
@@ -495,6 +531,9 @@ export const useGameStore = create<GameStore>()(
   selectedAgentId: null,
   selectedTaskId: null,
   credentialRequest: null,
+  integrationPrompt: null,
+  rightPanelTab: 'overview',
+  linearMirror: { enabled: false, enabledAt: 0 },
   deliverableProjects: [],
   userMessages: [],
   centerView: 'chat',
@@ -687,6 +726,17 @@ export const useGameStore = create<GameStore>()(
     // Mark task as in_progress and resume
     const task = store.tasks.find((t) => t.id === req.taskId);
     if (task) {
+      // More secrets queued for this task? Ask for the next one instead of resuming.
+      const queued = task.pendingSecrets ?? [];
+      if (queued.length > 0) {
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === task.id ? { ...t, pendingSecrets: queued.slice(1), aiContext: { ...t.aiContext, [credentialKey]: value } } : t,
+          ),
+        }));
+        get().requestCredential(task.id, queued[0].reason, queued[0].key, queued[0].label);
+        return;
+      }
       const pm = get().agents.find((a) => a.role === 'pm');
       if (pm) {
         get().sendMessage(pm.id, pm.id, `✅ Credentials provided by operator. Resuming task "${task.title}".`);
@@ -1135,6 +1185,93 @@ export const useGameStore = create<GameStore>()(
       }
       return { connectors };
     });
+    // Tasks waiting on an integration pick themselves back up once the server says it is connected.
+    get().resumeIntegrationTasks(connections.map((c) => c.provider));
+  },
+
+  requestIntegrations: (taskId, providers, secrets = []) => {
+    const task = get().tasks.find((t) => t.id === taskId);
+    const labels = providers.map((p) => PROVIDER_LABELS[p] ?? p).join(', ');
+    set((state) => ({
+      tasks: state.tasks.map((t) =>
+        t.id === taskId ? { ...t, status: 'awaiting_credentials' as const, awaitingIntegrations: providers, pendingSecrets: secrets } : t,
+      ),
+      integrationPrompt: { taskId, taskTitle: task?.title ?? 'Unknown task', providers },
+    }));
+
+    const pm = get().agents.find((a) => a.role === 'pm');
+    const ceo = get().agents.find((a) => a.role === 'ceo');
+    if (pm && ceo) {
+      get().sendMessage(pm.id, ceo.id, `🔌 "${task?.title}" needs ${labels}, which isn't connected. Connect it in the Integrations tab and I'll pick this back up automatically.`);
+    }
+    const ev = createGameEvent('system', `Task "${task?.title}" paused. Waiting for ${labels} to be connected`);
+    set((state) => ({ events: [ev, ...state.events.slice(0, 49)] }));
+  },
+
+  deferIntegrationPrompt: () => {
+    // Keep the task waiting; just take the operator to the tab where the connection happens.
+    set({ integrationPrompt: null, rightPanelTab: 'integrations' });
+  },
+
+  cancelIntegrationTask: () => {
+    const prompt = get().integrationPrompt;
+    if (!prompt) return;
+    set((state) => ({
+      integrationPrompt: null,
+      tasks: state.tasks.map((t) =>
+        t.id === prompt.taskId ? { ...t, status: 'failed' as const, awaitingIntegrations: undefined, pendingSecrets: undefined } : t,
+      ),
+    }));
+    const pm = get().agents.find((a) => a.role === 'pm');
+    if (pm) get().sendMessage(pm.id, pm.id, `❌ Cancelled. Task "${prompt.taskTitle}" won't run without the integration.`);
+    const ev = createGameEvent('system', `Task "${prompt.taskTitle}" cancelled (integration not connected).`);
+    set((state) => ({ events: [ev, ...state.events.slice(0, 49)] }));
+  },
+
+  setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
+
+  setLinearMirror: (enabled) =>
+    set((state) => ({
+      // enabledAt is the cut-off: only tasks created after switching on are mirrored, never old history.
+      linearMirror: { ...state.linearMirror, enabled, enabledAt: enabled ? Date.now() : state.linearMirror.enabledAt },
+    })),
+
+  setLinearAutopilot: (autopilot) => set((state) => ({ linearMirror: { ...state.linearMirror, autopilot } })),
+
+  resumeIntegrationTasks: (connectedProviders) => {
+    const ready = get().tasks.filter(
+      (t) =>
+        t.status === 'awaiting_credentials' &&
+        (t.awaitingIntegrations?.length ?? 0) > 0 &&
+        t.awaitingIntegrations!.every((p) => connectedProviders.includes(p)),
+    );
+    for (const t of ready) {
+      const labels = (t.awaitingIntegrations ?? []).map((p) => PROVIDER_LABELS[p] ?? p).join(', ');
+      const queued = t.pendingSecrets ?? [];
+      set((state) => ({
+        integrationPrompt: state.integrationPrompt?.taskId === t.id ? null : state.integrationPrompt,
+        tasks: state.tasks.map((x) =>
+          x.id === t.id
+            ? {
+                ...x,
+                awaitingIntegrations: undefined,
+                pendingSecrets: queued.slice(1),
+                // The original request is re-submitted below as a fresh request, so this placeholder is done.
+                ...(queued.length === 0 ? { status: 'completed' as const, completedAt: Date.now() } : {}),
+              }
+            : x,
+        ),
+      }));
+      const pm = get().agents.find((a) => a.role === 'pm');
+      if (pm) get().sendMessage(pm.id, pm.id, `✅ ${labels} connected. Picking "${t.title}" back up.`);
+
+      if (queued.length > 0) {
+        // Real secrets still needed: ask for them (one at a time) before resuming.
+        get().requestCredential(t.id, queued[0].reason, queued[0].key, queued[0].label);
+        continue;
+      }
+      integrationResumeHandler?.(t);
+    }
   },
 }),
     {
@@ -1166,6 +1303,7 @@ export const useGameStore = create<GameStore>()(
         developersCount: state.developersCount,
         connectors: state.connectors,
         orgId: state.orgId,
+        linearMirror: state.linearMirror,
 
         // Tasks: last 100 by recency, strip executionLogs (largest field)
         tasks: [...state.tasks]

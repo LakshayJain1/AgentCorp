@@ -219,46 +219,9 @@ export default function CenterPanel() {
     });
   };
 
-  // Dynamic bubble styles corresponding to roles in the design image
-  const getBubbleStyle = (role: string) => {
-    switch (role?.toLowerCase()) {
-      case 'ceo':
-        return {
-          wrapper: 'bg-[#E8E8FF]/60 border border-[#E8E8FF]',
-          text: 'text-navy/90',
-        };
-      case 'qa':
-        return {
-          wrapper: 'bg-[#E2FBE9]/70 border border-[#E2FBE9]',
-          text: 'text-navy/90',
-        };
-      case 'engineer':
-        return {
-          wrapper: 'bg-[#FFE6E6]/70 border border-[#FFE6E6]',
-          text: 'text-rose-400/90',
-        };
-      case 'sales':
-        return {
-          wrapper: 'bg-[#FFF3E0]/70 border border-[#FFD580]/30',
-          text: 'text-amber-400/90',
-        };
-      case 'finance':
-        return {
-          wrapper: 'bg-[#E6FBF0]/70 border border-[#26de81]/20',
-          text: 'text-emerald-400/90',
-        };
-      case 'ops':
-        return {
-          wrapper: 'bg-[#EAF0FF]/70 border border-[#4b7bec]/20',
-          text: 'text-blue-400/90',
-        };
-      default:
-        return {
-          wrapper: 'bg-white/[0.06] border border-navy/5',
-          text: 'text-navy/90',
-        };
-    }
-  };
+  // One fixed bubble look for everyone (agents and the user): neutral black with white text.
+  const BUBBLE_BG = 'bg-neutral-900 border border-white/10';
+  const BUBBLE_TEXT = 'text-white';
 
   return (
     <div className="flex-1 lg:w-1/2 lg:flex-none flex flex-col min-w-0 h-full lg:border-r lg:border-l glass-divider bg-black/20">
@@ -390,7 +353,7 @@ export default function CenterPanel() {
                       <span className="text-[10px] font-bold text-navy/50">YOU</span>
                       <span className="text-[9px] text-navy/35 font-medium">{formatTime(msg.timestamp)}</span>
                     </div>
-                    <div className="bg-[#253229] text-white rounded-2xl rounded-tr-md px-4 py-3 shadow-sm border border-[#253229]">
+                    <div className="bg-neutral-900 text-white rounded-2xl rounded-tr-md px-4 py-3 shadow-sm border border-white/10">
                       <p className="text-sm leading-relaxed font-medium">{msg.message}</p>
                     </div>
                   </div>
@@ -398,7 +361,6 @@ export default function CenterPanel() {
               );
             }
 
-            const bubbleStyle = getBubbleStyle(msg.fromRole);
             return (
               <motion.div
                 key={msg.id}
@@ -424,8 +386,8 @@ export default function CenterPanel() {
                   </div>
 
                   {/* Bubble content */}
-                  <div className={`rounded-2xl rounded-tl-md px-4 py-2.5 shadow-sm ${bubbleStyle.wrapper}`}>
-                    <p className={`text-sm leading-relaxed font-medium ${bubbleStyle.text}`}>{msg.message}</p>
+                  <div className={`rounded-2xl rounded-tl-md px-4 py-2.5 shadow-sm ${BUBBLE_BG}`}>
+                    <p className={`text-sm leading-relaxed font-medium ${BUBBLE_TEXT}`}>{msg.message}</p>
                   </div>
                 </div>
               </motion.div>
