@@ -94,10 +94,11 @@ class AIService {
     traits: AgentTrait,
     prompt: string,
     context?: Record<string, string>,
+    opts?: { tier?: 'small' | 'large'; maxTokens?: number },
   ): Promise<AIResponse> {
     return new Promise((resolve) => {
       this.queue.push({
-        request: { agentRole: role, agentName: name, agentTraits: traits, prompt, context },
+        request: { agentRole: role, agentName: name, agentTraits: traits, prompt, context, tier: opts?.tier, maxTokens: opts?.maxTokens },
         resolve,
       });
       this.processQueue();
@@ -417,6 +418,8 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
         body: JSON.stringify({
           prompt,
           temperature: 0.8,
+          tier: 'small',
+          maxTokens: 60,
         }),
       });
       const data = await res.json();
@@ -469,6 +472,9 @@ Leading indicators (CTR, open rate, CPC), lagging indicators (MQL, SQL, revenue)
               systemPrompt: buildSystemPrompt(item.request.agentRole, item.request.agentName),
               prompt: item.request.prompt,
               context: item.request.context,
+              // Chat-style replies are short and don't need the big model; callers that need real output opt in.
+              tier: item.request.tier ?? 'small',
+              maxTokens: item.request.maxTokens ?? 350,
             }),
           });
           const data = await res.json();

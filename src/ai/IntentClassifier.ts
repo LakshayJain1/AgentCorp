@@ -2,6 +2,8 @@ import { configLoader } from '@/config/ConfigLoader';
 import { useGameStore } from '@/store/gameStore';
 import { aiFetch } from '@/ai/transport';
 import { guardAction, providersMentioned, PROVIDER_LABELS } from '@/ai/actionGuard';
+import { trimHistory } from '@/ai/history';
+import { normalizeClassification, rememberClassification } from '@/ai/TaskClassifier';
 
 export interface IntentResult {
   type: 'internal' | 'needs_credentials' | 'chat' | 'action';
@@ -177,14 +179,41 @@ interface LLMClassifyResult {
   chatReply?: string;
 }
 
+const GREETING_RE = /^\s*(hi|hello|hey|yo|sup|hiya|howdy|good (morning|afternoon|evening)|thanks|thank you|thx|ty|ok|okay|cool|nice|great|got it|sounds good)\b[\s!.,]*(alex|there|team|all)?[\s!.,]*$/i;
+const BUILD_VERB_RE = /^\s*(please\s+)?(build|create|write|make|design|implement|generate|draft|develop|code|add)\b/i;
+
+/**
+ * Decides obvious messages without a model call. Deliberately narrow: bare greetings/thanks become chat,
+ * and short imperative build requests that name no integration become tasks. Everything else (questions,
+ * anything touching an integration, anything ambiguous) still goes to the model. Exported for tests.
+ */
+export function ruleIntent(text: string): LLMClassifyResult | null {
+  const t = text.trim();
+  if (!t) return null;
+  if (GREETING_RE.test(t)) {
+    return { type: 'chat', chatReply: "Hey! I'm Alex. Tell me what you'd like the team to build, research or plan and I'll get it moving." };
+  }
+  const words = t.split(/\s+/).filter(Boolean);
+  if (
+    t.length <= 120 && words.length >= 3 && BUILD_VERB_RE.test(t) &&
+    !t.endsWith('?') && !t.includes('\n') && providersMentioned(t).length === 0
+  ) {
+    return { type: 'task', ticketTitle: formatTicketTitle(t) };
+  }
+  return null;
+}
+
 async function aiClassifyIntent(
   text: string,
   connectedProviders: string[],
   history?: { role: 'user' | 'agent'; text: string }[],
 ): Promise<LLMClassifyResult> {
+  const ruled = ruleIntent(text);
+  if (ruled) return ruled;
   try {
-    const historyBlock = history && history.length > 0
-      ? `\nConversation so far (oldest first):\n${history.map((m) => `${m.role === 'user' ? 'User' : 'CEO'}: ${m.text}`).join('\n')}\n`
+    const recent = trimHistory(history, { maxMessages: 4, maxChars: 200 });
+    const historyBlock = recent.length > 0
+      ? `\nConversation so far (oldest first):\n${recent.map((m) => `${m.role === 'user' ? 'User' : 'CEO'}: ${m.text}`).join('\n')}\n`
       : '';
 
     let companyBlock = '';
@@ -202,8 +231,12 @@ async function aiClassifyIntent(
         }).join('\n')}\n`
       : '\nNo integrations currently connected.\n';
 
-    const prompt = `You are Alex, CEO of AgentCorp, an AI-powered virtual company.${companyBlock}
-A user is chatting with you.${integrationsBlock}${historyBlock}
+    // Volatile context last, static instructions in the system prompt (stable prefix the provider can cache).
+    const prompt = `${companyBlock}${integrationsBlock}${historyBlock}
+Latest message: "${text}"`;
+
+    const systemPrompt = `You are Alex, CEO of AgentCorp, an AI-powered virtual company.
+A user is chatting with you.
 Classify the LATEST user message into exactly one of these types:
 
 "action"  — The user wants to immediately EXECUTE an operation using a connected integration right now.
@@ -227,19 +260,23 @@ Rules:
 - When in doubt between "action" and "task": if it's a one-shot operation (not building software) and a connected tool covers it → "action".
 - "search/find/look up [provider] pages/issues/messages" when that provider IS connected → always "action".
 
-Latest message: "${text}"
+For "task" also name who should do it, so no second routing call is needed:
+agentRole: engineer | researcher | sales | finance | ops | qa
+deliverableType: code | doc | report | spec | config | analysis | design | pitch | outreach | gtm | proposal | icp | campaign
+deliverableLang (code only): typescript | react | nextjs | node | python | html | yaml
+Keep chatReply to one or two short sentences.
 
 Respond with valid JSON only — no markdown, no explanation:
 {"type": "action", "ticketTitle": "Short Title"}
-{"type": "task", "ticketTitle": "Short Title (3–7 words, Title Case)"}
+{"type": "task", "ticketTitle": "Short Title (3–7 words, Title Case)", "agentRole": "engineer", "deliverableType": "code", "deliverableLang": "react"}
 {"type": "chat", "chatReply": "your short warm CEO reply"}
 {"type": "needs_credentials", "ticketTitle": "Short Title"}`;
 
     const res = await aiFetch({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // One small JSON object (+ a short chatReply); don't reserve the default 4096 output tokens.
-      body: JSON.stringify({ prompt, temperature: 0.2, maxTokens: 400 }),
+      // One small JSON object (+ a short chatReply); don't reserve the default output cap.
+      body: JSON.stringify({ systemPrompt, prompt, temperature: 0.2, maxTokens: 300, tier: 'small' }),
     });
 
     if (!res.ok) throw new Error('AI classify failed');
@@ -249,9 +286,15 @@ Respond with valid JSON only — no markdown, no explanation:
     const jsonMatch = data.content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('no JSON in response');
 
-    const parsed = JSON.parse(jsonMatch[0]) as { type?: string; ticketTitle?: string; chatReply?: string };
+    const parsed = JSON.parse(jsonMatch[0]) as { type?: string; ticketTitle?: string; chatReply?: string; agentRole?: string; deliverableType?: string; deliverableLang?: string };
     const validTypes: LLMIntentType[] = ['action', 'task', 'chat', 'needs_credentials'];
     const type = validTypes.includes(parsed.type as LLMIntentType) ? (parsed.type as LLMIntentType) : 'chat';
+    if (type === 'task') {
+      // Reuse the routing the model already did so classifyTask() does not spend a second call on this title.
+      const cls = normalizeClassification(parsed);
+      const title = resolveTitle(parsed.ticketTitle, text);
+      if (cls) rememberClassification(title, cls);
+    }
     return { type, ticketTitle: parsed.ticketTitle, chatReply: parsed.chatReply };
   } catch {
     // Fallback heuristics when AI is unavailable.

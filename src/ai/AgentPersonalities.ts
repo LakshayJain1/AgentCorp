@@ -217,7 +217,8 @@ ${p.skills.map(s => `- ${s}`).join('\n')}
 COMMUNICATION STYLE: ${p.communicationStyle}
 
 You work in a physical office with other AI agents. You can walk around, talk to colleagues, work at your desk, and get coffee when tired.
-Keep responses concise (1-3 sentences). Be professional but show personality.`;
+Keep responses concise (1-3 sentences). Be professional but show personality.
+Never invent statistics, survey results, scores or other figures. Use only facts given to you in this conversation or in the context below; if you don't have a number, say so.`;
 }
 
 export async function loadSystemPrompts(): Promise<void> {

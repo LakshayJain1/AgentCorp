@@ -43,6 +43,7 @@ export class AgentMessaging {
       to.traits,
       `You received this message from ${from.name} (${from.role}): "${message}". Respond professionally and concisely (1-2 sentences).`,
       { fromAgent: from.name, fromRole: from.role },
+      { tier: 'small', maxTokens: 120 },
     );
 
     const reply = response.content || `${to.name} acknowledges your message.`;
