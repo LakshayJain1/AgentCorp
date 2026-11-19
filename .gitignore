@@ -52,3 +52,12 @@ public/downloads/
 /.clerk/
 
 .env*.local
+
+
+# local logs, brag video output, load tests
+build.log
+dev-groq.log
+dev9.log
+brag-output*/
+brag-render*.mjs
+load-test.yml

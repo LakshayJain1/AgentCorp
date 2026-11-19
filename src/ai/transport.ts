@@ -78,6 +78,8 @@ interface AiBody {
   maxTokens?: number;
   stream?: boolean;
   action?: string;
+  /** Model size hint for the hosted server; the desktop (BYOK) path uses the user's own model and ignores it. */
+  tier?: 'small' | 'large';
 }
 
 export async function aiFetch(init: RequestInit & { needsServerTools?: boolean }): Promise<Response> {

@@ -22,7 +22,7 @@ export async function GET() {
   const integrationStorageConfigured = Boolean(
     process.env.DATABASE_URL && process.env.TOKEN_ENCRYPTION_KEY,
   );
-  const aiConfigured = Boolean(process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY);
+  const aiConfigured = Boolean(process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY);
 
   return NextResponse.json({
     githubOAuthConfigured,
@@ -48,7 +48,7 @@ export async function GET() {
       ...(!vercelOAuthConfigured ? ['VERCEL_CLIENT_ID + Vercel_CLIENT_SECRET (Vercel OAuth)'] : []),
       ...(!notionOAuthConfigured ? ['NOTION_CLIENT_ID + NOTION_CLIENT_SECRET (Notion OAuth)'] : []),
       ...(!aiConfigured
-        ? ['OPENROUTER_API_KEY and/or GEMINI_API_KEY (dev fallback until per-user BYOK vault lands)']
+        ? ['GROQ_API_KEY, OPENROUTER_API_KEY and/or GEMINI_API_KEY (dev fallback until per-user BYOK vault lands)']
         : []),
     ],
   });

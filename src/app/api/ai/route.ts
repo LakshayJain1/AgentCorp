@@ -4,7 +4,9 @@ import { getToken } from '@/lib/integrations/token-service';
 import { getServerTool, listServerToolsAsOpenAI } from '@/lib/integrations/tools';
 import { resolveWorkspace } from '@/lib/workspace';
 import { postWithFallback, resolveModels } from '@/lib/ai/openrouterFallback';
+import { GROQ_URL, boostedCap, firstCap, groqExtras, groqModels, isTier, retryDelayMs, type ModelTier } from '@/lib/ai/groq';
 
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -33,6 +35,59 @@ interface RequestBody {
   maxTokens?: number;
   /** Don't offer server-side integration tools (the agent loop gates those itself). */
   noTools?: boolean;
+  /** 'small' for routing/chat/criteria, 'large' (default) for real work. Only Groq distinguishes them. */
+  tier?: ModelTier;
+}
+
+/** One OpenAI-compatible chat endpoint the route can call. */
+interface ChatProvider {
+  name: 'groq' | 'openrouter';
+  url: string;
+  key: string;
+  models: string[];
+  /** Fields added to every request body (output cap, reasoning effort...). */
+  payload: (cap: number) => Record<string, unknown>;
+}
+
+function groqProvider(body: RequestBody): ChatProvider {
+  const models = groqModels(isTier(body.tier) ? body.tier : 'large');
+  return {
+    name: 'groq',
+    url: GROQ_URL,
+    key: GROQ_API_KEY,
+    models,
+    payload: (cap) => ({ max_completion_tokens: cap, ...groqExtras(models) }),
+  };
+}
+
+function openRouterProvider(body: RequestBody, key: string = OPENROUTER_API_KEY): ChatProvider {
+  return {
+    name: 'openrouter',
+    url: API_URL,
+    key,
+    models: resolveModels(body.model, MODELS_ENV),
+    payload: (cap) => ({ max_tokens: cap }),
+  };
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * POST with the provider's models in order. One short wait-and-retry on a 429 that carries a small
+ * retry-after (Groq limits are per minute), never a retry loop.
+ */
+async function postChat(provider: ChatProvider, payload: Record<string, unknown>) {
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${provider.key}` };
+  let out = await postWithFallback(fetch, provider.url, headers, payload, provider.models);
+  if (out.response.status === 429) {
+    const wait = retryDelayMs(out.response.headers);
+    if (wait !== null) {
+      await out.response.text().catch(() => '');
+      await sleep(wait);
+      out = await postWithFallback(fetch, provider.url, headers, payload, provider.models);
+    }
+  }
+  return out;
 }
 
 interface ToolCallResult {
@@ -53,12 +108,20 @@ interface OpenRouterMessage {
   tool_call_id?: string;
 }
 
-async function callOpenRouter(
+interface ChatResult {
+  content: string | null;
+  toolCalls: ToolCallResult[];
+  /** True when the final reply was still cut off by the output limit after one larger retry. */
+  truncated?: boolean;
+  usage?: { model: string; promptTokens: number; completionTokens: number };
+}
+
+async function callChat(
+  provider: ChatProvider,
   body: RequestBody,
   userId: string,
   workspaceId: string | null,
-  apiKey: string = OPENROUTER_API_KEY,
-): Promise<{ content: string | null; toolCalls: ToolCallResult[] }> {
+): Promise<ChatResult> {
   const messages: OpenRouterMessage[] = [];
   const executed: ToolCallResult[] = [];
 
@@ -72,42 +135,61 @@ async function callOpenRouter(
   messages.push({ role: 'user', content: body.prompt });
 
   const tools = body.noTools ? [] : listServerToolsAsOpenAI();
+  let cap = firstCap(body.maxTokens);
+  let retriedLength = false;
+  let truncated = false;
+  let usage: ChatResult['usage'];
 
   for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-    const { response, model, skipped } = await postWithFallback(
-      fetch,
-      API_URL,
-      { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      {
-        messages,
-        temperature: body.temperature ?? 0.3,
-        max_tokens: Math.min(body.maxTokens ?? 4096, 4096),
-        ...(tools.length > 0 ? { tools } : {}),
-      },
-      resolveModels(body.model, MODELS_ENV),
-    );
+    const { response, model, skipped } = await postChat(provider, {
+      messages,
+      temperature: body.temperature ?? 0.3,
+      ...provider.payload(cap),
+      ...(tools.length > 0 ? { tools } : {}),
+    });
     if (skipped.length > 0) console.warn(`[ai] ${skipped.map((k) => `${k.model} ${k.status}`).join(', ')} -> answered by ${model}`);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('OpenRouter API error:', response.status, errorText);
+      console.error(`${provider.name} API error:`, response.status, errorText);
       return { content: null, toolCalls: executed };
     }
 
     const data = await response.json();
-    const choiceMessage = data?.choices?.[0]?.message as OpenRouterMessage | undefined;
+    const choice = data?.choices?.[0];
+    const choiceMessage = choice?.message as OpenRouterMessage | undefined;
     if (!choiceMessage) return { content: null, toolCalls: executed };
+
+    const u = data?.usage;
+    if (u) {
+      usage = { model, promptTokens: Number(u.prompt_tokens) || 0, completionTokens: Number(u.completion_tokens) || 0 };
+      console.log(`[ai] ${provider.name} ${model} tier=${body.tier ?? 'large'} in=${usage.promptTokens} out=${usage.completionTokens} finish=${choice?.finish_reason ?? '?'}`);
+    }
+
+    const toolCalls = choiceMessage.tool_calls;
+    const hasTools = !!toolCalls && toolCalls.length > 0;
+
+    // A reply cut off by the output cap (reasoning models can use most of it before answering) is retried once
+    // with a larger cap instead of being passed on half-written (a truncated JSON plan or deliverable breaks downstream).
+    if (choice?.finish_reason === 'length' && !hasTools) {
+      if (!retriedLength && cap < boostedCap(cap)) {
+        retriedLength = true;
+        cap = boostedCap(cap);
+        turn--;
+        continue;
+      }
+      truncated = true;
+    }
 
     messages.push(choiceMessage);
 
-    const toolCalls = choiceMessage.tool_calls;
-    if (!toolCalls || toolCalls.length === 0) {
-      return { content: choiceMessage.content || null, toolCalls: executed };
+    if (!hasTools) {
+      return { content: choiceMessage.content || null, toolCalls: executed, truncated: truncated || undefined, usage };
     }
 
     // Process tool calls in parallel using the caller's server-decrypted token
     await Promise.all(
-      toolCalls.map(async (call) => {
+      toolCalls!.map(async (call) => {
         const tool = getServerTool(call.function.name);
         let result = '';
         let args: Record<string, string> = {};
@@ -146,7 +228,7 @@ async function callOpenRouter(
 
   // Fallback: return the latest assistant content if max turns reached
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
-  return { content: lastAssistant?.content || null, toolCalls: executed };
+  return { content: lastAssistant?.content || null, toolCalls: executed, truncated: truncated || undefined, usage };
 }
 
 async function callGeminiFallback(body: RequestBody): Promise<string | null> {
@@ -204,12 +286,12 @@ const encoder = new TextEncoder();
 const sse = (obj: unknown): Uint8Array => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
 
 /**
- * Streams plain assistant text from OpenRouter as SSE `{delta}` events.
+ * Streams plain assistant text as SSE `{delta}` events from the first configured provider that answers
+ * (Groq, then OpenRouter), then Gemini as a single delta.
  * Server-side integration tools are intentionally not offered here: this path
  * is for summaries and chat replies, where we want tokens on screen quickly.
- * Falls back to Gemini (single delta) if OpenRouter is unavailable.
  */
-function streamCompletion(body: RequestBody, openRouterKey: string): Response {
+function streamCompletion(body: RequestBody, providers: ChatProvider[]): Response {
   const messages: OpenRouterMessage[] = [];
   if (body.systemPrompt) {
     const contextStr = body.context
@@ -223,14 +305,14 @@ function streamCompletion(body: RequestBody, openRouterKey: string): Response {
     async start(controller) {
       let sent = false;
       try {
-        if (openRouterKey) {
-          const { response: upstream } = await postWithFallback(
-            fetch,
-            API_URL,
-            { 'Content-Type': 'application/json', Authorization: `Bearer ${openRouterKey}` },
-            { messages, temperature: body.temperature ?? 0.3, max_tokens: body.maxTokens ?? 1024, stream: true },
-            resolveModels(body.model, MODELS_ENV),
-          );
+        for (const provider of providers) {
+          if (sent) break;
+          const { response: upstream } = await postChat(provider, {
+            messages,
+            temperature: body.temperature ?? 0.3,
+            ...provider.payload(Math.min(body.maxTokens ?? 1024, 4096)),
+            stream: true,
+          });
           if (upstream.ok && upstream.body) {
             const reader = upstream.body.getReader();
             const decoder = new TextDecoder();
@@ -256,7 +338,7 @@ function streamCompletion(body: RequestBody, openRouterKey: string): Response {
               }
             }
           } else {
-            console.error('OpenRouter stream error:', upstream.status, await upstream.text().catch(() => ''));
+            console.error(`${provider.name} stream error:`, upstream.status, await upstream.text().catch(() => ''));
           }
         }
         if (!sent && GEMINI_API_KEY) {
@@ -293,26 +375,32 @@ export async function POST(req: NextRequest) {
     // BYOK keys are never accepted here: the desktop app calls the provider directly from the
     // user's computer (desktop/ai-providers.js), so a user's key never reaches this server.
 
+    const hasGroq = GROQ_API_KEY.length > 0;
+    const hasOpenRouter = OPENROUTER_API_KEY.length > 0;
+    const hasGemini = GEMINI_API_KEY.length > 0;
+
     if (body.action === 'check') {
-      const hasKey = OPENROUTER_API_KEY.length > 0 || GEMINI_API_KEY.length > 0;
+      const hasKey = hasGroq || hasOpenRouter || hasGemini;
       return NextResponse.json({
         available: hasKey,
         configured: hasKey,
-        provider: OPENROUTER_API_KEY.length > 0 ? 'openrouter' : GEMINI_API_KEY.length > 0 ? 'gemini' : 'none',
-        message: OPENROUTER_API_KEY.length > 0
-          ? 'OpenRouter API key is configured'
-          : GEMINI_API_KEY.length > 0
-            ? 'Gemini API key is configured (fallback)'
-            : 'No API key set. Using mock AI responses.',
+        provider: hasGroq ? 'groq' : hasOpenRouter ? 'openrouter' : hasGemini ? 'gemini' : 'none',
+        message: hasGroq
+          ? 'Groq API key is configured'
+          : hasOpenRouter
+            ? 'OpenRouter API key is configured'
+            : hasGemini
+              ? 'Gemini API key is configured (fallback)'
+              : 'No API key set. Using mock AI responses.',
       });
     }
 
-    // Server keys only: OpenRouter, then Gemini as the fallback.
-    const effectiveOpenRouterKey = OPENROUTER_API_KEY;
-    const hasOpenRouter = effectiveOpenRouterKey.length > 0;
-    const hasGemini = GEMINI_API_KEY.length > 0;
+    // Server keys only, in order: Groq, OpenRouter, then Gemini as the last fallback.
+    const providers: ChatProvider[] = [];
+    if (hasGroq) providers.push(groqProvider(body));
+    if (hasOpenRouter) providers.push(openRouterProvider(body));
 
-    if (!hasOpenRouter && !hasGemini) {
+    if (providers.length === 0 && !hasGemini) {
       return NextResponse.json({
         content: null,
         error: 'No API key configured',
@@ -320,7 +408,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (body.stream === true) return streamCompletion(body, hasOpenRouter ? effectiveOpenRouterKey : '');
+    if (body.stream === true) return streamCompletion(body, providers);
 
     // Resolve the caller's workspace once so provider tools can fetch their
     // decrypted token. Absent DB config is handled by getToken -> 503.
@@ -333,11 +421,16 @@ export async function POST(req: NextRequest) {
 
     let content: string | null = null;
     let toolCalls: ToolCallResult[] = [];
+    let truncated: boolean | undefined;
+    let usage: ChatResult['usage'];
 
-    if (hasOpenRouter) {
-      const result = await callOpenRouter(body, userId, workspaceId, effectiveOpenRouterKey);
+    for (const provider of providers) {
+      const result = await callChat(provider, body, userId, workspaceId);
       content = result.content;
       toolCalls = result.toolCalls;
+      truncated = result.truncated;
+      usage = result.usage;
+      if (content) break;
     }
 
     if (!content && hasGemini) {
@@ -352,7 +445,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ content: content.trim(), toolCalls });
+    return NextResponse.json({ content: content.trim(), toolCalls, ...(truncated ? { truncated } : {}), ...(usage ? { usage } : {}) });
   } catch (error) {
     console.error('AI route error:', error);
     return NextResponse.json({

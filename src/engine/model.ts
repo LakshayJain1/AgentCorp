@@ -53,6 +53,8 @@ export async function callModel(opts: {
   prompt: string;
   temperature?: number;
   maxTokens?: number;
+  /** 'small' for short routing-style calls; default 'large'. */
+  tier?: 'small' | 'large';
   signal?: AbortSignal;
 }): Promise<string | null> {
   const hook = getTestModel();
@@ -69,6 +71,7 @@ export async function callModel(opts: {
         prompt: opts.prompt,
         temperature: opts.temperature ?? 0.2,
         maxTokens: opts.maxTokens,
+        tier: opts.tier,
         noTools: true,
       }),
       signal: opts.signal,

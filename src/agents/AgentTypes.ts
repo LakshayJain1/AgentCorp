@@ -350,6 +350,9 @@ export interface AIRequest {
   agentTraits: AgentTrait;
   prompt: string;
   context?: Record<string, string>;
+  /** Model size + output cap for this call; chat-style replies default to small/short. */
+  tier?: 'small' | 'large';
+  maxTokens?: number;
 }
 
 export type AIResponse = {
