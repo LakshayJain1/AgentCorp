@@ -1229,6 +1229,10 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
       streamId: `direct_${task.id}`,
     });
 
+    // Claim the task for this worker before any await: otherwise the tick pipeline sees it still pending and
+    // re-assigns it to whichever worker is least busy, overwriting the owner chosen here.
+    store.updateTask(task.id, { status: 'in_progress', assignedTo: workerAgent.id });
+
     const ctrl = registerRun(task.id);
     const signal = ctrl.signal;
     const isDevTask = workerAgent.workerRole === 'developer' && (task.deliverableType ?? 'code') === 'code';
