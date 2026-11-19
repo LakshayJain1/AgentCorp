@@ -14,6 +14,7 @@ import { useOrgBroadcast } from '@/hooks/useOrgBroadcast';
 import { Users, MessageSquare, BarChart2 } from 'lucide-react';
 import { useAuthUser } from '@/hooks/useAuthUser';
 import { startEngine, stopEngine } from '@/engine/EngineRuntime';
+import { setRunStorageScope } from '@/engine/runPersistence';
 
 function WorkspacePageInner() {
   const router = useRouter();
@@ -39,11 +40,14 @@ function WorkspacePageInner() {
   // The engine (agents, workers, orchestrator tick) is independent of the 2D
   // office: it starts as soon as the workspace is ready, in viewer mode never.
   const engineReady = hydrated && isInitialized && !!user && !inviteOrgId;
+  const userId = user?.id ?? null;
   useEffect(() => {
     if (!engineReady) return;
+    // Run history is stored per signed-in user; set the scope before the engine loads it.
+    setRunStorageScope(userId);
     startEngine().catch((err) => console.error('[Workspace] engine failed to start:', err));
     return () => stopEngine();
-  }, [engineReady]);
+  }, [engineReady, userId]);
 
   // Signed out → email-code sign-in in onboarding. An invite link keeps its
   // workspace id so we come straight back to the invited workspace afterwards.

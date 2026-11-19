@@ -35,11 +35,13 @@ import { registerRun, unregisterRun, setResumeHandler, discardInterruptedRun } f
 import { saveCheckpoint, loadCheckpoint, clearCheckpoint, type LoopCheckpoint } from '@/engine/runPersistence';
 import { detectExecutorEnv } from '@/execution/ToolExecutor';
 import { aiFetch } from '@/ai/transport';
+import { trimHistory } from '@/ai/history';
+import { buildTeamContext } from '@/ai/teamContext';
 import { searchWeb } from '@/engine/webSearch';
 import { formatResultsForModel } from '@/lib/search';
 
 /** How many times QA may send a finished loop back to the agent before flagging it for a human. */
-const MAX_QA_RETRIES = 2;
+const MAX_QA_RETRIES = 1;
 
 export class CentralOrchestrator {
   private planner: PlannerAgent;
@@ -139,8 +141,9 @@ export class CentralOrchestrator {
         const messageText = request.replace(/@[a-zA-Z]+\s*/g, '').trim() || `Hey ${mentionedAgent.name}, how are you?`;
         const personalities = AGENT_PERSONALITIES();
         const traits = personalities[mentionedAgent.role] || personalities.engineer;
-        const historyBlock = history && history.length > 0
-          ? `\nRecent conversation:\n${history.map((m) => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.text}`).join('\n')}\n`
+        const recentTurns = trimHistory(history, { maxMessages: 4, maxChars: 400 });
+        const historyBlock = recentTurns.length > 0
+          ? `\nRecent conversation:\n${recentTurns.map((m) => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.text}`).join('\n')}\n`
           : '';
 
         // Classify the stripped message to decide chat vs task
@@ -215,7 +218,7 @@ export class CentralOrchestrator {
         } else {
           // ── CHAT intent — agent replies conversationally ──────────────────
           const prompt = `${historyBlock}The user is talking directly to you. Respond in character as ${mentionedAgent.name} (${mentionedAgent.role}). Keep it conversational and concise.\n\nUser: ${messageText}`;
-          const aiReply = await aiService.askAgent(mentionedAgent.role, mentionedAgent.name, traits, prompt);
+          const aiReply = await aiService.askAgent(mentionedAgent.role, mentionedAgent.name, traits, prompt, buildTeamContext(useGameStore.getState()));
           const reply = aiReply.content || `Hey! I'm ${mentionedAgent.name}. How can I help?`;
           this.reportToolCalls(mentionedAgent.id, aiReply.toolCalls ?? []);
           store.sendMessage(mentionedAgent.id, mentionedAgent.id, reply);
@@ -246,11 +249,12 @@ export class CentralOrchestrator {
         const replyTarget = pm?.id ?? ceo.id;
         const personalities = AGENT_PERSONALITIES();
         const traits = personalities['ceo'] || personalities['engineer'];
-        const historyBlock = history && history.length > 0
-          ? `\nRecent conversation:\n${history.map((m) => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.text}`).join('\n')}\n`
+        const recentTurns = trimHistory(history, { maxMessages: 4, maxChars: 400 });
+        const historyBlock = recentTurns.length > 0
+          ? `\nRecent conversation:\n${recentTurns.map((m) => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.text}`).join('\n')}\n`
           : '';
         const chatPrompt = `${historyBlock}The user just said: "${request}"\n\nRespond in character as ${ceo.name}, CEO. You have full context of the conversation above including any agent results. Be concise and conversational. If the user is referencing something an agent just found or did, engage with that content directly.`;
-        const aiReply = await aiService.askAgent('ceo', ceo.name, traits, chatPrompt);
+        const aiReply = await aiService.askAgent('ceo', ceo.name, traits, chatPrompt, buildTeamContext(useGameStore.getState()));
         const replyText = aiReply.content || intent.chatReply || `Hey! I'm Alex, your CEO. Tell me what you need built and I'll get the team on it.`;
         store.sendMessage(ceo.id, replyTarget, replyText);
         store.pushAgentActivity(ceo.id, {
@@ -677,6 +681,8 @@ Generate exactly 4 concrete sprint tasks that are specific, actionable, and real
 Return ONLY a JSON array of task title strings — no explanation, no markdown.
 Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboarding flow", "Fix login edge case"]`,
           temperature: 0.7,
+          maxTokens: 300,
+          tier: 'small',
         }),
       });
       if (res.ok) {

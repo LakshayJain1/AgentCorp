@@ -166,6 +166,8 @@ DELIVERABLE TYPE: ${task.deliverableType || 'code'}
           catchphrases: [],
         },
         prompt,
+        undefined,
+        { tier: 'large', maxTokens: 1500 },
       );
 
       const jsonMatch = response.content.match(/\{[\s\S]*\}/);

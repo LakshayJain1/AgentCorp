@@ -1,5 +1,5 @@
 import type { CriterionResult } from './runEvents';
-import { callModel } from './model';
+import { callModel, getTestModel } from './model';
 import { extractJsonArray, extractJsonObject } from './json';
 
 /**
@@ -51,6 +51,16 @@ export function fallbackCriteria(title: string, deliverableType: string | undefi
   ];
 }
 
+// Re-running the same task (a retry, a re-queue, a reopened ticket) asks for identical criteria; remember the
+// model's answer so it is paid for once. Only model-written text is cached, never the template fallback.
+const criteriaCache = new Map<string, string[]>();
+const CRITERIA_CACHE_MAX = 50;
+const criteriaKey = (o: { title: string; description?: string; deliverableType?: string }) =>
+  [o.title, o.description ?? '', o.deliverableType ?? 'code'].join('').toLowerCase();
+
+/** Test hook. */
+export function clearCriteriaCache(): void { criteriaCache.clear(); }
+
 /** Ask the model for criteria; fall back to templates without a key or on bad output. */
 export async function generateCriteria(opts: {
   title: string;
@@ -61,7 +71,9 @@ export async function generateCriteria(opts: {
   signal?: AbortSignal;
 }): Promise<Criterion[]> {
   let texts: string[] = [];
-  const reply = await callModel({
+  const key = criteriaKey(opts);
+  const cached = getTestModel() ? undefined : criteriaCache.get(key);
+  const reply = cached ? JSON.stringify(cached) : await callModel({
     label: 'criteria',
     system:
       'You write acceptance criteria for software and business tasks. Reply with a JSON array of strings only. ' +
@@ -75,13 +87,19 @@ export async function generateCriteria(opts: {
       '(e.g. "Exports a slugify function", "Handles empty input"). No vague criteria like "good quality". JSON array of strings only.',
     temperature: 0.2,
     maxTokens: 400,
+    tier: 'small',
     signal: opts.signal,
   });
   const arr = reply ? extractJsonArray(reply) : null;
   if (arr) {
     texts = arr.filter((x): x is string => typeof x === 'string' && x.trim().length >= 8).map((x) => x.trim().slice(0, 200)).slice(0, 5);
   }
-  if (texts.length < 2) texts = fallbackCriteria(opts.title, opts.deliverableType);
+  if (texts.length < 2) {
+    texts = fallbackCriteria(opts.title, opts.deliverableType);
+  } else if (!cached && !getTestModel()) {
+    if (criteriaCache.size >= CRITERIA_CACHE_MAX) criteriaCache.delete(criteriaCache.keys().next().value as string);
+    criteriaCache.set(key, [...texts]);
+  }
   for (const m of opts.mechanical ?? []) if (!texts.some((x) => x.toLowerCase() === m.toLowerCase())) texts.push(m);
   return texts.slice(0, 6).map(classifyCriterion);
 }

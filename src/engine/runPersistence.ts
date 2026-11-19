@@ -9,8 +9,33 @@ import { useRunStore, type RunEvent, type RunMeta } from './runEvents';
  * blocked storage) the app works exactly as before, in memory only.
  */
 
-const DB_NAME = 'agentcorp-runs';
+const DB_PREFIX = 'agentcorp-runs';
 const DB_VERSION = 1;
+
+/**
+ * The database is named per signed-in user, so two accounts on one browser never see each other's
+ * runs, events or checkpoints. Until a scope is set nothing is read or written (memory only).
+ */
+let scope: string | null = null;
+let unsubscribe: (() => void) | null = null;
+
+export function runDbName(userId: string): string {
+  return `${DB_PREFIX}:${userId}`;
+}
+
+/** Call with the signed-in user's id before initRunPersistence. A different id drops the previous connection. */
+export function setRunStorageScope(userId: string | null): void {
+  const next = userId && userId.trim() ? userId : null;
+  if (next === scope) return;
+  scope = next;
+  unsubscribe?.();
+  unsubscribe = null;
+  dbPromise?.then((db) => db?.close()).catch(() => {});
+  dbPromise = null;
+  started = false;
+  // Whatever the previous user's session left in memory must not carry over.
+  useRunStore.getState().clear();
+}
 const KEEP_RUNS = 40;
 
 /** What a loop needs to continue where it stopped. Kept small on purpose. */
@@ -32,8 +57,8 @@ function openDb(): Promise<IDBDatabase | null> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve) => {
     try {
-      if (typeof indexedDB === 'undefined') return resolve(null);
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      if (typeof indexedDB === 'undefined' || !scope) return resolve(null);
+      const req = indexedDB.open(runDbName(scope), DB_VERSION);
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains('runs')) db.createObjectStore('runs', { keyPath: 'runId' });
@@ -175,7 +200,7 @@ export async function initRunPersistence(): Promise<void> {
     });
   };
   const schedule = () => { if (!timer) timer = setTimeout(() => { void flush(); }, 400); };
-  useRunStore.subscribe(schedule);
+  unsubscribe = useRunStore.subscribe(schedule);
   // Persist the "interrupted" markers we just assigned.
   schedule();
   void prune(db);
