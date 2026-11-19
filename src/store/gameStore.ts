@@ -269,6 +269,9 @@ function detectDeliverableType(title: string): { type: DeliverableType; lang?: s
   return { type: 'code', lang: 'typescript' };
 }
 
+/** Max characters of one deliverable kept in the persisted (localStorage) copy. */
+const PERSIST_DELIVERABLE_CHARS = 60_000;
+
 interface TaskClassificationOverride {
   agentRole?: AgentRole;
   deliverableType?: DeliverableType;
@@ -1311,11 +1314,12 @@ export const useGameStore = create<GameStore>()(
           .slice(0, 100)
           .map(({ executionLogs: _logs, ...t }) => ({ ...t, executionLogs: [] as TaskExecutionLog[] })),
 
-        // Deliverables: last 20, content capped at 8 KB
+        // Deliverables: last 20, content capped at 60 KB each (~1.2 MB worst case, well under the localStorage quota).
+        // A tighter cap cut long plans off mid-sentence after a reload.
         deliverableProjects: [...state.deliverableProjects]
           .sort((a, b) => b.createdAt - a.createdAt)
           .slice(0, 20)
-          .map((p) => ({ ...p, content: p.content?.slice(0, 8_000) ?? '' })),
+          .map((p) => ({ ...p, content: p.content?.slice(0, PERSIST_DELIVERABLE_CHARS) ?? '' })),
 
         // Agent snapshots: id-indexed, persist runtime fields so reload doesn't
         // reset currentTaskId/currentSubTaskId/workStatus/online. Memory trimmed to last 20.

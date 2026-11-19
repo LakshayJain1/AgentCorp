@@ -227,6 +227,8 @@ export interface Task {
   createdAt: number;
   completedAt: number | null;
   steps: TaskStep[];
+  /** Web-search query for research-style work; defaults to the title when absent. */
+  searchQuery?: string;
   aiContext?: Record<string, string>;
   deliverableType?: DeliverableType;
   deliverable?: string;

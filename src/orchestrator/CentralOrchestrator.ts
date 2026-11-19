@@ -1,6 +1,7 @@
 import { useGameStore, setIntegrationResumeHandler } from '@/store/gameStore';
-import { Agent, AgentActivity, SubTask, StreamEvent, Task } from '@/agents/AgentTypes';
+import { Agent, AgentActivity, AgentRole, DeliverableType, SubTask, StreamEvent, Task } from '@/agents/AgentTypes';
 import { PlannerAgent } from './PlannerAgent';
+import { splitTeamBrief, briefTopic, type TeamBrief } from './teamBrief';
 import { TaskQueue } from './TaskQueue';
 import { BaseWorkerAgent } from '@/agents/BaseWorkerAgent';
 import { ValidatorAgent } from '@/agents/ValidatorAgent';
@@ -42,6 +43,21 @@ import { formatResultsForModel } from '@/lib/search';
 
 /** How many times QA may send a finished loop back to the agent before flagging it for a human. */
 const MAX_QA_RETRIES = 1;
+
+/** Deliverable types that cite the market and so get a web search first, whoever writes them. */
+const SOURCED_TYPES = new Set<string>(['research', 'analysis', 'gtm', 'campaign', 'icp']);
+
+/** How each kind of teammate's part of a team brief is written. */
+const PART_CLASSIFICATION: Record<string, { agentRole: AgentRole; deliverableType: DeliverableType; deliverableLang: string }> = {
+  researcher: { agentRole: 'researcher', deliverableType: 'research', deliverableLang: 'markdown' },
+  sales:      { agentRole: 'sales',      deliverableType: 'gtm',      deliverableLang: 'markdown' },
+  finance:    { agentRole: 'finance',    deliverableType: 'report',   deliverableLang: 'markdown' },
+  ops:        { agentRole: 'ops',        deliverableType: 'doc',      deliverableLang: 'markdown' },
+  engineer:   { agentRole: 'engineer',   deliverableType: 'spec',     deliverableLang: 'markdown' },
+  ceo:        { agentRole: 'ceo',        deliverableType: 'report',   deliverableLang: 'markdown' },
+  pm:         { agentRole: 'pm',         deliverableType: 'doc',      deliverableLang: 'markdown' },
+  hr:         { agentRole: 'hr',         deliverableType: 'doc',      deliverableLang: 'markdown' },
+};
 
 export class CentralOrchestrator {
   private planner: PlannerAgent;
@@ -339,6 +355,19 @@ export class CentralOrchestrator {
         streamId: `intent_${Date.now()}`,
       });
     } else {
+      // A brief that hands work to several named teammates becomes one task per teammate, not one task for one agent.
+      const team = splitTeamBrief(request, store.agents.map((a) => a.name));
+      if (team) {
+        this.emit({
+          type: 'log',
+          data: { message: `Team brief: splitting "${ticketTitle}" into ${team.parts.length} tasks (${team.parts.map((p) => p.agentName).join(', ')}).` },
+          timestamp: Date.now(),
+          streamId: `intent_${Date.now()}`,
+        });
+        void this.runTeamBrief(team, ticketTitle).catch((err) => console.error('[AgentCorp] team brief failed:', err));
+        return;
+      }
+
       console.log('[AgentCorp] PM creating task with title:', ticketTitle);
       const classification = await classifyTask(ticketTitle, request);
       store.addTaskWithTitle(ticketTitle, undefined, request, classification);
@@ -360,6 +389,52 @@ export class CentralOrchestrator {
           console.error('[AgentCorp] direct task execution failed:', err);
         });
       }
+    }
+  }
+
+  /**
+   * Run a team brief: one task per named teammate, in order, each owned by that teammate. Parts run one after
+   * another (not in parallel) to stay inside the provider's per-minute limits, and the synthesis part (the
+   * go/no-go) goes last and is handed what the others wrote.
+   */
+  private async runTeamBrief(team: TeamBrief, projectTitle: string): Promise<void> {
+    const store = useGameStore.getState();
+    const pm = store.agents.find((a) => a.role === 'pm');
+    const ceo = store.agents.find((a) => a.role === 'ceo');
+    const topic = briefTopic(team.context);
+    const owners = team.parts.map((p) => p.agentName).join(', ');
+    if (pm && ceo) {
+      store.sendMessage(pm.id, ceo.id, `Split "${projectTitle}" into ${team.parts.length} tasks, one per owner: ${owners}.`);
+    }
+
+    const finished: { name: string; text: string }[] = [];
+    for (const part of team.parts) {
+      const agent = useGameStore.getState().agents.find((a) => a.name === part.agentName);
+      if (!agent) continue;
+      const cls = PART_CLASSIFICATION[agent.role] ?? PART_CLASSIFICATION.ops;
+      const others = team.parts.filter((p) => p.agentName !== part.agentName).map((p) => `${p.agentName}: ${p.text}`).join('\n');
+      const earlier = part.synthesis
+        ? `\n\nWhat your teammates produced (use it, do not repeat it):\n${finished.map((f) => `--- ${f.name} ---\n${f.text.slice(0, 3500)}`).join('\n\n')}`
+        : '';
+      const description =
+        `Business brief: ${team.context}\n\n` +
+        `Your part (${agent.name}, ${agent.role}): ${part.text}\n\n` +
+        `Your teammates cover:\n${others}\n\n` +
+        `Write only your part, thoroughly, as a standalone document with a clear heading. Be specific to this idea.${earlier}`;
+      const title = `${projectTitle} - ${agent.name}: ${part.text}`.slice(0, 90);
+
+      store.addTaskWithTitle(title, undefined, description, { agentRole: cls.agentRole, deliverableType: cls.deliverableType, deliverableLang: cls.deliverableLang });
+      const task = [...useGameStore.getState().tasks].reverse().find((t) => t.title === title);
+      if (!task) continue;
+      useGameStore.getState().updateTask(task.id, { searchQuery: `${part.text} ${topic}` });
+
+      try {
+        await this.executeDirectTask(task, agent.id);
+      } catch (err) {
+        console.error('[AgentCorp] team brief part failed:', agent.name, err);
+      }
+      const done = useGameStore.getState().tasks.find((t) => t.id === task.id);
+      if (done?.deliverable) finished.push({ name: agent.name, text: done.deliverable });
     }
   }
 
@@ -942,7 +1017,7 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
    */
   private async groundResearchPrompt(a: { task: Task; worker: Agent; prompt: string; signal: AbortSignal }): Promise<string> {
     const { task, worker, prompt, signal } = a;
-    const query = task.title.replace(/\s+/g, ' ').trim().slice(0, 200);
+    const query = (task.searchQuery || task.title).replace(/\s+/g, ' ').trim().slice(0, 200);
     const stepId = `${task.id}_search`;
     const noSources =
       '\n\nNo live web sources were available for this task. Do not invent URLs, quotes, statistics or citations. ' +
@@ -983,7 +1058,15 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
   }): Promise<{ content: string; results: CriterionResult[] }> {
     const { task, worker, deliverableType, deliverableLang, criteria, signal, modelOk } = a;
     // Research work is written from real search results (and told never to invent links), not from memory alone.
-    const prompt = worker.workerRole === 'research_worker' && modelOk ? await this.groundResearchPrompt({ task, worker, prompt: a.prompt, signal }) : a.prompt;
+    // Research, and business work that quotes the market (pricing, go-to-market, campaigns), is written from real
+    // search results rather than memory.
+    const needsSources = worker.workerRole === 'research_worker' || SOURCED_TYPES.has(deliverableType);
+    let prompt = needsSources && modelOk ? await this.groundResearchPrompt({ task, worker, prompt: a.prompt, signal }) : a.prompt;
+    if (deliverableType !== 'code' && deliverableType !== 'config') {
+      prompt +=
+        '\n\nHonesty rule: any competitor, price, statistic or finding that does not come from the sources above must be labelled an ' +
+        'estimate or assumption. Never invent interviews, surveys, studies, dates of research or citations.';
+    }
     const qa = async (text: string, stepId: string): Promise<CriterionResult[]> => {
       if (!modelOk) {
         // No AI reviewer (mock mode): report "not evaluated" rather than inventing a verdict.
@@ -1018,7 +1101,7 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
       let second = '';
       try {
         second = await aiService.generateDeliverable(
-          `${prompt}\n\nA reviewer found problems with a previous attempt:\n${failureFeedback(results)}\n\nPrevious attempt:\n${content.slice(0, 4000)}\n\nWrite an improved, complete version that fixes every problem.`,
+          `${prompt}\n\nA reviewer found problems with a previous attempt:\n${failureFeedback(results)}\n\nPrevious attempt:\n${content.slice(0, 12000)}\n\nWrite an improved, complete version that fixes every problem.`,
           deliverableType,
           deliverableLang,
           { signal, criteria: criteriaTexts },

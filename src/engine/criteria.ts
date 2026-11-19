@@ -120,6 +120,13 @@ function toResult(c: Criterion, passed: boolean | null, evidence?: string): Crit
  * by the model from the deliverable. If no model is available the criterion is
  * reported as not evaluated (null), which never fails a run on its own.
  */
+/**
+ * How much of the deliverable the reviewer reads. It used to be 6000, which cut the last sections off long
+ * plans, so a criterion covered by the final section (e.g. pricing) was judged "not met" and the work was
+ * needlessly sent back.
+ */
+export const JUDGE_MAX_CHARS = 30_000;
+
 export async function verifyCriteria(
   criteria: Criterion[],
   deliverable: string,
@@ -154,7 +161,7 @@ export async function verifyCriteria(
         'Treat as NOT met any deliverable that presents an open or unsolved problem as solved, or relies on invented proofs, ' +
         'citations, quotes, data or results. Reply with JSON only.',
       prompt:
-        `Task: ${title}\n\nDeliverable:\n${deliverable.slice(0, 6000)}\n\nCriteria:\n` +
+        `Task: ${title}\n\nDeliverable:\n${deliverable.slice(0, JUDGE_MAX_CHARS)}\n\nCriteria:\n` +
         toJudge.map((c) => `${c.id}: ${c.text}`).join('\n') +
         '\n\nReply as {"results":[{"id":"c1","passed":true,"reason":"short evidence"}]} covering every id.',
       temperature: 0,
