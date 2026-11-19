@@ -229,6 +229,17 @@ export interface Task {
   steps: TaskStep[];
   /** Web-search query for research-style work; defaults to the title when absent. */
   searchQuery?: string;
+  /**
+   * Set on each task of a team brief. Lives on the task (which is persisted) so that a reload in the middle of a
+   * brief can carry on with the parts that had not started yet.
+   */
+  brief?: {
+    id: string;
+    projectTitle: string;
+    /** Position of this task's part in `plan.parts`. */
+    index: number;
+    plan: { context: string; parts: { agentName: string; text: string; synthesis: boolean }[] };
+  };
   aiContext?: Record<string, string>;
   deliverableType?: DeliverableType;
   deliverable?: string;

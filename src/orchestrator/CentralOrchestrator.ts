@@ -364,7 +364,7 @@ export class CentralOrchestrator {
           timestamp: Date.now(),
           streamId: `intent_${Date.now()}`,
         });
-        void this.runTeamBrief(team, ticketTitle).catch((err) => console.error('[AgentCorp] team brief failed:', err));
+        void this.runTeamBrief(team, ticketTitle, `brief_${Date.now()}`, 0).catch((err) => console.error('[AgentCorp] team brief failed:', err));
         return;
       }
 
@@ -397,18 +397,71 @@ export class CentralOrchestrator {
    * another (not in parallel) to stay inside the provider's per-minute limits, and the synthesis part (the
    * go/no-go) goes last and is handed what the others wrote.
    */
-  private async runTeamBrief(team: TeamBrief, projectTitle: string): Promise<void> {
+  private activeBriefs = new Set<string>();
+
+  /**
+   * Carry on a team brief from `from` (0 for a new brief). Each task records its brief and position, so after a
+   * reload the parts that never started can be picked up again without repeating the finished ones.
+   */
+  private async runTeamBrief(team: TeamBrief, projectTitle: string, briefId: string, from: number): Promise<void> {
+    if (this.activeBriefs.has(briefId)) return;
+    this.activeBriefs.add(briefId);
+    try {
+      await this.runTeamBriefParts(team, projectTitle, briefId, from);
+    } finally {
+      this.activeBriefs.delete(briefId);
+    }
+  }
+
+  /** Continue a brief whose later parts never started (page reload, closed tab): next part after the last one created. */
+  private continueTeamBrief(briefId: string): void {
+    const tasks = useGameStore.getState().tasks.filter((t) => t.brief?.id === briefId);
+    const last = tasks.reduce<Task | null>((m, t) => (!m || (t.brief!.index > m.brief!.index) ? t : m), null);
+    if (!last?.brief) return;
+    const next = last.brief.index + 1;
+    if (next >= last.brief.plan.parts.length) return;
+    void this.runTeamBrief(last.brief.plan, last.brief.projectTitle, briefId, next).catch((err) => console.error('[AgentCorp] team brief failed:', err));
+  }
+
+  /**
+   * On start: a brief whose latest part is finished but which has parts left was cut off between two parts.
+   * (A part that was cut off mid-run shows up as an interrupted run instead; Resume on it continues the brief.)
+   */
+  resumeTeamBriefs(): void {
+    const tasks = useGameStore.getState().tasks.filter((t) => t.brief);
+    const ids = [...new Set(tasks.map((t) => t.brief!.id))];
+    for (const id of ids) {
+      const mine = tasks.filter((t) => t.brief!.id === id);
+      const last = mine.reduce((m, t) => (t.brief!.index > m.brief!.index ? t : m));
+      if (last.status === 'completed' && last.brief!.index + 1 < last.brief!.plan.parts.length) {
+        console.log('[AgentCorp] resuming team brief', id, 'from part', last.brief!.index + 1);
+        this.continueTeamBrief(id);
+      }
+    }
+  }
+
+  private async runTeamBriefParts(team: TeamBrief, projectTitle: string, briefId: string, from: number): Promise<void> {
     const store = useGameStore.getState();
     const pm = store.agents.find((a) => a.role === 'pm');
     const ceo = store.agents.find((a) => a.role === 'ceo');
     const topic = briefTopic(team.context);
     const owners = team.parts.map((p) => p.agentName).join(', ');
     if (pm && ceo) {
-      store.sendMessage(pm.id, ceo.id, `Split "${projectTitle}" into ${team.parts.length} tasks, one per owner: ${owners}.`);
+      store.sendMessage(
+        pm.id, ceo.id,
+        from === 0
+          ? `Split "${projectTitle}" into ${team.parts.length} tasks, one per owner: ${owners}.`
+          : `Picking "${projectTitle}" back up at part ${from + 1} of ${team.parts.length}.`,
+      );
     }
 
-    const finished: { name: string; text: string }[] = [];
-    for (const part of team.parts) {
+    // What the earlier parts wrote (needed by the synthesis part), whether they ran just now or before a reload.
+    const finished: { name: string; text: string }[] = useGameStore.getState().tasks
+      .filter((t) => t.brief?.id === briefId && t.deliverable)
+      .sort((a, b) => a.brief!.index - b.brief!.index)
+      .map((t) => ({ name: t.brief!.plan.parts[t.brief!.index]?.agentName ?? '', text: t.deliverable! }));
+    for (const [i, part] of team.parts.entries()) {
+      if (i < from) continue;
       const agent = useGameStore.getState().agents.find((a) => a.name === part.agentName);
       if (!agent) continue;
       const cls = PART_CLASSIFICATION[agent.role] ?? PART_CLASSIFICATION.ops;
@@ -426,7 +479,10 @@ export class CentralOrchestrator {
       store.addTaskWithTitle(title, undefined, description, { agentRole: cls.agentRole, deliverableType: cls.deliverableType, deliverableLang: cls.deliverableLang });
       const task = [...useGameStore.getState().tasks].reverse().find((t) => t.title === title);
       if (!task) continue;
-      useGameStore.getState().updateTask(task.id, { searchQuery: `${part.text} ${topic}` });
+      useGameStore.getState().updateTask(task.id, {
+        searchQuery: `${part.text} ${topic}`,
+        brief: { id: briefId, projectTitle, index: i, plan: team },
+      });
 
       try {
         await this.executeDirectTask(task, agent.id);
@@ -893,6 +949,8 @@ Example: ["Build user dashboard UI", "Write API endpoint tests", "Document onboa
       message: cp ? `Resuming from step ${cp.step}` : 'Restarting the task',
     });
     await this.executeDirectTask(task, cp?.workerId ?? run?.agentId, { resume: cp ?? null, isResume: true });
+    // This task was one part of a team brief that was cut off: the parts after it still need to run.
+    if (task.brief) this.continueTeamBrief(task.brief.id);
   }
 
   /** Extra, mechanically checkable criteria grounded in what the workspace actually contains. */

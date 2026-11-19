@@ -148,6 +148,8 @@ export function startEngine(): Promise<void> {
     status.startedAt = Date.now();
     installDevHandle(getEngineStatus);
     console.log(`[Engine] started (timer: ${timer.kind})`);
+    // A reload between two parts of a team brief leaves the later parts unstarted; pick them up.
+    centralOrchestrator.resumeTeamBriefs();
   })().catch((err) => {
     console.error('[Engine] failed to start:', err);
     if (gen === engineGen) startPromise = null;
